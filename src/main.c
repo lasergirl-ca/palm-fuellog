@@ -3,6 +3,7 @@
 #include <PalmOS.h>
 #include "resources.h"
 #include "hello2.h"
+#include "calc.h"
 
 #define kMinRomVersion sysMakeROMVersion(3, 0, 0, sysROMStageRelease, 0)
 
@@ -13,6 +14,14 @@ static Boolean MainFormHandleEvent(EventType *event)
     switch (event->eType) {
     case frmOpenEvent:
         FrmCopyLabel(form, MainSectionLabel, HelloFromSection2());
+        {
+            /* SP2: exercise the 64-bit libgcc helpers on the device.
+             * $84.62 at 1.36 home units per fill unit is $115.08. */
+            Char text[32];
+            StrCopy(text, "8462 x 1.36 = ");
+            StrIToA(text + StrLen(text), CalcHomeCents(8462, 1360000));
+            FrmCopyLabel(form, MainMathLabel, text);
+        }
         FrmDrawForm(form);
         return true;
 
