@@ -43,12 +43,11 @@ The Makefile also tracks header dependencies now (`-MMD`, with the target path f
 up because GCC 2.95 writes `main.o:` instead of `build/main.o:`), which is why the first
 rebuild after the fix silently reused the stale object.
 
-## Still to do on the device
+## Device result
 
-- Copy `FuelLog.prc` to `/PALM/Launcher/` on the SD card (or `pilot-xfer -i`), open it on the
-  T|X, and confirm the form shows "Hello from FuelLog" over "called into code section 2".
-  That is the M0 exit criterion only a real device can tick.
-- Optional: the same `.prc` in CloudpilotEmu with a Tungsten E2 ROM for a desktop check.
+Confirmed on the T|X at 11:36 on Oct 22, 2026: the form draws its title, "Hello from
+FuelLog" and "called into code section 2", with the Done button below. The cross-section
+call works on the device, which closes SP1 and the hello-world line of the M0 exit criteria.
 
 ## Decision
 
