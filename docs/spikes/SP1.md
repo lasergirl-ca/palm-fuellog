@@ -22,6 +22,27 @@ the `fuellog-toolchain` image, and `make test` runs on macOS.
 - The SDK is selected with `-palmos5r3`, the name palmdev-prep derives from the `sdk-5r3`
   directory; `-palmos5` is not a valid name.
 
+## First device run: blank screen, and the fix
+
+The first `.prc` launched on the T|X and showed a white app area with no form. The
+call into section 2 had been compiled as `bsrw`, a 16-bit PC-relative branch, because
+`hello2.h` declared the function without its section attribute. The linker resolved the
+branch as if both sections shared one address space, so on the device it jumped into
+the wrong bytes of code resource 1 before `FrmDrawForm` ran. No crash, just nothing.
+
+The prc-tools manual is explicit: the section attribute must be on the declaration that
+every caller sees, or "the call will be generated as a call to the default code section".
+Two things now enforce that:
+
+- `src/sections.h` defines `SEC2`, and `src/hello2.h` carries it on the prototype.
+- `tools/check-sections.sh` runs at link time and fails the build when any object has a
+  `DISP16` relocation against a function that lives outside `.text`. Reproducing the
+  original mistake makes `make docker` stop with a named file and symbol.
+
+The Makefile also tracks header dependencies now (`-MMD`, with the target path fixed
+up because GCC 2.95 writes `main.o:` instead of `build/main.o:`), which is why the first
+rebuild after the fix silently reused the stale object.
+
 ## Still to do on the device
 
 - Copy `FuelLog.prc` to `/PALM/Launcher/` on the SD card (or `pilot-xfer -i`), open it on the

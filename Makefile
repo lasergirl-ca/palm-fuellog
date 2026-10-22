@@ -10,7 +10,7 @@ PILRC    := pilrc
 BUILDPRC := build-prc
 HOSTCC   := cc
 
-CFLAGS   := -O2 -Wall -palmos5r3 -Irsc -Isrc
+CFLAGS   := -O2 -Wall -palmos5r3 -Irsc -Isrc -MMD
 BUILD    := build
 
 SRCS := src/main.c src/hello2.c src/calc.c
@@ -22,8 +22,13 @@ all: $(APP).prc
 $(BUILD):
 	mkdir -p $(BUILD)
 
+# GCC 2.95 writes the -MMD dependency file into the current directory and
+# names the target without its directory, so move it and fix the target.
 $(BUILD)/%.o: src/%.c | $(BUILD)
 	$(CC) $(CFLAGS) -c $< -o $@
+	sed -e 's|^$*\.o:|$@:|' $*.d > $(BUILD)/$*.d && rm -f $*.d
+
+-include $(OBJS:.o=.d)
 
 $(SECT).s $(SECT).ld: $(DEF) | $(BUILD)
 	$(MULTIGEN) -b $(SECT) $(DEF)
@@ -33,6 +38,7 @@ $(BUILD)/sections.o: $(SECT).s
 
 $(BUILD)/$(APP): $(OBJS) $(BUILD)/sections.o $(SECT).ld
 	$(CC) $(CFLAGS) -o $@ $(OBJS) $(BUILD)/sections.o $(SECT).ld
+	tools/check-sections.sh $@ $(OBJS)
 
 $(BUILD)/rcp.stamp: rsc/fuellog.rcp rsc/resources.h | $(BUILD)
 	$(PILRC) -q -I rsc rsc/fuellog.rcp $(BUILD)
