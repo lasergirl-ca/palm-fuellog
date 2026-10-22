@@ -10,11 +10,14 @@
 #include "calc.h"
 #include "device.h"
 #include "graph.h"
+#include "vfstest.h"
 
 #define kMinRomVersion sysMakeROMVersion(3, 0, 0, sysROMStageRelease, 0)
 
 static RectangleType gPlot;      /* graph area, standard coordinates */
 static Int16 gSelected = -1;
+static char gSp4Lines[vfsTestMaxLines][vfsTestLineLen];
+static UInt16 gSp4Count;
 
 /* Fit the form to the display and keep Done at the bottom. */
 static void LayoutMainForm(FormType *form)
@@ -32,6 +35,11 @@ static void LayoutMainForm(FormType *form)
     WinSetBounds(FrmGetWindowHandle(form), &bounds);
 
     idx = FrmGetObjectIndex(form, MainDoneButton);
+    FrmGetObjectBounds(form, idx, &r);
+    r.topLeft.y = h - r.extent.y - 3;
+    FrmSetObjectBounds(form, idx, &r);
+
+    idx = FrmGetObjectIndex(form, MainSp4Button);
     FrmGetObjectBounds(form, idx, &r);
     r.topLeft.y = h - r.extent.y - 3;
     FrmSetObjectBounds(form, idx, &r);
@@ -117,8 +125,43 @@ static Boolean MainFormHandleEvent(EventType *event)
             EvtAddEventToQueue(&stop);
             return true;
         }
+        if (event->data.ctlSelect.controlID == MainSp4Button) {
+            gSp4Count = VfsTestRun(gSp4Lines);
+            FrmGotoForm(Sp4Form);
+            return true;
+        }
         break;
 
+    default:
+        break;
+    }
+    return false;
+}
+
+static void DrawSp4Lines(void)
+{
+    UInt16 i;
+    FntSetFont(stdFont);
+    for (i = 0; i < gSp4Count; i++)
+        WinDrawChars(gSp4Lines[i], StrLen(gSp4Lines[i]), 4, 18 + i * 11);
+}
+
+static Boolean Sp4FormHandleEvent(EventType *event)
+{
+    FormType *form = FrmGetActiveForm();
+
+    switch (event->eType) {
+    case frmOpenEvent:
+    case frmUpdateEvent:
+        FrmDrawForm(form);
+        DrawSp4Lines();
+        return true;
+    case ctlSelectEvent:
+        if (event->data.ctlSelect.controlID == Sp4DoneButton) {
+            FrmGotoForm(MainForm);
+            return true;
+        }
+        break;
     default:
         break;
     }
@@ -131,6 +174,8 @@ static Boolean AppHandleEvent(EventType *event)
         UInt16 formId = event->data.frmLoad.formID;
         FormType *form = FrmInitForm(formId);
         FrmSetActiveForm(form);
+        if (formId == Sp4Form)
+            FrmSetEventHandler(form, Sp4FormHandleEvent);
         if (formId == MainForm) {
             FrmSetEventHandler(form, MainFormHandleEvent);
             if (DeviceHasPIN()) {

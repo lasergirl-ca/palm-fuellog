@@ -10,4 +10,13 @@ BEGIN
     LABEL "                                  " ID MainSectionLabel AT (4 17) FONT 0
     LABEL "                                  " ID MainMathLabel AT (4 28) FONT 0
     BUTTON "Done" ID MainDoneButton AT (CENTER 144 40 12)
+    BUTTON "SP4" ID MainSp4Button AT (4 144 28 12)
+END
+
+FORM ID Sp4Form AT (0 0 160 160)
+NOFRAME
+USABLE
+BEGIN
+    TITLE "SP4: card test"
+    BUTTON "Done" ID Sp4DoneButton AT (CENTER 144 40 12)
 END
