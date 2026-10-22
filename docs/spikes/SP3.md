@@ -3,7 +3,7 @@
 **Question.** Can one form resize when the input area collapses, and draw a line graph at
 double density, both ways?
 
-**Status (Oct 22, 2026): built, awaiting the device run.** The sample form is the hello-world
+**Answer (Oct 22, 2026): yes, both ways.** Confirmed on the T|X in three screenshots. The sample form is the hello-world
 form extended; the desktop stand-in (Mu's Tungsten T3 emulation) was not tried because there
 is no T3 ROM on this Mac.
 
@@ -43,12 +43,14 @@ A screenshot of each of steps 1, 2 and 4 settles the spike.
 
 - Step 1, 11:49 Oct 22: "Display 160x160, PIN, density 144"; the graph, mean line, points and labels drew at double density with the input area open. The two short labels overlapped on one row, fixed by stacking them.
 - Step 4, 11:51: a tap near the Sep 15 point ringed it and drew "Sep 15: 8.3" above the plot, kept inside the right axis. The standard-coordinate hit test lines up with the double-density drawing.
-- Steps 2, 3 and 5 (collapse the input area, reopen it, Done): pending.
+- Step 2, 11:53: with the input area collapsed the status line read "Display 160x224, PIN, density 144", Done sat at the bottom edge, the graph used the full height, and a tap called out "Sep 3: 8.2". Note the real extent is 224 rows, not 225: the constraint maximum of 225 is accepted, but the T|X hands the form 448 hi-res rows under its status bar.
+- Steps 3 and 5 (reopen, Done) were not screenshotted; the reopen path is the same handler.
 
 ## Notes for M2 and M4
 
-- The constraints call fixes the width at 160 and allows heights 160 to 225, which is the
-  T|X with its status bar. Landscape is out of scope for v1.
+- The constraints call fixes the width at 160 and allows heights 160 to 225; the T|X
+  actually delivers 224 (448 hi-res rows under its status bar), so layouts must read
+  `WinGetDisplayExtent` rather than assume 225. Landscape is out of scope for v1.
 - The graph draws straight to the screen here; M4 moves it to an offscreen window created
   under `kCoordinatesDouble` and copies once, as the Look and feel table requires.
 - `GraphHitTest` approximates the y-label width at 18 standard pixels; the real graph will
