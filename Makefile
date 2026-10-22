@@ -13,11 +13,15 @@ HOSTCC   := cc
 CFLAGS   := -O2 -Wall -palmos5r3 -Irsc -Isrc -MMD
 BUILD    := build
 
-SRCS := src/main.c src/hello2.c src/calc.c src/device.c src/graph.c
+SRCS := src/main.c src/hello2.c src/calc.c src/device.c src/graph.c \
+        src/outstream.c src/xlsx.c src/pdf.c
 OBJS := $(patsubst src/%.c,$(BUILD)/%.o,$(SRCS))
 SECT := $(BUILD)/fuellog-sections
 
 all: $(APP).prc
+
+# A failed section check must not leave a half-linked executable behind.
+.DELETE_ON_ERROR:
 
 $(BUILD):
 	mkdir -p $(BUILD)
@@ -47,12 +51,18 @@ $(BUILD)/rcp.stamp: rsc/fuellog.rcp rsc/resources.h | $(BUILD)
 $(APP).prc: $(DEF) $(BUILD)/$(APP) $(BUILD)/rcp.stamp
 	$(BUILDPRC) -o $@ $(DEF) $(BUILD)/$(APP) $(BUILD)/*.bin
 
+EXPORT_SRCS := src/outstream.c src/xlsx.c src/pdf.c
+
 test: $(BUILD)
 	$(HOSTCC) -Wall -Wextra -o $(BUILD)/test_calc tests/test_calc.c src/calc.c
 	$(BUILD)/test_calc
+	mkdir -p $(BUILD)/out
+	$(HOSTCC) -Wall -Wextra -o $(BUILD)/test_export tests/test_export.c $(EXPORT_SRCS)
+	$(BUILD)/test_export
+	python3 -I tools/check_xlsx.py $(BUILD)/out/fuellog-seek.xlsx $(BUILD)/out/fuellog-stream.xlsx
 
 check: $(APP).prc
-	python3 -I tools/prcinfo.py $(APP).prc --expect-code 3
+	python3 -I tools/prcinfo.py $(APP).prc --expect-code 4
 
 docker:
 	docker run --rm --platform linux/amd64 -v "$(CURDIR)":/src fuellog-toolchain make

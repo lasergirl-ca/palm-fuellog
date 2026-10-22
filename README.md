@@ -14,7 +14,7 @@ a Docker image, because GCC 2.95 does not build natively on Apple Silicon macOS 
 make docker-image   # once: builds the fuellog-toolchain image (amd64, emulated)
 make docker         # builds FuelLog.prc inside the image
 make test           # host unit tests with the system C compiler
-python3 tools/prcinfo.py FuelLog.prc --expect-code 3   # resource listing and section check
+python3 tools/prcinfo.py FuelLog.prc --expect-code 4   # resource listing and section check
 ```
 
 Install on the T|X by copying `FuelLog.prc` to `/PALM/Launcher/` on the SD card
