@@ -7,8 +7,7 @@ NOFRAME
 USABLE
 BEGIN
     TITLE "FuelLog"
-    LABEL "Hello from FuelLog" ID MainHelloLabel AT (CENTER 50) FONT 1
-    LABEL "                                  " ID MainSectionLabel AT (CENTER 75) FONT 0
-    LABEL "                                  " ID MainMathLabel AT (CENTER 100) FONT 0
-    BUTTON "Done" ID MainDoneButton AT (CENTER 140 40 12)
+    LABEL "                                  " ID MainSectionLabel AT (4 17) FONT 0
+    LABEL "                                  " ID MainMathLabel AT (4 28) FONT 0
+    BUTTON "Done" ID MainDoneButton AT (CENTER 144 40 12)
 END

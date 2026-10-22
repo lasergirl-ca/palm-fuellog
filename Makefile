@@ -13,7 +13,7 @@ HOSTCC   := cc
 CFLAGS   := -O2 -Wall -palmos5r3 -Irsc -Isrc -MMD
 BUILD    := build
 
-SRCS := src/main.c src/hello2.c src/calc.c
+SRCS := src/main.c src/hello2.c src/calc.c src/device.c src/graph.c
 OBJS := $(patsubst src/%.c,$(BUILD)/%.o,$(SRCS))
 SECT := $(BUILD)/fuellog-sections
 
