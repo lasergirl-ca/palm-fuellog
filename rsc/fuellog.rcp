@@ -1,0 +1,13 @@
+#include "resources.h"
+
+VERSION "0.0.1"
+
+FORM ID MainForm AT (0 0 160 160)
+NOFRAME
+USABLE
+BEGIN
+    TITLE "FuelLog"
+    LABEL "Hello from FuelLog" ID MainHelloLabel AT (CENTER 50) FONT 1
+    LABEL "                                  " ID MainSectionLabel AT (CENTER 75) FONT 0
+    BUTTON "Done" ID MainDoneButton AT (CENTER 140 40 12)
+END

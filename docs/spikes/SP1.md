@@ -1,0 +1,36 @@
+# SP1: Does the jichu4n Homebrew tap build prc-tools on Apple Silicon macOS 27?
+
+**Answer (Oct 22, 2026): not through the tap as it stands. The Docker fallback is the build path, and it works.**
+A hello-world `FuelLog.prc` with two code sections builds in about ten seconds inside
+the `fuellog-toolchain` image, and `make test` runs on macOS.
+
+## What was tried
+
+| Step | Result |
+| --- | --- |
+| `brew install prc-tools` (tap pins prc-tools-remix 2.3.4), Oct 12 | Fails at configure: Clang 21 rejects the implicit-int test program in the 2003 autoconf script. The formula also configures the host as `i686-apple-darwin` and sets no `CC` flags. |
+| prc-tools-remix 2.3.6 source, built by hand with the project's own `tools/build.sh` flags (`CC="clang -std=gnu89 ..."`, `--host=i686-apple-darwin`), Oct 22 | Gets further: configure passes and binutils 2.14 builds, but the freshly built GCC 2.95 `cc1` dies with signal 11 while compiling `libgcc2.c` (`_muldi3`). That is the 1999 compiler running as a 64-bit arm64 host process, not a missing flag, so it is not worth more of the timebox. Log: scratchpad `logs/native-make.log`. |
+| Docker image `toolchain/Dockerfile`: Debian bookworm amd64 with the 2.3.6 `.deb`, Palm OS SDK 5r3 and PilRC 3.2 | Builds in a few minutes under QEMU emulation (Rosetta is off on this Mac). `m68k-palmos-gcc 2.95.3-kgpd`, `pilrc 3.2`, `m68k-palmos-multigen` and `build-prc` all run. |
+
+## What the hello world proves
+
+- `fuellog.def` declares `multiple code { sec2 }`; `src/hello2.c` places a function in that
+  section and `src/main.c` calls it to fill a label. The link goes through the multigen
+  jump table with no special call syntax.
+- `tools/prcinfo.py FuelLog.prc --expect-code 3` lists code 0 (startup stub, 24 bytes),
+  code 1 (main, 1,256 bytes) and code 2 (sec2, 40 bytes), type `appl`, creator `ZFlg`.
+- The SDK is selected with `-palmos5r3`, the name palmdev-prep derives from the `sdk-5r3`
+  directory; `-palmos5` is not a valid name.
+
+## Still to do on the device
+
+- Copy `FuelLog.prc` to `/PALM/Launcher/` on the SD card (or `pilot-xfer -i`), open it on the
+  T|X, and confirm the form shows "Hello from FuelLog" over "called into code section 2".
+  That is the M0 exit criterion only a real device can tick.
+- Optional: the same `.prc` in CloudpilotEmu with a Tungsten E2 ROM for a desktop check.
+
+## Decision
+
+- Day-to-day builds: `make docker` (and `make docker-image` once per machine).
+- The native toolchain is a convenience, not a requirement; if it works, `make` with the
+  tools on `PATH` builds the same `.prc`.
