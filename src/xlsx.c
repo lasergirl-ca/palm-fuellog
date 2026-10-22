@@ -1,31 +1,12 @@
 #include "xlsx.h"
+#include "crc32.h"
 
 #define kDosTime 0x6000u   /* 12:00:00 */
 #define kDosDate 0x5D56u   /* 2026-10-22: ((2026-1980)<<9)|(10<<5)|22 */
 
-static void CrcInit(UInt32 *table) EXPORT_SEC;
-static UInt32 CrcUpdate(const UInt32 *table, UInt32 crc, const UInt8 *p, UInt32 len) EXPORT_SEC;
 static void WriteLocalHeader(XlsxWriter *w, const XlsxPart *p, UInt32 crc, UInt32 size) EXPORT_SEC;
 static void XmlText(XlsxWriter *w, const char *s) EXPORT_SEC;
 static void CellRef(XlsxWriter *w) EXPORT_SEC;
-
-static void CrcInit(UInt32 *table)
-{
-    UInt32 i, j, c;
-    for (i = 0; i < 256; i++) {
-        c = i;
-        for (j = 0; j < 8; j++)
-            c = (c & 1) ? (0xEDB88320UL ^ (c >> 1)) : (c >> 1);
-        table[i] = c;
-    }
-}
-
-static UInt32 CrcUpdate(const UInt32 *table, UInt32 crc, const UInt8 *p, UInt32 len)
-{
-    while (len--)
-        crc = table[(crc ^ *p++) & 0xFF] ^ (crc >> 8);
-    return crc;
-}
 
 void XlsxBegin(XlsxWriter *w, OutStream *out, UInt32 *crcTable)
 {
@@ -35,7 +16,7 @@ void XlsxBegin(XlsxWriter *w, OutStream *out, UInt32 *crcTable)
     w->nParts = 0;
     w->streaming = (out->seek == 0);
     for (i = 0; i < xlsxMaxParts; i++) w->parts[i].name[0] = 0;
-    CrcInit(crcTable);
+    Crc32Init(crcTable);
 }
 
 static void WriteLocalHeader(XlsxWriter *w, const XlsxPart *p, UInt32 crc, UInt32 size)
@@ -73,7 +54,7 @@ void XlsxBeginPart(XlsxWriter *w, const char *name)
 
 void XlsxWrite(XlsxWriter *w, const void *buf, UInt32 len)
 {
-    w->crc = CrcUpdate(w->crcTable, w->crc, (const UInt8 *)buf, len);
+    w->crc = Crc32Update(w->crcTable, w->crc, (const UInt8 *)buf, len);
     OutWrite(w->out, buf, len);
 }
 

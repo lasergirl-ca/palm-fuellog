@@ -72,8 +72,9 @@ padding and 64,000 bytes of records, so the exporter writes a plain PDB with no 
 - Card writes through `VFSFileWrite` are the slow path at 86 KB/s. A CSV of a thousand
   fills (about 100 KB) takes a little over a second; an XLSX or PDF of a few hundred KB takes
   several seconds, which is why those exports get the cancellable progress dialog the spec
-  already calls for. Larger chunks may help and are worth one measurement when the real
-  writers land in M5; the fallback of smaller chunks is not needed.
+  already calls for. Larger chunks help a great deal: SP6 wrote 1.6 MB in 32 KB pieces in about one
+  second, so the export writers should buffer 32 KB. The fallback of smaller chunks is not
+  needed.
 - Reads are six times faster than writes, so import of a 200 KB spreadsheet spends its time
   in parsing, not in the card.
 - Creating 1,000 records took 870 ms, under one millisecond each, so the import's second

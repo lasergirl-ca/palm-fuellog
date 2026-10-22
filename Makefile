@@ -13,8 +13,8 @@ HOSTCC   := cc
 CFLAGS   := -O2 -Wall -palmos5r3 -Irsc -Isrc -MMD
 BUILD    := build
 
-SRCS := src/main.c src/hello2.c src/calc.c src/device.c src/graph.c src/vfstest.c \
-        src/outstream.c src/xlsx.c src/pdf.c
+SRCS := src/main.c src/hello2.c src/calc.c src/device.c src/graph.c src/vfstest.c src/sp6test.c \
+        src/outstream.c src/xlsx.c src/pdf.c src/crc32.c src/inflate.c src/zipread.c
 OBJS := $(patsubst src/%.c,$(BUILD)/%.o,$(SRCS))
 SECT := $(BUILD)/fuellog-sections
 
@@ -51,7 +51,8 @@ $(BUILD)/rcp.stamp: rsc/fuellog.rcp rsc/resources.h | $(BUILD)
 $(APP).prc: $(DEF) $(BUILD)/$(APP) $(BUILD)/rcp.stamp
 	$(BUILDPRC) -o $@ $(DEF) $(BUILD)/$(APP) $(BUILD)/*.bin
 
-EXPORT_SRCS := src/outstream.c src/xlsx.c src/pdf.c
+EXPORT_SRCS := src/outstream.c src/xlsx.c src/pdf.c src/crc32.c
+INFLATE_EXTRA ?= docs/spikes/samples/sp6.xlsx
 
 test: $(BUILD)
 	$(HOSTCC) -Wall -Wextra -o $(BUILD)/test_calc tests/test_calc.c src/calc.c
@@ -60,6 +61,8 @@ test: $(BUILD)
 	$(HOSTCC) -Wall -Wextra -o $(BUILD)/test_export tests/test_export.c $(EXPORT_SRCS)
 	$(BUILD)/test_export
 	python3 -I tools/check_xlsx.py $(BUILD)/out/fuellog-seek.xlsx $(BUILD)/out/fuellog-stream.xlsx
+	$(HOSTCC) -Wall -Wextra -O2 -o $(BUILD)/test_inflate tests/test_inflate.c src/inflate.c src/zipread.c src/crc32.c
+	python3 -I tools/check_inflate.py $(BUILD)/test_inflate $(BUILD)/inflate $(INFLATE_EXTRA)
 
 check: $(APP).prc
 	python3 -I tools/prcinfo.py $(APP).prc --expect-code 4

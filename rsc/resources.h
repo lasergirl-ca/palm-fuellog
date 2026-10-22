@@ -4,6 +4,7 @@
 #define MainMathLabel   1004
 #define MainDoneButton  1003
 #define MainSp4Button   1005
+#define MainSp6Button   1006
 
-#define Sp4Form         1100
-#define Sp4DoneButton   1101
+#define ResultsForm     1100
+#define ResultsDoneButton 1101

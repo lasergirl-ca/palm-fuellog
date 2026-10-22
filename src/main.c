@@ -11,6 +11,7 @@
 #include "device.h"
 #include "graph.h"
 #include "vfstest.h"
+#include "sp6test.h"
 
 #define kMinRomVersion sysMakeROMVersion(3, 0, 0, sysROMStageRelease, 0)
 
@@ -40,6 +41,11 @@ static void LayoutMainForm(FormType *form)
     FrmSetObjectBounds(form, idx, &r);
 
     idx = FrmGetObjectIndex(form, MainSp4Button);
+    FrmGetObjectBounds(form, idx, &r);
+    r.topLeft.y = h - r.extent.y - 3;
+    FrmSetObjectBounds(form, idx, &r);
+
+    idx = FrmGetObjectIndex(form, MainSp6Button);
     FrmGetObjectBounds(form, idx, &r);
     r.topLeft.y = h - r.extent.y - 3;
     FrmSetObjectBounds(form, idx, &r);
@@ -127,7 +133,12 @@ static Boolean MainFormHandleEvent(EventType *event)
         }
         if (event->data.ctlSelect.controlID == MainSp4Button) {
             gSp4Count = VfsTestRun(gSp4Lines);
-            FrmGotoForm(Sp4Form);
+            FrmGotoForm(ResultsForm);
+            return true;
+        }
+        if (event->data.ctlSelect.controlID == MainSp6Button) {
+            gSp4Count = Sp6TestRun(gSp4Lines);
+            FrmGotoForm(ResultsForm);
             return true;
         }
         break;
@@ -157,7 +168,7 @@ static Boolean Sp4FormHandleEvent(EventType *event)
         DrawSp4Lines();
         return true;
     case ctlSelectEvent:
-        if (event->data.ctlSelect.controlID == Sp4DoneButton) {
+        if (event->data.ctlSelect.controlID == ResultsDoneButton) {
             FrmGotoForm(MainForm);
             return true;
         }
@@ -174,7 +185,7 @@ static Boolean AppHandleEvent(EventType *event)
         UInt16 formId = event->data.frmLoad.formID;
         FormType *form = FrmInitForm(formId);
         FrmSetActiveForm(form);
-        if (formId == Sp4Form)
+        if (formId == ResultsForm)
             FrmSetEventHandler(form, Sp4FormHandleEvent);
         if (formId == MainForm) {
             FrmSetEventHandler(form, MainFormHandleEvent);
