@@ -39,4 +39,37 @@ UInt32 CalcMpgX10(UInt32 l100x10, UInt8 imperial);
 UInt32 CalcEarnedPoints(UInt32 earnRate, UInt8 basis, UInt32 volumeMl,
                         UInt32 grossCents, UInt16 premiumMult);
 
+/* ---- charging ---- */
+
+/* kWh/100 km x 10 for wh watt-hours over dkm tenths of a kilometre, the
+ * same shape as fuel economy; 0 when dkm is 0. */
+UInt32 CalcKwh100kmX10(UInt32 wh, UInt32 dkm);
+
+/* Energy cost per 100 km in cents: homeCents of fuel and electricity
+ * together over dkm. This is the plug-in hybrid's honest number. */
+UInt32 CalcCostPer100kmCents(UInt32 homeCents, UInt32 dkm);
+
+/* ---- redemptions ---- */
+
+#define calcRedeemNone      0
+#define calcRedeemMoneyOff  1
+#define calcRedeemPerVolume 2
+#define calcVolLitre    0
+#define calcVolUSGallon 1
+
+typedef struct {
+    UInt8  kind;
+    UInt32 block;        /* points per step */
+    UInt32 value;        /* thousandths of currency per step (per volume unit for discounts) */
+    UInt8  volUnit;
+    UInt32 maxVol;       /* mL cap per fill, 0 = none */
+    UInt32 maxPerUnit;   /* thousandths of currency per volume unit cap, 0 = none */
+} CalcRedeemRule;
+
+/* Discount in cents for redeeming `points` on a fill of volumeMl under the
+ * rule, never more than grossCents. Money off: whole steps of block points
+ * are worth value each. Per volume: each step takes value off every unit
+ * of the capped volume, with the per-unit discount capped too. */
+UInt32 CalcDiscountCents(const CalcRedeemRule *rule, UInt32 points, UInt32 volumeMl, UInt32 grossCents);
+
 #endif

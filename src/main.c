@@ -12,6 +12,7 @@
 #include "graph.h"
 #include "vfstest.h"
 #include "sp6test.h"
+#include "m1test.h"
 
 #define kMinRomVersion sysMakeROMVersion(3, 0, 0, sysROMStageRelease, 0)
 
@@ -46,6 +47,11 @@ static void LayoutMainForm(FormType *form)
     FrmSetObjectBounds(form, idx, &r);
 
     idx = FrmGetObjectIndex(form, MainSp6Button);
+    FrmGetObjectBounds(form, idx, &r);
+    r.topLeft.y = h - r.extent.y - 3;
+    FrmSetObjectBounds(form, idx, &r);
+
+    idx = FrmGetObjectIndex(form, MainM1Button);
     FrmGetObjectBounds(form, idx, &r);
     r.topLeft.y = h - r.extent.y - 3;
     FrmSetObjectBounds(form, idx, &r);
@@ -141,6 +147,11 @@ static Boolean MainFormHandleEvent(EventType *event)
             FrmGotoForm(ResultsForm);
             return true;
         }
+        if (event->data.ctlSelect.controlID == MainM1Button) {
+            gSp4Count = M1TestRun(gSp4Lines);
+            FrmGotoForm(ResultsForm);
+            return true;
+        }
         break;
 
     default:
@@ -154,7 +165,7 @@ static void DrawSp4Lines(void)
     UInt16 i;
     FntSetFont(stdFont);
     for (i = 0; i < gSp4Count; i++)
-        WinDrawChars(gSp4Lines[i], StrLen(gSp4Lines[i]), 4, 18 + i * 11);
+        WinDrawChars(gSp4Lines[i], StrLen(gSp4Lines[i]), 4, 16 + i * 10);
 }
 
 static Boolean Sp4FormHandleEvent(EventType *event)

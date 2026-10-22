@@ -56,6 +56,34 @@ int main(void)
     check("worst per gal", CalcEarnedPoints(10000, calcEarnPerUSGallon, 200000, 200000, 300), 15850);
     check("worst per $", CalcEarnedPoints(10000, calcEarnPerCurrency, 200000, 200000, 300), 600000);
 
+    /* Charging (New Charge sample): 38.6 kWh over 254 km is 15.2 kWh/100 km,
+     * and $4.25 over 254 km is $1.67 per 100 km. */
+    check("EV 38.6 kWh / 254 km", CalcKwh100kmX10(38600, 2540), 152);
+    check("EV cost per 100 km", CalcCostPer100kmCents(425, 2540), 167);
+    check("fuel cost per 100 km (Stats sample)", CalcCostPer100kmCents(52071, 35620), 1462);
+    check("cost per 100 km of zero distance", CalcCostPer100kmCents(425, 0), 0);
+
+    /* Redemptions. Petro-Points: 1,000 pts = $1.00 off, whole steps only. */
+    {
+        CalcRedeemRule petro, kroger, pco, none;
+        petro.kind = calcRedeemMoneyOff; petro.block = 1000; petro.value = 1000; petro.volUnit = 0; petro.maxVol = 0; petro.maxPerUnit = 0;
+        check("Petro 3,399 pts -> $3.00", CalcDiscountCents(&petro, 3399, 47300, 8462), 300);
+        check("Petro 999 pts -> nothing", CalcDiscountCents(&petro, 999, 47300, 8462), 0);
+        check("Petro never above the total", CalcDiscountCents(&petro, 20000, 47300, 1500), 1500);
+        /* Kroger: 100 pts = 10 c/gal off, up to $1/gal, on up to 35 gal. */
+        kroger.kind = calcRedeemPerVolume; kroger.block = 100; kroger.value = 100; kroger.volUnit = calcVolUSGallon;
+        kroger.maxVol = 132489; kroger.maxPerUnit = 1000;
+        check("Kroger 100 pts on 12.495 gal -> $1.25", CalcDiscountCents(&kroger, 100, 47300, 8462), 125);
+        check("Kroger 1,240 pts -> $1.00/gal cap -> $12.50", CalcDiscountCents(&kroger, 1240, 47300, 8462), 1250);
+        check("Kroger 35 gal volume cap on 50 gal", CalcDiscountCents(&kroger, 1000, 189271, 30000), 3500);
+        /* PC Optimum: 4,000 pts = 10 c/L off up to 40 L. */
+        pco.kind = calcRedeemPerVolume; pco.block = 4000; pco.value = 100; pco.volUnit = calcVolLitre; pco.maxVol = 40000; pco.maxPerUnit = 0;
+        check("PC Optimum 4,000 pts on 47.3 L -> 40 L cap -> $4.00", CalcDiscountCents(&pco, 4000, 47300, 8462), 400);
+        check("PC Optimum 3,999 pts -> nothing", CalcDiscountCents(&pco, 3999, 47300, 8462), 0);
+        none.kind = calcRedeemNone; none.block = 0; none.value = 0; none.volUnit = 0; none.maxVol = 0; none.maxPerUnit = 0;
+        check("no redemption rule", CalcDiscountCents(&none, 5000, 47300, 8462), 0);
+    }
+
     printf("%d failure(s)\n", failures);
     return failures ? 1 : 0;
 }

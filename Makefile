@@ -14,6 +14,7 @@ CFLAGS   := -O2 -Wall -palmos5r3 -Irsc -Isrc -MMD
 BUILD    := build
 
 SRCS := src/main.c src/hello2.c src/calc.c src/device.c src/graph.c src/vfstest.c src/sp6test.c \
+        src/m1test.c src/db.c src/prefs.c src/records.c src/units.c src/currency.c \
         src/outstream.c src/xlsx.c src/pdf.c src/crc32.c src/inflate.c src/zipread.c
 OBJS := $(patsubst src/%.c,$(BUILD)/%.o,$(SRCS))
 SECT := $(BUILD)/fuellog-sections
@@ -57,6 +58,12 @@ INFLATE_EXTRA ?= docs/spikes/samples/sp6.xlsx
 test: $(BUILD)
 	$(HOSTCC) -Wall -Wextra -o $(BUILD)/test_calc tests/test_calc.c src/calc.c
 	$(BUILD)/test_calc
+	$(HOSTCC) -Wall -Wextra -o $(BUILD)/test_records tests/test_records.c src/records.c
+	$(BUILD)/test_records
+	$(HOSTCC) -Wall -Wextra -o $(BUILD)/test_units tests/test_units.c src/units.c src/currency.c src/calc.c src/records.c
+	$(BUILD)/test_units
+	$(HOSTCC) -Wall -Wextra -o $(BUILD)/test_prefs tests/test_prefs.c src/prefs.c
+	$(BUILD)/test_prefs
 	mkdir -p $(BUILD)/out
 	$(HOSTCC) -Wall -Wextra -o $(BUILD)/test_export tests/test_export.c $(EXPORT_SRCS)
 	$(BUILD)/test_export

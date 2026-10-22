@@ -66,3 +66,42 @@ UInt32 CalcEarnedPoints(UInt32 earnRate, UInt8 basis, UInt32 volumeMl,
     d *= 100;
     return (UInt32)((n + d / 2) / d);
 }
+
+UInt32 CalcKwh100kmX10(UInt32 wh, UInt32 dkm)
+{
+    if (dkm == 0)
+        return 0;
+    return CalcMulDiv(wh, 10, dkm);
+}
+
+UInt32 CalcCostPer100kmCents(UInt32 homeCents, UInt32 dkm)
+{
+    if (dkm == 0)
+        return 0;
+    return CalcMulDiv(homeCents, 1000, dkm);   /* cents / (dkm / 1000) */
+}
+
+UInt32 CalcDiscountCents(const CalcRedeemRule *rule, UInt32 points, UInt32 volumeMl, UInt32 grossCents)
+{
+    UInt32 steps, cents;
+    U64 n;
+
+    if (rule->kind == calcRedeemNone || rule->block == 0 || points < rule->block)
+        return 0;
+    steps = points / rule->block;
+    if (rule->kind == calcRedeemMoneyOff) {
+        n = (U64)steps * rule->value;                       /* thousandths */
+        cents = (UInt32)((n + 5) / 10);
+    } else {
+        UInt32 vol = volumeMl;
+        U64 perUnitTh = (U64)steps * rule->value;           /* thousandths per volume unit */
+        if (rule->maxVol && vol > rule->maxVol) vol = rule->maxVol;
+        if (rule->maxPerUnit && perUnitTh > rule->maxPerUnit) perUnitTh = rule->maxPerUnit;
+        if (rule->volUnit == calcVolUSGallon)
+            n = perUnitTh * vol * 1000000ULL / 3785411784ULL; /* thousandths over the gallons (mL / 3785.411784) */
+        else
+            n = perUnitTh * vol / 1000ULL;                  /* thousandths over the litres */
+        cents = (UInt32)((n + 5) / 10);
+    }
+    return cents > grossCents ? grossCents : cents;
+}
