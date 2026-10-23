@@ -61,6 +61,7 @@ UInt32 FillPack(const FillRecord *r, UInt8 *buf)
     UInt8 *p = buf, np = r->pointCount > fillMaxPoints ? fillMaxPoints : r->pointCount, i;
     UInt32 n;
     p = Put16(p, r->date);
+    p = Put16(p, r->time);
     p = Put16(p, r->flags);
     p = Put8(p, r->vehicle);
     p = Put8(p, r->grade);
@@ -92,6 +93,7 @@ Int32 FillUnpack(const UInt8 *buf, UInt32 len, FillRecord *r)
     UInt32 n;
     if (len < fillHeaderSize) return -1;
     p = Get16(p, &r->date);
+    p = Get16(p, &r->time);
     p = Get16(p, &r->flags);
     p = Get8(p, &r->vehicle);
     p = Get8(p, &r->grade);
@@ -126,7 +128,7 @@ Int32 FillCompare(const UInt8 *a, const UInt8 *b)
     UInt32 oa, ob;
     Get16(a, &da); Get16(b, &db);
     if (da != db) return da < db ? -1 : 1;
-    Get32(a + 6, &oa); Get32(b + 6, &ob);
+    Get32(a + 8, &oa); Get32(b + 8, &ob);
     if (oa != ob) return oa < ob ? -1 : 1;
     return 0;
 }

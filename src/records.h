@@ -32,7 +32,8 @@
 
 #define fillMaxPoints 4
 #define fillMaxNotes  256          /* bytes including the terminator */
-#define fillHeaderSize 37
+#define fillHeaderSize 39
+#define fillTimeUnknown 0xFFFF     /* no time entered */
 #define fillPointSize  9
 
 typedef struct {
@@ -43,13 +44,14 @@ typedef struct {
 
 typedef struct {
     UInt16 date;          /* days since 1904-01-01 */
+    UInt16 time;          /* minutes since midnight, or fillTimeUnknown */
     UInt16 flags;
     UInt8  vehicle;
     UInt8  grade;
     UInt32 odometer;      /* km x 10 */
     UInt32 trip;          /* km x 10 */
     UInt32 volume;        /* mL, or Wh for a charge */
-    UInt32 price;         /* thousandths of a currency unit per L or kWh */
+    UInt32 price;         /* ten-thousandths of a currency unit per L or kWh */
     UInt32 total;         /* cents actually paid */
     UInt32 discount;      /* cents taken off by points */
     UInt8  currency;
@@ -86,7 +88,7 @@ typedef struct {
     UInt32 startOdo;      /* km x 10 */
     UInt32 tankSize;      /* mL */
     UInt32 batteryWh;
-    UInt32 homeRate;      /* thousandths per kWh */
+    UInt32 homeRate;      /* ten-thousandths of a currency unit per kWh */
     UInt8  fuelDefault;
     UInt8  defaultCurrency;
     UInt8  archived;

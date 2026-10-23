@@ -1,2 +1,2 @@
-application { "FuelLog" ZFlg }
+application { "FuelLog" ZFlg stack=16384 }
 multiple code { sec2 xport }

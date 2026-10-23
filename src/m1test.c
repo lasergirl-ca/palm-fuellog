@@ -35,8 +35,8 @@ UInt16 M1TestRun(char lines[vfsTestMaxLines][vfsTestLineLen])
 
     /* A fill through pack, sorted insert and unpack. */
     MemSet(&f, sizeof f, 0);
-    f.date = 44852; f.flags = fillFlagFullTank; f.vehicle = 1; f.odometer = 842120; f.trip = 5720;
-    f.volume = 48200; f.price = 1749; f.total = 8430; f.currency = curCAD; f.fxRate = fxOne;
+    f.date = 44852; f.time = fillTimeUnknown; f.flags = fillFlagFullTank; f.vehicle = 1; f.odometer = 842120; f.trip = 5720;
+    f.volume = 48200; f.price = 17490; f.total = 8430; f.currency = curCAD; f.fxRate = fxOne;
     f.pointCount = 1; f.points[0].programme = 2; f.points[0].earned = 482;
     StrCopy(f.notes, "M1 check");
     before = DbCount(dbFills);

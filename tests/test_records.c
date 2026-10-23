@@ -26,35 +26,37 @@ int main(void)
     {
         FillRecord f, g;
         memset(&f, 0, sizeof f);
-        f.date = 44852; f.flags = fillFlagFullTank | fillFlagTripEntered; f.vehicle = 1; f.grade = fillGradeRegular;
-        f.odometer = 842120; f.trip = 5720; f.volume = 48200; f.price = 1749; f.total = 8430; f.discount = 0;
+        f.date = 44852; f.time = 11 * 60 + 36; f.flags = fillFlagFullTank | fillFlagTripEntered; f.vehicle = 1; f.grade = fillGradeRegular;
+        f.odometer = 842120; f.trip = 5720; f.volume = 48200; f.price = 17490; f.total = 8430; f.discount = 0;
         f.currency = 1; f.fxRate = 1000000; f.payment = fillPaymentCash; f.pointCount = 2;
         f.points[0].programme = 2; f.points[0].earned = 482; f.points[0].redeemed = 0;
         f.points[1].programme = 3; f.points[1].earned = 145; f.points[1].redeemed = -7;
         strcpy(f.notes, "Petro-Canada on 152 St.");
         n = FillPack(&f, buf);
         check("fill size", n, FillSize(&f));
-        check("fill size value", n, 37 + 2 * 9 + 23 + 1);
+        check("fill size value", n, 39 + 2 * 9 + 23 + 1);
         /* Byte offsets from the design spec's canonical layout. */
         check("fill date at 0", (buf[0] << 8) | buf[1], 44852);
-        check("fill flags at 2", (buf[2] << 8) | buf[3], 5);
-        check("fill vehicle at 4", buf[4], 1);
-        check("fill odometer at 6", ((long)buf[6] << 24) | (buf[7] << 16) | (buf[8] << 8) | buf[9], 842120);
-        check("fill total at 22", ((long)buf[22] << 24) | (buf[23] << 16) | (buf[24] << 8) | buf[25], 8430);
-        check("fill currency at 30", buf[30], 1);
-        check("fill fxRate at 31", ((long)buf[31] << 24) | (buf[32] << 16) | (buf[33] << 8) | buf[34], 1000000);
-        check("fill payment at 35", buf[35], 0);
-        check("fill pointCount at 36", buf[36], 2);
-        check("fill point 1 pgm at 37", buf[37], 2);
-        check("fill point 2 redeemed at 51 (odd offset)", (long)(Int32)(((UInt32)buf[51] << 24) | (buf[52] << 16) | (buf[53] << 8) | buf[54]), -7);
-        check("fill notes at 55", buf[55], 'P');
+        check("fill time at 2", (buf[2] << 8) | buf[3], 696);
+        check("fill flags at 4", (buf[4] << 8) | buf[5], 5);
+        check("fill vehicle at 6", buf[6], 1);
+        check("fill odometer at 8", ((long)buf[8] << 24) | (buf[9] << 16) | (buf[10] << 8) | buf[11], 842120);
+        check("fill total at 24", ((long)buf[24] << 24) | (buf[25] << 16) | (buf[26] << 8) | buf[27], 8430);
+        check("fill currency at 32", buf[32], 1);
+        check("fill fxRate at 33", ((long)buf[33] << 24) | (buf[34] << 16) | (buf[35] << 8) | buf[36], 1000000);
+        check("fill payment at 37", buf[37], 0);
+        check("fill pointCount at 38", buf[38], 2);
+        check("fill point 1 pgm at 39", buf[39], 2);
+        check("fill point 2 redeemed at 53 (odd offset)", (long)(Int32)(((UInt32)buf[53] << 24) | (buf[54] << 16) | (buf[55] << 8) | buf[56]), -7);
+        check("fill notes at 57", buf[57], 'P');
         check("fill terminator", buf[n - 1], 0);
         check("fill unpack", FillUnpack(buf, n, &g), 0);
         check("fill odometer back", g.odometer, 842120);
+        check("fill time back", g.time, 696);
         check("fill redeemed back", g.points[1].redeemed, -7);
         checkStr("fill notes back", g.notes, "Petro-Canada on 152 St.");
         check("fill unpack short buffer", FillUnpack(buf, 20, &g), -1);
-        buf[36] = 5;
+        buf[38] = 5;
         check("fill unpack bad pointCount", FillUnpack(buf, n, &g), -1);
         /* Sort order: date, then odometer. */
         {
@@ -71,7 +73,7 @@ int main(void)
         /* Notes longer than the field are cut to 255 bytes plus the terminator. */
         memset(f.notes, 'x', sizeof f.notes); f.notes[sizeof f.notes - 1] = 0;
         n = FillPack(&f, buf);
-        check("fill long notes size", n, 37 + 18 + 255 + 1);
+        check("fill long notes size", n, 39 + 18 + 255 + 1);
     }
 
     /* Vehicle: fixed 47 bytes, name padded with zeros. */

@@ -184,20 +184,21 @@ Err DbRemove(UInt8 which, UInt16 index)
     return DmRemoveRecord(gRef[which], index);
 }
 
+/* Packed-record scratch kept off the 4 KB 68k stack. */
+static UInt8 gPacked[fillHeaderSize + fillMaxPoints * fillPointSize + fillMaxNotes];
+
 Err DbAddFill(const FillRecord *r, UInt16 *indexOut)
 {
-    UInt8 buf[fillHeaderSize + fillMaxPoints * fillPointSize + fillMaxNotes];
-    UInt32 len = FillPack(r, buf);
-    return DbAdd(dbFills, buf, len, indexOut);
+    UInt32 len = FillPack(r, gPacked);
+    return DbAdd(dbFills, gPacked, len, indexOut);
 }
 
 Err DbGetFill(UInt16 index, FillRecord *r)
 {
-    UInt8 buf[fillHeaderSize + fillMaxPoints * fillPointSize + fillMaxNotes];
     UInt32 len;
-    Err err = DbGet(dbFills, index, buf, sizeof buf, &len);
+    Err err = DbGet(dbFills, index, gPacked, sizeof gPacked, &len);
     if (err) return err;
-    return FillUnpack(buf, len, r) == 0 ? errNone : dbErrCorrupt;
+    return FillUnpack(gPacked, len, r) == 0 ? errNone : dbErrCorrupt;
 }
 
 Err DbAddVehicle(const VehicleRecord *r, UInt16 *indexOut)

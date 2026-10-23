@@ -13,6 +13,10 @@
 #include "vfstest.h"
 #include "sp6test.h"
 #include "m1test.h"
+#include "app.h"
+#include "db.h"
+#include "fill_list.h"
+#include "fill_form.h"
 
 #define kMinRomVersion sysMakeROMVersion(3, 0, 0, sysROMStageRelease, 0)
 
@@ -22,7 +26,7 @@ static char gSp4Lines[vfsTestMaxLines][vfsTestLineLen];
 static UInt16 gSp4Count;
 
 /* Fit the form to the display and keep Done at the bottom. */
-static void LayoutMainForm(FormType *form)
+static void LayoutDiagForm(FormType *form)
 {
     RectangleType bounds, r;
     Coord w, h;
@@ -97,14 +101,14 @@ static void FillLabels(FormType *form)
     FrmCopyLabel(form, MainMathLabel, text);
 }
 
-static Boolean MainFormHandleEvent(EventType *event)
+static Boolean DiagFormHandleEvent(EventType *event)
 {
     FormType *form = FrmGetActiveForm();
 
     switch (event->eType) {
     case frmOpenEvent:
         FillLabels(form);
-        LayoutMainForm(form);
+        LayoutDiagForm(form);
         DrawAll(form);
         return true;
 
@@ -114,7 +118,7 @@ static Boolean MainFormHandleEvent(EventType *event)
 
     case winDisplayChangedEvent:
         /* The input area opened or collapsed: refit and redraw everything. */
-        LayoutMainForm(form);
+        LayoutDiagForm(form);
         WinEraseWindow();
         DrawAll(form);
         return true;
@@ -131,10 +135,7 @@ static Boolean MainFormHandleEvent(EventType *event)
 
     case ctlSelectEvent:
         if (event->data.ctlSelect.controlID == MainDoneButton) {
-            EventType stop;
-            MemSet(&stop, sizeof(stop), 0);
-            stop.eType = appStopEvent;
-            EvtAddEventToQueue(&stop);
+            FrmGotoForm(FillListForm);
             return true;
         }
         if (event->data.ctlSelect.controlID == MainSp4Button) {
@@ -180,7 +181,7 @@ static Boolean Sp4FormHandleEvent(EventType *event)
         return true;
     case ctlSelectEvent:
         if (event->data.ctlSelect.controlID == ResultsDoneButton) {
-            FrmGotoForm(MainForm);
+            FrmGotoForm(DiagForm);
             return true;
         }
         break;
@@ -196,19 +197,24 @@ static Boolean AppHandleEvent(EventType *event)
         UInt16 formId = event->data.frmLoad.formID;
         FormType *form = FrmInitForm(formId);
         FrmSetActiveForm(form);
-        if (formId == ResultsForm)
+        switch (formId) {
+        case FillListForm:
+            FrmSetEventHandler(form, FillListHandleEvent);
+            AppSetupDIA(form);
+            break;
+        case FillForm:
+            FrmSetEventHandler(form, FillFormHandleEvent);
+            AppSetupDIA(form);
+            break;
+        case DiagForm:
+            FrmSetEventHandler(form, DiagFormHandleEvent);
+            AppSetupDIA(form);
+            break;
+        case ResultsForm:
             FrmSetEventHandler(form, Sp4FormHandleEvent);
-        if (formId == MainForm) {
-            FrmSetEventHandler(form, MainFormHandleEvent);
-            if (DeviceHasPIN()) {
-                /* Let the user collapse the input area; the form may grow
-                 * from 160 to 225 rows of standard coordinates. */
-                FrmSetDIAPolicyAttr(form, frmDIAPolicyCustom);
-                PINSetInputTriggerState(pinInputTriggerEnabled);
-                WinSetConstraintsSize(FrmGetWindowHandle(form),
-                                      160, 225, 225, 160, 160, 160);
-                PINSetInputAreaState(pinInputAreaUser);
-            }
+            break;
+        default:
+            break;
         }
         return true;
     }
@@ -250,9 +256,17 @@ UInt32 PilotMain(UInt16 cmd, MemPtr cmdPBP, UInt16 launchFlags)
         if (RomVersionCompatible(kMinRomVersion, launchFlags) != errNone)
             return sysErrRomIncompatible;
         DeviceInit();
-        FrmGotoForm(MainForm);
+        PrefsLoad(&gPrefs);
+        LocGetNumberSeparators((NumberFormatType)PrefGetPreference(prefNumberFormat), &gThousands, &gPoint);
+        if (DbOpenAll() != errNone) {
+            FrmAlert(SaveFailedAlert);
+            return errNone;
+        }
+        FrmGotoForm(FillListForm);
         AppEventLoop();
         FrmCloseAllForms();
+        PrefsSave(&gPrefs);
+        DbCloseAll();
     }
     return errNone;
 }

@@ -15,6 +15,7 @@ BUILD    := build
 
 SRCS := src/main.c src/hello2.c src/calc.c src/device.c src/graph.c src/vfstest.c src/sp6test.c \
         src/m1test.c src/db.c src/prefs.c src/records.c src/units.c src/currency.c \
+        src/app.c src/fill_list.c src/fill_form.c src/text.c src/datecalc.c \
         src/outstream.c src/xlsx.c src/pdf.c src/crc32.c src/inflate.c src/zipread.c
 OBJS := $(patsubst src/%.c,$(BUILD)/%.o,$(SRCS))
 SECT := $(BUILD)/fuellog-sections
@@ -64,6 +65,10 @@ test: $(BUILD)
 	$(BUILD)/test_units
 	$(HOSTCC) -Wall -Wextra -o $(BUILD)/test_prefs tests/test_prefs.c src/prefs.c
 	$(BUILD)/test_prefs
+	$(HOSTCC) -Wall -Wextra -o $(BUILD)/test_text tests/test_text.c src/text.c
+	$(BUILD)/test_text
+	$(HOSTCC) -Wall -Wextra -o $(BUILD)/test_date tests/test_date.c src/datecalc.c
+	$(BUILD)/test_date
 	mkdir -p $(BUILD)/out
 	$(HOSTCC) -Wall -Wextra -o $(BUILD)/test_export tests/test_export.c $(EXPORT_SRCS)
 	$(BUILD)/test_export

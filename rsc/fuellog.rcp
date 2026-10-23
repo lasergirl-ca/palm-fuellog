@@ -2,11 +2,11 @@
 
 VERSION "0.0.1"
 
-FORM ID MainForm AT (0 0 160 160)
+FORM ID DiagForm AT (0 0 160 160)
 NOFRAME
 USABLE
 BEGIN
-    TITLE "FuelLog"
+    TITLE "Diagnostics"
     LABEL "                                  " ID MainSectionLabel AT (4 17) FONT 0
     LABEL "                                  " ID MainMathLabel AT (4 28) FONT 0
     BUTTON "Done" ID MainDoneButton AT (116 144 40 12)
@@ -21,4 +21,112 @@ USABLE
 BEGIN
     TITLE "Results"
     BUTTON "Done" ID ResultsDoneButton AT (116 146 40 12)
+END
+
+FORM ID FillListForm AT (0 0 160 160)
+NOFRAME
+USABLE
+MENUID MainMenuBar
+BEGIN
+    TITLE "FuelLog"
+    BUTTON "New" ID FillListNewButton AT (4 146 32 12)
+    BUTTON "Stats" ID FillListStatsButton AT (42 146 34 12)
+    BUTTON "Service" ID FillListServiceButton AT (82 146 42 12)
+END
+
+FORM ID FillForm AT (0 0 160 160)
+NOFRAME
+USABLE
+BEGIN
+    TITLE "New Fill"
+    LABEL "Date:" AUTOID AT (32 17) FONT 0
+    SELECTORTRIGGER "Oct 22" ID FillDateTrigger AT (58 17 36 12)
+    SELECTORTRIGGER "11:36 am" ID FillTimeTrigger AT (96 17 44 12)
+    LABEL "Odometer:" AUTOID AT (12 30) FONT 0
+    FIELD ID FillOdoField AT (58 30 50 12) UNDERLINED MAXCHARS 10 NUMERIC
+    LABEL "               " ID FillOdoHint AT (111 30) FONT 0
+    LABEL "Trip:" AUTOID AT (35 43) FONT 0
+    FIELD ID FillTripField AT (58 43 50 12) UNDERLINED MAXCHARS 8 NUMERIC
+    LABEL "              " ID FillTripHint AT (111 43) FONT 0
+    LABEL "Volume (L):     " ID FillVolumeLabel AT (2 56) FONT 0
+    FIELD ID FillVolumeField AT (58 56 50 12) UNDERLINED MAXCHARS 8 NUMERIC
+    LABEL "Price (c/L):     " ID FillPriceLabel AT (2 69) FONT 0
+    FIELD ID FillPriceField AT (58 69 50 12) UNDERLINED MAXCHARS 8 NUMERIC
+    LABEL "Total:" AUTOID AT (30 82) FONT 0
+    FIELD ID FillTotalField AT (58 82 50 12) UNDERLINED MAXCHARS 9 NUMERIC
+    LABEL "            " ID FillCalcHint AT (111 82) FONT 0
+    LABEL "Currency:" AUTOID AT (13 95) FONT 0
+    POPUPTRIGGER "CAD" ID FillCurrencyTrigger AT (58 95 40 12) LEFTANCHOR
+    LIST "USD" "CAD" "EUR" "AUD" ID FillCurrencyList AT (58 95 40 44) NONUSABLE VISIBLEITEMS 4
+    POPUPLIST ID FillCurrencyTrigger FillCurrencyList
+    LABEL "Paid:" AUTOID AT (33 108) FONT 0
+    PUSHBUTTON "Cash" ID FillCashButton AT (58 108 30 12) GROUP 1
+    PUSHBUTTON "Card" ID FillCardButton AT (PREVRIGHT 108 30 12) GROUP 1
+    LABEL "Grade:" AUTOID AT (27 121) FONT 0
+    POPUPTRIGGER "Regular" ID FillGradeTrigger AT (58 121 50 12) LEFTANCHOR
+    LIST "Regular" "Mid" "Premium" "Diesel" ID FillGradeList AT (58 121 50 44) NONUSABLE VISIBLEITEMS 4
+    POPUPLIST ID FillGradeTrigger FillGradeList
+    CHECKBOX "Full tank" ID FillFullCheckbox AT (56 133 60 12) CHECKED
+    BUTTON "Done" ID FillDoneButton AT (4 146 36 12)
+    BUTTON "Cancel" ID FillCancelButton AT (46 146 40 12)
+    BUTTON "Delete" ID FillDeleteButton AT (116 146 40 12)
+    GRAFFITISTATEINDICATOR AT (150 150)
+END
+
+MENU ID MainMenuBar
+BEGIN
+    PULLDOWN "Options"
+    BEGIN
+        MENUITEM "Diagnostics" ID MenuDiagnostics
+        MENUITEM "About FuelLog" ID MenuAbout
+    END
+END
+
+ALERT ID NotYetAlert
+INFORMATION
+BEGIN
+    TITLE "Not yet"
+    MESSAGE "This screen arrives in a later milestone."
+    BUTTONS "OK"
+END
+
+ALERT ID BadNumberAlert
+ERROR
+BEGIN
+    TITLE "Check the numbers"
+    MESSAGE "A number could not be read, or the odometer is missing. Fix the field with the stray character and tap Done again."
+    BUTTONS "OK"
+END
+
+ALERT ID NeedVolumeAlert
+ERROR
+BEGIN
+    TITLE "Nothing to log"
+    MESSAGE "Enter the volume, or the total and the price, so FuelLog has something to work out."
+    BUTTONS "OK"
+END
+
+ALERT ID SaveFailedAlert
+ERROR
+BEGIN
+    TITLE "Could not save"
+    MESSAGE "The fill was not stored. Free some memory and try again."
+    BUTTONS "OK"
+END
+
+ALERT ID DeleteFillAlert
+CONFIRMATION
+DEFAULTBUTTON 1
+BEGIN
+    TITLE "Delete this fill?"
+    MESSAGE "Balances and economy will be recalculated without it."
+    BUTTONS "Delete" "Cancel"
+END
+
+ALERT ID AboutAlert
+INFORMATION
+BEGIN
+    TITLE "FuelLog"
+    MESSAGE "FuelLog 0.1 for Palm OS 5. Spikes and M1 complete; M2 in progress."
+    BUTTONS "OK"
 END
