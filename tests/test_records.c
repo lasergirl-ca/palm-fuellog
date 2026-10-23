@@ -2,6 +2,8 @@
 #include <stdio.h>
 #include <string.h>
 #include "../src/records.h"
+#include "../src/presets.h"
+#include "../src/calc.h"
 
 static int failures;
 
@@ -159,6 +161,45 @@ int main(void)
         check("appinfo version bytes", (buf[0] << 8) | buf[1], 1);
         check("appinfo unpack", AppInfoUnpack(buf, n, &b), 0);
         check("appinfo version back", b.schemaVersion, 1);
+    }
+
+    /* Presets: six programmes that round-trip, with the spec's rules. */
+    {
+        ProgrammeRecord p, q;
+        UInt8 buf[160];
+        UInt32 n;
+        int i;
+        for (i = 0; i < pgmPresetCount; i++) {
+            PgmPreset((UInt8)i, &p);
+            n = ProgrammePack(&p, buf);
+            check("preset unpack", ProgrammeUnpack(buf, n, &q), 0);
+            check("preset id", q.id, i + 1);
+            checkStr("preset name", q.name, p.name);
+            check("preset premium", q.premiumMult, 100);
+        }
+        PgmPreset(0, &p);
+        check("76 is Card only", p.requiresPayment, pgmPaymentCard);
+        check("76 counts in cents", p.valuePerPoint, 1000);
+        check("76 earns 3c on 12.495 gal", CalcEarnedPoints(p.earnRate, p.earnBasis, 47300, 8462, 100), 37);
+        checkStr("76 keeps the KB Points alias", p.aliases, "KB Points,KB,Conoco");
+        PgmPreset(1, &p);
+        check("Petro 473 pts on 47.3 L", CalcEarnedPoints(p.earnRate, p.earnBasis, 47300, 8462, 100), 473);
+        check("Petro point worth 0.1c", p.valuePerPoint, 100);
+        PgmPreset(4, &p);
+        {
+            CalcRedeemRule r;
+            r.kind = p.redeemKind; r.block = p.redeemBlock; r.value = p.redeemValue; r.volUnit = p.redeemVolUnit;
+            r.maxVol = p.redeemMaxVol; r.maxPerUnit = p.redeemMaxPerUnit;
+            check("Kroger 1,240 pts capped at $1/gal", CalcDiscountCents(&r, 1240, 47300, 8462), 1250);
+            check("Kroger expires month after", p.expiryRule, pgmExpiryMonthAfter);
+        }
+        PgmPreset(3, &p);
+        {
+            CalcRedeemRule r;
+            r.kind = p.redeemKind; r.block = p.redeemBlock; r.value = p.redeemValue; r.volUnit = p.redeemVolUnit;
+            r.maxVol = p.redeemMaxVol; r.maxPerUnit = p.redeemMaxPerUnit;
+            check("PC Optimum 4,000 pts on 47.3 L", CalcDiscountCents(&r, 4000, 47300, 8462), 400);
+        }
     }
 
     printf("%d failure(s)\n", failures);

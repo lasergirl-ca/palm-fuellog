@@ -112,3 +112,74 @@
 #define NeedNameAlert        1506
 #define TooManyVehiclesAlert 1507
 #define DeleteVehicleAlert   1508
+
+#define MenuProgrammes       1405
+
+#define FillRateLabel        1326
+#define FillRateField        1327
+#define FillMissedCheckbox   1328
+#define FillPointsTrigger    1329
+#define FillNoteButton       1330
+#define FillPointsLabel      1331
+
+#define ProgrammesForm       1900
+#define PgmsNewButton        1901
+#define PgmsDoneButton       1902
+
+#define EditProgrammeForm    2000
+#define PgmNameField         2001
+#define PgmCurrencyTrigger   2002
+#define PgmCurrencyList      2003
+#define PgmPointsButton      2004
+#define PgmMoneyButton       2005
+#define PgmEarnField         2006
+#define PgmEarnUnitLabel     2007
+#define PgmBasisTrigger      2008
+#define PgmBasisList         2009
+#define PgmPremiumField      2010
+#define PgmPayTrigger        2011
+#define PgmPayList           2012
+#define PgmAutoCheckbox      2013
+#define PgmRedeemTrigger     2014
+#define PgmRedeemList        2015
+#define PgmBlockField        2016
+#define PgmEqLabel           2017
+#define PgmValueField        2018
+#define PgmPerLabel          2019
+#define PgmVolUnitTrigger    2020
+#define PgmVolUnitList       2021
+#define PgmUpToLabel         2022
+#define PgmMaxVolField       2023
+#define PgmCapLabel          2024
+#define PgmMaxPerUnitField   2025
+#define PgmCapUnitLabel      2026
+#define PgmExpiryTrigger     2027
+#define PgmExpiryList        2028
+#define PgmMonthsField       2029
+#define PgmOpeningField      2030
+#define PgmOpeningUnitLabel  2031
+#define PgmAliasField        2032
+#define PgmBalanceLabel      2033
+#define PgmDoneButton        2034
+#define PgmCancelButton      2035
+#define PgmArchiveButton     2036
+
+/* Points dialog: four rows; row i uses base + i. */
+#define PointsForm           2100
+#define PtsOkButton          2101
+#define PtsCancelButton      2102
+#define PtsTrigger0          2110
+#define PtsList0             2120
+#define PtsEarned0           2130
+#define PtsRedeemed0         2140
+#define PtsHint0             2150
+
+#define NoteForm             2200
+#define FillNoteField            2201
+#define NoteCountLabel       2202
+#define NoteOkButton         2203
+#define NoteClearButton      2204
+
+#define TooManyProgrammesAlert 1509
+#define DeleteProgrammeAlert 1510
+#define NeedPgmNameAlert     1511

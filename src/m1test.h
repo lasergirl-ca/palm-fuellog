@@ -3,5 +3,5 @@
 #ifndef M1TEST_H
 #define M1TEST_H
 #include "vfstest.h"
-UInt16 M1TestRun(char lines[vfsTestMaxLines][vfsTestLineLen]);
+UInt16 M1TestRun(char lines[vfsTestMaxLines][vfsTestLineLen]) SEC2;
 #endif

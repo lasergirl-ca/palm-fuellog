@@ -96,6 +96,16 @@ UInt16 VehBuildChoices(ListType *lst, char names[][vehNameLen], char *ptrs[], UI
 
 /* ---- Vehicles list ---- */
 
+/* Section placement: see sections.h. */
+static UInt16 VisibleAt(UInt16 row, UInt16 *dbIndex) FORMS_SEC;
+static void DrawVehicles(void) FORMS_SEC;
+static void LayoutVehicles(FormType *form) FORMS_SEC;
+static void SetPopup(FormType *form, UInt16 triggerId, UInt16 listId, Int16 sel) FORMS_SEC;
+static Int16 GetPopup(FormType *form, UInt16 listId) FORMS_SEC;
+static void ShowElectricFields(FormType *form, UInt8 powertrain) FORMS_SEC;
+static void LoadVehicle(FormType *form) FORMS_SEC;
+static Boolean SaveVehicle(FormType *form) FORMS_SEC;
+
 static UInt16 VisibleAt(UInt16 row, UInt16 *dbIndex)
 {
     UInt16 n = DbCount(dbVehicles), i, seen = 0;
@@ -151,7 +161,7 @@ static void LayoutVehicles(FormType *form)
     RectangleType r;
     UInt16 idx;
     AppFitForm(form, bottom, 2);
-    WinGetDisplayExtent(&w, &h);
+    WinGetDisplayExtent(&w, &h); h = AppFormHeight(form);
     idx = FrmGetObjectIndex(form, VehiclesArchivedCheckbox);
     FrmGetObjectBounds(form, idx, &r); r.topLeft.y = h - 29; FrmSetObjectBounds(form, idx, &r);
     gVehRows.topLeft.x = 0; gVehRows.topLeft.y = kVehTop; gVehRows.extent.x = w; gVehRows.extent.y = h - 31 - kVehTop;

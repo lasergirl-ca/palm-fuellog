@@ -23,12 +23,36 @@ static UInt16 gVisibleCount;
 static RectangleType gRows;
 
 /* Column right edges in standard coordinates. */
-static const Coord kColDate = 4, kColOdo = 68, kColVol = 94, kColTotal = 122, kColEco = 156;
+static const Coord kColDate = 4, kColOdo = 68, kColVol = 94, kColTotal = 130, kColEco = 156;
 static VehicleRecord gCurVeh;   /* the selected vehicle, for the headers */
 
 static void DrawRight(const char *s, Coord right, Coord y)
 {
     WinDrawChars(s, StrLen(s), right - FntCharsWidth(s, StrLen(s)), y);
+}
+
+/* The list keeps economy in the "distance per unit" style, which fits a
+ * three-letter header: MPG or KPL for fuel (the Prefs L/100 km choice shows
+ * as km/L here), MPE or KPE for an electric car (miles or km per kWh). */
+static Boolean EcoMiles(void) { return gPrefs.economyUnit == unitEcoMpgUS || gPrefs.economyUnit == unitEcoMpgImp; }
+
+static const char *EcoHeader(Boolean electric)
+{
+    if (electric) return gPrefs.distanceUnit == unitDistMiles ? "MPE" : "KPE";
+    return EcoMiles() ? "MPG" : "KPL";
+}
+
+/* eco is L/100 km x 10 for fuel, kWh/100 km x 10 for a charge; returns the
+ * list figure x 10. */
+static UInt32 EcoDisplay(UInt32 eco, Boolean charge)
+{
+    if (eco == 0) return 0;
+    if (charge) {
+        /* km per kWh x 10 = 10000 / (kWh/100 km x 10); miles divide by 1.609 */
+        if (gPrefs.distanceUnit == unitDistMiles) return CalcMulDiv(10000UL, 1000UL, eco * 1609UL);
+        return (10000UL + eco / 2) / eco;
+    }
+    return UnitEcoFuelToDisplay(eco, gPrefs.economyUnit == unitEcoL100km ? unitEcoKmPerL : gPrefs.economyUnit);
 }
 
 /* Economy for the fill at database index k (oldest first): volume since the
@@ -83,19 +107,22 @@ static void DrawRows(void)
     FillRecord *fp = &gRowFill;
 
     Boolean electric = gPrefs.currentVehicle != 255 && VehGet(gPrefs.currentVehicle, &gCurVeh) && gCurVeh.powertrain == vehPowerElectric;
-    /* An electric car's kWh/100 header is wide: pull the kWh and Total columns in a little. */
-    Coord colVol = electric ? kColVol - 4 : kColVol, colTotal = electric ? kColTotal - 6 : kColTotal;
+    Coord colVol = kColVol, colTotal = kColTotal;
     Collect();
     count = gVisibleCount;
     WinEraseRectangle(&gRows, 0);
     FntSetFont(boldFont);
     WinDrawChars("Date", 4, kColDate, kTop - 11);
-    DrawRight("Odo", kColOdo, kTop - 11);
+    {
+        /* The odometer figures are wider than their title: centre "Odo" over a six-digit reading. */
+        Coord figures, title;
+        FntSetFont(stdFont); figures = FntCharsWidth("000,000", 7);
+        FntSetFont(boldFont); title = FntCharsWidth("Odo", 3);
+        WinDrawChars("Odo", 3, (Coord)(kColOdo - figures / 2 - title / 2), kTop - 11);
+    }
     DrawRight(electric ? "kWh" : UnitVolLabel(gPrefs.volumeUnit), colVol, kTop - 11);
     DrawRight("Total", colTotal, kTop - 11);
-    /* The economy header sits in the last column; an electric car's is too long for bold. */
-    if (electric) { FntSetFont(stdFont); DrawRight("kWh/100", kColEco, kTop - 11); FntSetFont(boldFont); }
-    else DrawRight(gPrefs.economyUnit == unitEcoL100km ? "L/100" : UnitEcoLabel(gPrefs.economyUnit), kColEco, kTop - 11);
+    DrawRight(EcoHeader(electric), kColEco, kTop - 11);
     rows = (UInt16)((gRows.extent.y) / kRowH);
     if (count == 0) {
         FntSetFont(stdFont);
@@ -119,17 +146,21 @@ static void DrawRows(void)
         WinDrawChars(buf, StrLen(buf), kColDate, y);
         TextFixed(buf, (Int32)(UnitDistToDisplay(fp->odometer, gPrefs.distanceUnit) / 10), 0, gPoint, gThousands);
         DrawRight(buf, kColOdo, y);
-        TextFixed(buf, (Int32)UnitVolToDisplay(fp->volume, gPrefs.volumeUnit), UnitVolDecimals(gPrefs.volumeUnit), gPoint, 0);
-        if (fp->flags & fillFlagCharge) TextFixed(buf, (Int32)(fp->volume / 100), 1, gPoint, 0);
+        {
+            /* The list shows one decimal of volume to save width; the form keeps them all. */
+            UInt32 shown = UnitVolToDisplay(fp->volume, gPrefs.volumeUnit), div = 1;
+            UInt8 d = UnitVolDecimals(gPrefs.volumeUnit);
+            while (d-- > 1) div *= 10;
+            TextFixed(buf, (Int32)((shown + div / 2) / div), 1, gPoint, 0);
+        }
+        if (fp->flags & fillFlagCharge) TextFixed(buf, (Int32)((fp->volume + 50) / 100), 1, gPoint, 0);
         DrawRight(buf, colVol, y);
         TextFixed(buf, (Int32)fp->total, 2, gPoint, 0);
         DrawRight(buf, colTotal, y);
         eco = RowEconomy(k, fp);
         FntSetFont(boldFont);
         if (eco) {
-            /* A charge's economy is kWh/100 km as it stands; fuel follows the economy unit. */
-            if (fp->flags & fillFlagCharge) TextFixed(buf, (Int32)eco, 1, gPoint, 0);
-            else TextFixed(buf, (Int32)UnitEcoFuelToDisplay(eco, gPrefs.economyUnit), 1, gPoint, 0);
+            TextFixed(buf, (Int32)EcoDisplay(eco, (fp->flags & fillFlagCharge) != 0), 1, gPoint, 0);
             DrawRight(buf, kColEco, y);
         } else {
             FntSetFont(stdFont);
@@ -172,13 +203,9 @@ static void DrawFooter(void)
     eco = (lastFullOdo > firstFullOdo) ? CalcL100kmX10(fullVol, lastFullOdo - firstFullOdo) : 0;
     if (eco) {
         StrCopy(buf, "Avg ");
-        if (electric) {   /* CalcL100kmX10 and CalcKwh100kmX10 scale alike: Wh over 0.1 km */
-            TextFixed(num, (Int32)eco, 1, gPoint, 0);
-            StrCat(buf, num); StrCat(buf, " kWh/100 km");
-        } else {
-            TextFixed(num, (Int32)UnitEcoFuelToDisplay(eco, gPrefs.economyUnit), 1, gPoint, 0);
-            StrCat(buf, num); StrCat(buf, " "); StrCat(buf, UnitEcoLabel(gPrefs.economyUnit));
-        }
+        /* CalcL100kmX10 and CalcKwh100kmX10 scale alike: Wh over 0.1 km */
+        TextFixed(num, (Int32)EcoDisplay(eco, electric), 1, gPoint, 0);
+        StrCat(buf, num); StrCat(buf, " "); StrCat(buf, EcoHeader(electric));
         WinDrawChars(buf, StrLen(buf), 4, fy);
     }
     StrCopy(buf, DateMonthName(tm));
@@ -193,7 +220,7 @@ static void Layout(FormType *form)
     static const UInt16 bottom[] = { FillListNewButton, FillListStatsButton, FillListServiceButton };
     Coord w, h;
     AppFitForm(form, bottom, 3);
-    WinGetDisplayExtent(&w, &h);
+    WinGetDisplayExtent(&w, &h); h = AppFormHeight(form);
     gRows.topLeft.x = 0; gRows.topLeft.y = kTop;
     gRows.extent.x = w; gRows.extent.y = (Coord)(((h - 17 - 12 - kTop) / kRowH) * kRowH);
 }
@@ -218,6 +245,7 @@ Boolean FillListHandleEvent(EventType *event)
         DrawAll(form);
         return true;
     case winDisplayChangedEvent:
+        gDisplayChanges++;
         Layout(form);
         WinEraseWindow();
         DrawAll(form);
@@ -271,8 +299,19 @@ Boolean FillListHandleEvent(EventType *event)
     case menuEvent:
         if (event->data.menu.itemID == MenuPrefs) { FrmGotoForm(PrefsForm); return true; }
         if (event->data.menu.itemID == MenuVehicles) { FrmGotoForm(VehiclesForm); return true; }
+        if (event->data.menu.itemID == MenuProgrammes) { FrmGotoForm(ProgrammesForm); return true; }
         if (event->data.menu.itemID == MenuDiagnostics) { FrmGotoForm(DiagForm); return true; }
-        if (event->data.menu.itemID == MenuAbout) { FrmCustomAlert(AboutAlert, FUELLOG_BUILD, "", ""); return true; }
+        if (event->data.menu.itemID == MenuAbout) {
+            /* Diagnostics for the layout: display vs window height and DIA changes seen. */
+            char diag[40];
+            Coord w, h;
+            WinGetDisplayExtent(&w, &h);
+            StrCopy(diag, "display "); StrIToA(diag + StrLen(diag), h);
+            StrCat(diag, ", window "); StrIToA(diag + StrLen(diag), AppFormHeight(form));
+            StrCat(diag, ", changes "); StrIToA(diag + StrLen(diag), gDisplayChanges);
+            FrmCustomAlert(AboutAlert, FUELLOG_BUILD, diag, "");
+            return true;
+        }
         break;
     default:
         break;

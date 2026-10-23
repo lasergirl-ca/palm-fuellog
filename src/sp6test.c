@@ -19,6 +19,15 @@ typedef struct {
 
 /* Called from the window flush every 32 KB: a one-line status on the form,
  * so a long decode under PACE is visibly alive and can be timed by eye. */
+/* Section placement: see sections.h. */
+static void Progress(Ctx *x) SEC2;
+static Int32 ReadAt(void *c, UInt32 pos, UInt8 *buf, UInt32 len) SEC2;
+static Int32 ReadNext(void *c, UInt8 *buf, UInt32 len) SEC2;
+static Int32 WriteOut(void *c, const UInt8 *buf, UInt32 len) SEC2;
+static void Line(char lines[][vfsTestLineLen], UInt16 *n, const char *a, Int32 num, const char *b) SEC2;
+static Int32 Ms(UInt32 start) SEC2;
+static UInt32 FreeHeap(void) SEC2;
+
 static void Progress(Ctx *x)
 {
     RectangleType r;

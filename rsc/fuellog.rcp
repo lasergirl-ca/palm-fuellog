@@ -65,6 +65,8 @@ BEGIN
     POPUPTRIGGER "CAD" ID FillCurrencyTrigger AT (58 95 40 12) LEFTANCHOR
     LIST "USD" "CAD" "EUR" "AUD" ID FillCurrencyList AT (58 95 40 44) NONUSABLE VISIBLEITEMS 4
     POPUPLIST ID FillCurrencyTrigger FillCurrencyList
+    LABEL "@" ID FillRateLabel AT (101 95) FONT 0
+    FIELD ID FillRateField AT (108 95 48 12) UNDERLINED MAXCHARS 9 NUMERIC
     LABEL "Paid:" AUTOID AT (33 108) FONT 0
     PUSHBUTTON "Cash" ID FillCashButton AT (58 108 30 12) GROUP 1
     PUSHBUTTON "Card" ID FillCardButton AT (PREVRIGHT 108 30 12) GROUP 1
@@ -72,11 +74,14 @@ BEGIN
     POPUPTRIGGER "Regular" ID FillGradeTrigger AT (58 121 60 12) LEFTANCHOR
     LIST "Regular" "Mid" "Premium" "Diesel" "Home AC" "Public AC" "DC fast" ID FillGradeList AT (58 121 60 77) NONUSABLE VISIBLEITEMS 7
     POPUPLIST ID FillGradeTrigger FillGradeList
-    CHECKBOX "Full tank      " ID FillFullCheckbox AT (56 133 80 12) CHECKED
-    BUTTON "Done" ID FillDoneButton AT (4 146 36 12)
-    BUTTON "Cancel" ID FillCancelButton AT (46 146 40 12)
-    BUTTON "Delete" ID FillDeleteButton AT (110 146 40 12)
-    GRAFFITISTATEINDICATOR AT (152 150)
+    CHECKBOX "Full tank" ID FillFullCheckbox AT (56 133 54 12) CHECKED
+    CHECKBOX "Missed" ID FillMissedCheckbox AT (112 133 46 12)
+    LABEL "Points:" ID FillPointsLabel AT (25 146) FONT 0
+    SELECTORTRIGGER "none" ID FillPointsTrigger AT (58 146 98 12) LEFTANCHOR
+    BUTTON "Done" ID FillDoneButton AT (4 159 32 12)
+    BUTTON "Cancel" ID FillCancelButton AT (40 159 38 12)
+    BUTTON "Note" ID FillNoteButton AT (82 159 32 12)
+    BUTTON "Delete" ID FillDeleteButton AT (118 159 38 12)
 END
 
 MENU ID MainMenuBar
@@ -85,6 +90,7 @@ BEGIN
     BEGIN
         MENUITEM "Preferences..." ID MenuPrefs "R"
         MENUITEM "Vehicles..." ID MenuVehicles "V"
+        MENUITEM "Programmes..." ID MenuProgrammes "P"
         MENUITEM SEPARATOR
         MENUITEM "Diagnostics" ID MenuDiagnostics
         MENUITEM "About FuelLog" ID MenuAbout
@@ -136,7 +142,7 @@ ALERT ID AboutAlert
 INFORMATION
 BEGIN
     TITLE "FuelLog"
-    MESSAGE "FuelLog 0.2 for Palm OS 5, build ^1. M2 in progress."
+    MESSAGE "FuelLog 0.2 for Palm OS 5, build ^1. M2 in progress. Layout: ^2."
     BUTTONS "OK"
 END
 
@@ -254,5 +260,149 @@ ERROR
 BEGIN
     TITLE "Vehicle limit"
     MESSAGE "FuelLog keeps up to 16 vehicles. Archive or delete one first."
+    BUTTONS "OK"
+END
+
+FORM ID ProgrammesForm AT (0 0 160 160)
+NOFRAME
+USABLE
+BEGIN
+    TITLE "Programmes"
+    BUTTON "New" ID PgmsNewButton AT (4 146 32 12)
+    BUTTON "Done" ID PgmsDoneButton AT (42 146 36 12)
+END
+
+FORM ID EditProgrammeForm AT (0 0 160 160)
+NOFRAME
+USABLE
+BEGIN
+    TITLE "Edit Programme"
+    LABEL "Name:" AUTOID AT (28 17) FONT 0
+    FIELD ID PgmNameField AT (58 17 98 12) UNDERLINED MAXCHARS 23
+    LABEL "Currency:" AUTOID AT (13 30) FONT 0
+    POPUPTRIGGER "CAD" ID PgmCurrencyTrigger AT (58 30 40 12) LEFTANCHOR
+    LIST "USD" "CAD" "EUR" "AUD" ID PgmCurrencyList AT (58 30 40 44) NONUSABLE VISIBLEITEMS 4
+    POPUPLIST ID PgmCurrencyTrigger PgmCurrencyList
+    LABEL "Counts in:" AUTOID AT (9 43) FONT 0
+    PUSHBUTTON "Points" ID PgmPointsButton AT (58 43 36 12) GROUP 1
+    PUSHBUTTON "Money" ID PgmMoneyButton AT (PREVRIGHT 43 36 12) GROUP 1
+    LABEL "Earn:" AUTOID AT (31 56) FONT 0
+    FIELD ID PgmEarnField AT (58 56 30 12) UNDERLINED MAXCHARS 6 NUMERIC
+    LABEL "pts per" ID PgmEarnUnitLabel AT (90 56) FONT 0
+    POPUPTRIGGER "litre" ID PgmBasisTrigger AT (122 56 36 12) LEFTANCHOR
+    LIST "none" "litre" "US gal" "dollar" ID PgmBasisList AT (122 56 36 44) NONUSABLE VISIBLEITEMS 4
+    POPUPLIST ID PgmBasisTrigger PgmBasisList
+    LABEL "Premium:" AUTOID AT (14 69) FONT 0
+    FIELD ID PgmPremiumField AT (58 69 30 12) UNDERLINED MAXCHARS 3 NUMERIC
+    LABEL "% of the base rate" AUTOID AT (90 69) FONT 0
+    LABEL "Only on:" AUTOID AT (17 82) FONT 0
+    POPUPTRIGGER "Any payment" ID PgmPayTrigger AT (58 82 80 12) LEFTANCHOR
+    LIST "Any payment" "Cash" "Card" ID PgmPayList AT (58 82 80 33) NONUSABLE VISIBLEITEMS 3
+    POPUPLIST ID PgmPayTrigger PgmPayList
+    CHECKBOX "Add to new fills" ID PgmAutoCheckbox AT (56 95 90 12)
+    LABEL "Redeem:" AUTOID AT (17 108) FONT 0
+    POPUPTRIGGER "Money off" ID PgmRedeemTrigger AT (58 108 80 12) LEFTANCHOR
+    LIST "None" "Money off" "Per volume" ID PgmRedeemList AT (58 108 80 33) NONUSABLE VISIBLEITEMS 3
+    POPUPLIST ID PgmRedeemTrigger PgmRedeemList
+    FIELD ID PgmBlockField AT (58 121 34 12) UNDERLINED MAXCHARS 7 NUMERIC
+    LABEL "pts = $" ID PgmEqLabel AT (94 121) FONT 0
+    FIELD ID PgmValueField AT (122 121 34 12) UNDERLINED MAXCHARS 7 NUMERIC
+    LABEL "per" ID PgmPerLabel AT (58 134) FONT 0
+    POPUPTRIGGER "litre" ID PgmVolUnitTrigger AT (74 134 40 12) LEFTANCHOR
+    LIST "litre" "US gal" ID PgmVolUnitList AT (74 134 40 22) NONUSABLE VISIBLEITEMS 2
+    POPUPLIST ID PgmVolUnitTrigger PgmVolUnitList
+    LABEL "up to" ID PgmUpToLabel AT (116 134) FONT 0
+    FIELD ID PgmMaxVolField AT (138 134 18 12) UNDERLINED MAXCHARS 3 NUMERIC
+    LABEL "Cap:" ID PgmCapLabel AT (36 147) FONT 0
+    FIELD ID PgmMaxPerUnitField AT (58 147 30 12) UNDERLINED MAXCHARS 6 NUMERIC
+    LABEL "c/unit, 0 none" ID PgmCapUnitLabel AT (90 147) FONT 0
+    LABEL "Expires:" AUTOID AT (19 160) FONT 0
+    POPUPTRIGGER "Never" ID PgmExpiryTrigger AT (58 160 70 12) LEFTANCHOR
+    LIST "Never" "Month after" "After months" ID PgmExpiryList AT (58 160 70 33) NONUSABLE VISIBLEITEMS 3
+    POPUPLIST ID PgmExpiryTrigger PgmExpiryList
+    FIELD ID PgmMonthsField AT (132 160 20 12) UNDERLINED MAXCHARS 2 NUMERIC
+    LABEL "Opening:" AUTOID AT (13 173) FONT 0
+    FIELD ID PgmOpeningField AT (58 173 50 12) UNDERLINED MAXCHARS 10
+    LABEL "pts" ID PgmOpeningUnitLabel AT (110 173) FONT 0
+    LABEL "Aliases:" AUTOID AT (19 186) FONT 0
+    FIELD ID PgmAliasField AT (58 186 98 12) UNDERLINED MAXCHARS 63
+    LABEL "                                        " ID PgmBalanceLabel AT (4 199) FONT 0
+    BUTTON "Done" ID PgmDoneButton AT (4 212 36 12)
+    BUTTON "Cancel" ID PgmCancelButton AT (46 212 40 12)
+    BUTTON "Archive" ID PgmArchiveButton AT (108 212 48 12)
+END
+
+FORM ID PointsForm AT (2 2 156 156)
+MODAL
+SAVEBEHIND
+USABLE
+BEGIN
+    TITLE "Points for this fill"
+    LABEL "Programme" AUTOID AT (4 16) FONT 1
+    LABEL "Earned" AUTOID AT (84 16) FONT 1
+    LABEL "Redeem" AUTOID AT (118 16) FONT 1
+    POPUPTRIGGER "Add programme" ID PtsTrigger0 AT (2 28 78 12) LEFTANCHOR
+    LIST "(none)" ID PtsList0 AT (2 28 100 66) NONUSABLE VISIBLEITEMS 6
+    POPUPLIST ID PtsTrigger0 PtsList0
+    FIELD ID PtsEarned0 AT (82 28 34 12) UNDERLINED MAXCHARS 8
+    FIELD ID PtsRedeemed0 AT (118 28 34 12) UNDERLINED MAXCHARS 8
+    LABEL "                          " ID PtsHint0 AT (10 39) FONT 0
+    POPUPTRIGGER "Add programme" ID 2111 AT (2 52 78 12) LEFTANCHOR
+    LIST "(none)" ID 2121 AT (2 52 100 66) NONUSABLE VISIBLEITEMS 6
+    POPUPLIST ID 2111 2121
+    FIELD ID 2131 AT (82 52 34 12) UNDERLINED MAXCHARS 8
+    FIELD ID 2141 AT (118 52 34 12) UNDERLINED MAXCHARS 8
+    LABEL "                          " ID 2151 AT (10 63) FONT 0
+    POPUPTRIGGER "Add programme" ID 2112 AT (2 76 78 12) LEFTANCHOR
+    LIST "(none)" ID 2122 AT (2 76 100 66) NONUSABLE VISIBLEITEMS 6
+    POPUPLIST ID 2112 2122
+    FIELD ID 2132 AT (82 76 34 12) UNDERLINED MAXCHARS 8
+    FIELD ID 2142 AT (118 76 34 12) UNDERLINED MAXCHARS 8
+    LABEL "                          " ID 2152 AT (10 87) FONT 0
+    POPUPTRIGGER "Add programme" ID 2113 AT (2 100 78 12) LEFTANCHOR
+    LIST "(none)" ID 2123 AT (2 100 100 66) NONUSABLE VISIBLEITEMS 6
+    POPUPLIST ID 2113 2123
+    FIELD ID 2133 AT (82 100 34 12) UNDERLINED MAXCHARS 8
+    FIELD ID 2143 AT (118 100 34 12) UNDERLINED MAXCHARS 8
+    LABEL "                          " ID 2153 AT (10 111) FONT 0
+    LABEL "                           " ID 2160 AT (4 124) FONT 0
+    BUTTON "OK" ID PtsOkButton AT (4 140 36 12)
+    BUTTON "Cancel" ID PtsCancelButton AT (46 140 40 12)
+END
+
+FORM ID NoteForm AT (2 2 156 156)
+MODAL
+SAVEBEHIND
+USABLE
+BEGIN
+    TITLE "Note"
+    FIELD ID FillNoteField AT (6 18 144 110) UNDERLINED MULTIPLELINES MAXCHARS 255
+    LABEL "                " ID NoteCountLabel AT (80 128) FONT 0
+    BUTTON "Done" ID NoteOkButton AT (4 140 36 12)
+    BUTTON "Clear" ID NoteClearButton AT (46 140 36 12)
+END
+
+ALERT ID TooManyProgrammesAlert
+ERROR
+BEGIN
+    TITLE "Programme limit"
+    MESSAGE "FuelLog keeps up to 16 programmes. Archive one you no longer use first."
+    BUTTONS "OK"
+END
+
+ALERT ID DeleteProgrammeAlert
+CONFIRMATION
+DEFAULTBUTTON 1
+BEGIN
+    TITLE "Delete programme?"
+    MESSAGE "No fill uses this programme, so nothing else is lost."
+    BUTTONS "Delete" "Cancel"
+END
+
+ALERT ID NeedPgmNameAlert
+ERROR
+BEGIN
+    TITLE "Name the programme"
+    MESSAGE "Give the programme a name so it can be picked on a fill."
     BUTTONS "OK"
 END

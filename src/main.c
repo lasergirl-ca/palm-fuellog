@@ -19,6 +19,7 @@
 #include "fill_form.h"
 #include "vehicles.h"
 #include "prefs_form.h"
+#include "programmes.h"
 
 #define kMinRomVersion sysMakeROMVersion(3, 0, 0, sysROMStageRelease, 0)
 
@@ -220,6 +221,14 @@ static Boolean AppHandleEvent(EventType *event)
             FrmSetEventHandler(form, EditVehicleFormHandleEvent);
             AppSetupDIA(form);
             break;
+        case ProgrammesForm:
+            FrmSetEventHandler(form, ProgrammesFormHandleEvent);
+            AppSetupDIA(form);
+            break;
+        case EditProgrammeForm:
+            FrmSetEventHandler(form, EditProgrammeFormHandleEvent);
+            AppSetupDIA(form);
+            break;
         case DiagForm:
             FrmSetEventHandler(form, DiagFormHandleEvent);
             AppSetupDIA(form);
@@ -276,6 +285,7 @@ UInt32 PilotMain(UInt16 cmd, MemPtr cmdPBP, UInt16 launchFlags)
             FrmAlert(SaveFailedAlert);
             return errNone;
         }
+        PgmInstallPresets();
         FrmGotoForm(FillListForm);
         AppEventLoop();
         FrmCloseAllForms();

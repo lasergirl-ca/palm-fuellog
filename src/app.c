@@ -6,6 +6,7 @@
 FuelPrefs gPrefs;
 char gThousands = ',', gPoint = '.';
 UInt16 gEditIndex = dmMaxRecordIndex;
+UInt16 gDisplayChanges;
 
 void AppSetFieldText(FormType *form, UInt16 fieldId, const char *text)
 {
@@ -109,10 +110,8 @@ void AppScrollBy(FormType *form, Int16 dy, const UInt16 *pinnedIds, UInt16 n)
 /* The content area runs from under the title bar to above the pinned buttons. */
 static void VisibleArea(Coord *top, Coord *bottom)
 {
-    Coord w, h;
-    WinGetDisplayExtent(&w, &h);
     *top = 15;
-    *bottom = h - 16;
+    *bottom = AppFormHeight(FrmGetActiveForm()) - 16;
 }
 
 Boolean AppScrollKey(FormType *form, const EventType *event, const UInt16 *pinnedIds, UInt16 n)
@@ -158,10 +157,20 @@ void AppFitForm(FormType *form, const UInt16 *bottomIds, UInt16 n)
     bounds.topLeft.x = 0; bounds.topLeft.y = 0;
     bounds.extent.x = w; bounds.extent.y = h;
     WinSetBounds(FrmGetWindowHandle(form), &bounds);
+    /* Pin to the height the window really has: if the resize did not take,
+     * the buttons stay on screen instead of moving below the window. */
+    h = AppFormHeight(form);
     for (i = 0; i < n; i++) {
         idx = FrmGetObjectIndex(form, bottomIds[i]);
         FrmGetObjectBounds(form, idx, &r);
         r.topLeft.y = h - r.extent.y - 3;
         FrmSetObjectBounds(form, idx, &r);
     }
+}
+
+Coord AppFormHeight(FormType *form)
+{
+    RectangleType b;
+    FrmGetFormBounds(form, &b);
+    return b.extent.y;
 }

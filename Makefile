@@ -18,7 +18,7 @@ BUILD    := build
 SRCS := src/main.c src/hello2.c src/calc.c src/device.c src/graph.c src/vfstest.c src/sp6test.c \
         src/m1test.c src/db.c src/prefs.c src/records.c src/units.c src/currency.c \
         src/app.c src/fill_list.c src/fill_form.c src/text.c src/datecalc.c \
-        src/vehicles.c src/prefs_form.c \
+        src/vehicles.c src/prefs_form.c src/programmes.c src/presets.c \
         src/outstream.c src/xlsx.c src/pdf.c src/crc32.c src/inflate.c src/zipread.c
 OBJS := $(patsubst src/%.c,$(BUILD)/%.o,$(SRCS))
 SECT := $(BUILD)/fuellog-sections
@@ -62,7 +62,7 @@ INFLATE_EXTRA ?= docs/spikes/samples/sp6.xlsx
 test: $(BUILD)
 	$(HOSTCC) -Wall -Wextra -o $(BUILD)/test_calc tests/test_calc.c src/calc.c
 	$(BUILD)/test_calc
-	$(HOSTCC) -Wall -Wextra -o $(BUILD)/test_records tests/test_records.c src/records.c
+	$(HOSTCC) -Wall -Wextra -o $(BUILD)/test_records tests/test_records.c src/records.c src/presets.c src/calc.c
 	$(BUILD)/test_records
 	$(HOSTCC) -Wall -Wextra -o $(BUILD)/test_units tests/test_units.c src/units.c src/currency.c src/calc.c src/records.c
 	$(BUILD)/test_units
@@ -80,7 +80,7 @@ test: $(BUILD)
 	python3 -I tools/check_inflate.py $(BUILD)/test_inflate $(BUILD)/inflate $(INFLATE_EXTRA)
 
 check: $(APP).prc
-	python3 -I tools/prcinfo.py $(APP).prc --expect-code 4
+	python3 -I tools/prcinfo.py $(APP).prc --expect-code 5
 
 docker:
 	docker run --rm --platform linux/amd64 -v "$(CURDIR)":/src fuellog-toolchain make

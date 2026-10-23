@@ -16,6 +16,12 @@ typedef struct {
     Coord s;                /* scale: 1 or 2 */
 } Geom;
 
+/* Section placement: see sections.h. */
+static Coord PointX(const Geom *g, Int16 i) SEC2;
+static Coord PointY(const Geom *g, Int16 value) SEC2;
+static void DrawText(const char *s, Coord x, Coord y) SEC2;
+static void FormatTenths(char *out, Int16 v) SEC2;
+
 static Coord PointX(const Geom *g, Int16 i)
 {
     return g->x0 + (Coord)(((Int32)(g->x1 - g->x0) * kDay[i]) / kDay[kPoints - 1]);

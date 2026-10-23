@@ -16,6 +16,8 @@ UInt16 AppNowMinutes(void);                      /* minutes since midnight */
 void   AppTimeText(char *buf, UInt16 minutes);   /* per the Formats panel, buf >= timeStringLength */
 void   AppSetupDIA(FormType *form);              /* custom policy, 160 to 225 rows */
 void   AppFitForm(FormType *form, const UInt16 *bottomIds, UInt16 n);  /* resize and pin controls */
+Coord  AppFormHeight(FormType *form);   /* the window height after AppFitForm: lay rows out to this, not the display */
+extern UInt16 gDisplayChanges;          /* winDisplayChangedEvents seen, for the About diagnostics */
 
 /* Form scrolling. Palm forms do not scroll, so the content objects move
  * under the pinned ones (the bottom buttons and anything in the title bar).

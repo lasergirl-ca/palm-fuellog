@@ -22,6 +22,16 @@ typedef struct {
     UInt16 n;
 } Log;
 
+/* Section placement: see sections.h. */
+static void LogLine(Log *log, const char *a, Int32 num, const char *b) SEC2;
+static Int32 Ms(UInt32 startTicks) SEC2;
+static UInt8 NextByte(void) SEC2;
+static Err MakeDirs(UInt16 vol) SEC2;
+static Err WriteAndReadBack(UInt16 vol, Log *log) SEC2;
+static UInt32 ChecksumDb(DmOpenRef db, UInt16 *count) SEC2;
+static Err BuildDb(UInt32 *sumOut, Log *log) SEC2;
+static Err ExportImport(UInt16 vol, UInt32 sumBefore, Log *log) SEC2;
+
 static void LogLine(Log *log, const char *a, Int32 num, const char *b)
 {
     char *s;

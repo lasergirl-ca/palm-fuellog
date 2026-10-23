@@ -2,5 +2,5 @@
 #ifndef SP6TEST_H
 #define SP6TEST_H
 #include "vfstest.h"
-UInt16 Sp6TestRun(char lines[vfsTestMaxLines][vfsTestLineLen]);
+UInt16 Sp6TestRun(char lines[vfsTestMaxLines][vfsTestLineLen]) SEC2;
 #endif

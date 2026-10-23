@@ -4,6 +4,9 @@
 #include "units.h"
 #include "currency.h"
 
+/* Section placement: see sections.h. */
+static void Line(char lines[][vfsTestLineLen], UInt16 *n, const char *a, Int32 num, const char *b) SEC2;
+
 static void Line(char lines[][vfsTestLineLen], UInt16 *n, const char *a, Int32 num, const char *b)
 {
     char *s;
