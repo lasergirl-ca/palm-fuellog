@@ -17,6 +17,8 @@
 #include "db.h"
 #include "fill_list.h"
 #include "fill_form.h"
+#include "vehicles.h"
+#include "prefs_form.h"
 
 #define kMinRomVersion sysMakeROMVersion(3, 0, 0, sysROMStageRelease, 0)
 
@@ -204,6 +206,18 @@ static Boolean AppHandleEvent(EventType *event)
             break;
         case FillForm:
             FrmSetEventHandler(form, FillFormHandleEvent);
+            AppSetupDIA(form);
+            break;
+        case PrefsForm:
+            FrmSetEventHandler(form, PrefsFormHandleEvent);
+            AppSetupDIA(form);
+            break;
+        case VehiclesForm:
+            FrmSetEventHandler(form, VehiclesFormHandleEvent);
+            AppSetupDIA(form);
+            break;
+        case EditVehicleForm:
+            FrmSetEventHandler(form, EditVehicleFormHandleEvent);
             AppSetupDIA(form);
             break;
         case DiagForm:

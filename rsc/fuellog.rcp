@@ -29,6 +29,9 @@ USABLE
 MENUID MainMenuBar
 BEGIN
     TITLE "FuelLog"
+    POPUPTRIGGER "All" ID FillListVehicleTrigger AT (96 1 62 12) RIGHTANCHOR
+    LIST "All" ID FillListVehicleList AT (60 1 98 60) NONUSABLE VISIBLEITEMS 6
+    POPUPLIST ID FillListVehicleTrigger FillListVehicleList
     BUTTON "New" ID FillListNewButton AT (4 146 32 12)
     BUTTON "Stats" ID FillListStatsButton AT (42 146 34 12)
     BUTTON "Service" ID FillListServiceButton AT (82 146 42 12)
@@ -39,6 +42,9 @@ NOFRAME
 USABLE
 BEGIN
     TITLE "New Fill"
+    POPUPTRIGGER "Outback" ID FillVehicleTrigger AT (96 1 62 12) RIGHTANCHOR
+    LIST "Outback" ID FillVehicleList AT (60 1 98 60) NONUSABLE VISIBLEITEMS 6
+    POPUPLIST ID FillVehicleTrigger FillVehicleList
     LABEL "Date:" AUTOID AT (32 17) FONT 0
     SELECTORTRIGGER "Oct 22" ID FillDateTrigger AT (58 17 36 12)
     SELECTORTRIGGER "11:36 am" ID FillTimeTrigger AT (96 17 44 12)
@@ -62,21 +68,24 @@ BEGIN
     LABEL "Paid:" AUTOID AT (33 108) FONT 0
     PUSHBUTTON "Cash" ID FillCashButton AT (58 108 30 12) GROUP 1
     PUSHBUTTON "Card" ID FillCardButton AT (PREVRIGHT 108 30 12) GROUP 1
-    LABEL "Grade:" AUTOID AT (27 121) FONT 0
-    POPUPTRIGGER "Regular" ID FillGradeTrigger AT (58 121 50 12) LEFTANCHOR
-    LIST "Regular" "Mid" "Premium" "Diesel" ID FillGradeList AT (58 121 50 44) NONUSABLE VISIBLEITEMS 4
+    LABEL "Grade: " ID FillGradeLabel AT (27 121) FONT 0
+    POPUPTRIGGER "Regular" ID FillGradeTrigger AT (58 121 60 12) LEFTANCHOR
+    LIST "Regular" "Mid" "Premium" "Diesel" "Home AC" "Public AC" "DC fast" ID FillGradeList AT (58 121 60 77) NONUSABLE VISIBLEITEMS 7
     POPUPLIST ID FillGradeTrigger FillGradeList
-    CHECKBOX "Full tank" ID FillFullCheckbox AT (56 133 60 12) CHECKED
+    CHECKBOX "Full tank      " ID FillFullCheckbox AT (56 133 80 12) CHECKED
     BUTTON "Done" ID FillDoneButton AT (4 146 36 12)
     BUTTON "Cancel" ID FillCancelButton AT (46 146 40 12)
-    BUTTON "Delete" ID FillDeleteButton AT (116 146 40 12)
-    GRAFFITISTATEINDICATOR AT (150 150)
+    BUTTON "Delete" ID FillDeleteButton AT (110 146 40 12)
+    GRAFFITISTATEINDICATOR AT (152 150)
 END
 
 MENU ID MainMenuBar
 BEGIN
     PULLDOWN "Options"
     BEGIN
+        MENUITEM "Preferences..." ID MenuPrefs "R"
+        MENUITEM "Vehicles..." ID MenuVehicles "V"
+        MENUITEM SEPARATOR
         MENUITEM "Diagnostics" ID MenuDiagnostics
         MENUITEM "About FuelLog" ID MenuAbout
     END
@@ -127,6 +136,123 @@ ALERT ID AboutAlert
 INFORMATION
 BEGIN
     TITLE "FuelLog"
-    MESSAGE "FuelLog 0.1 for Palm OS 5. Spikes and M1 complete; M2 in progress."
+    MESSAGE "FuelLog 0.2 for Palm OS 5, build ^1. M2 in progress."
+    BUTTONS "OK"
+END
+
+FORM ID PrefsForm AT (0 0 160 160)
+NOFRAME
+USABLE
+BEGIN
+    TITLE "Preferences"
+    LABEL "Units" AUTOID AT (4 17) FONT 1
+    LABEL "Distance:" AUTOID AT (24 29) FONT 0
+    POPUPTRIGGER "km" ID PrefsDistTrigger AT (70 29 60 12) LEFTANCHOR
+    LIST "km" "miles" ID PrefsDistList AT (70 29 60 22) NONUSABLE VISIBLEITEMS 2
+    POPUPLIST ID PrefsDistTrigger PrefsDistList
+    LABEL "Volume:" AUTOID AT (30 41) FONT 0
+    POPUPTRIGGER "Litres" ID PrefsVolTrigger AT (70 41 70 12) LEFTANCHOR
+    LIST "Litres" "US gallons" "Imp gallons" ID PrefsVolList AT (70 41 70 33) NONUSABLE VISIBLEITEMS 3
+    POPUPLIST ID PrefsVolTrigger PrefsVolList
+    LABEL "Economy:" AUTOID AT (23 53) FONT 0
+    POPUPTRIGGER "L/100 km" ID PrefsEcoTrigger AT (70 53 70 12) LEFTANCHOR
+    LIST "L/100 km" "km/L" "MPG (US)" "MPG (Imp)" ID PrefsEcoList AT (70 53 70 44) NONUSABLE VISIBLEITEMS 4
+    POPUPLIST ID PrefsEcoTrigger PrefsEcoList
+    LABEL "Price per:" AUTOID AT (20 65) FONT 0
+    POPUPTRIGGER "Litre" ID PrefsPriceTrigger AT (70 65 70 12) LEFTANCHOR
+    LIST "Litre" "US gallon" "Imp gallon" ID PrefsPriceList AT (70 65 70 33) NONUSABLE VISIBLEITEMS 3
+    POPUPLIST ID PrefsPriceTrigger PrefsPriceList
+    LABEL "Price as:" AUTOID AT (24 77) FONT 0
+    PUSHBUTTON "$1.789" ID PrefsDollarsButton AT (70 77 38 12) GROUP 1
+    PUSHBUTTON "178.9c" ID PrefsCentsButton AT (PREVRIGHT 77 38 12) GROUP 1
+    LABEL "Money" AUTOID AT (4 92) FONT 1
+    LABEL "Home currency:" AUTOID AT (4 104) FONT 0
+    POPUPTRIGGER "CAD" ID PrefsHomeTrigger AT (70 104 50 12) LEFTANCHOR
+    LIST "USD" "CAD" "EUR" "AUD" ID PrefsHomeList AT (70 104 50 44) NONUSABLE VISIBLEITEMS 4
+    POPUPLIST ID PrefsHomeTrigger PrefsHomeList
+    LABEL "New entries in:" AUTOID AT (2 116) FONT 0
+    POPUPTRIGGER "Last used" ID PrefsNewTrigger AT (70 116 60 12) LEFTANCHOR
+    LIST "Last used" "USD" "CAD" "EUR" "AUD" ID PrefsNewList AT (70 116 60 55) NONUSABLE VISIBLEITEMS 5
+    POPUPLIST ID PrefsNewTrigger PrefsNewList
+    CHECKBOX "Weekly card backup, keep" ID PrefsBackupCheckbox AT (4 130 112 12)
+    POPUPTRIGGER "5" ID PrefsKeepTrigger AT (118 130 30 12) LEFTANCHOR
+    LIST "3" "5" "10" ID PrefsKeepList AT (118 130 30 33) NONUSABLE VISIBLEITEMS 3
+    POPUPLIST ID PrefsKeepTrigger PrefsKeepList
+    BUTTON "Done" ID PrefsDoneButton AT (4 146 36 12)
+    BUTTON "Cancel" ID PrefsCancelButton AT (46 146 40 12)
+END
+
+FORM ID VehiclesForm AT (0 0 160 160)
+NOFRAME
+USABLE
+BEGIN
+    TITLE "Vehicles"
+    CHECKBOX "Show archived" ID VehiclesArchivedCheckbox AT (4 131 80 12)
+    BUTTON "New" ID VehiclesNewButton AT (4 146 32 12)
+    BUTTON "Done" ID VehiclesDoneButton AT (42 146 36 12)
+END
+
+FORM ID EditVehicleForm AT (0 0 160 160)
+NOFRAME
+USABLE
+BEGIN
+    TITLE "Edit Vehicle"
+    LABEL "Name:" AUTOID AT (36 17) FONT 0
+    FIELD ID VehNameField AT (66 17 90 12) UNDERLINED MAXCHARS 23
+    LABEL "Powertrain:" AUTOID AT (12 30) FONT 0
+    POPUPTRIGGER "Plug-in hybrid" ID VehPowerTrigger AT (66 30 90 12) LEFTANCHOR
+    LIST "Fuel" "Hybrid" "Plug-in hybrid" "Electric" ID VehPowerList AT (66 30 90 44) NONUSABLE VISIBLEITEMS 4
+    POPUPLIST ID VehPowerTrigger VehPowerList
+    LABEL "Odometer in:" AUTOID AT (6 43) FONT 0
+    PUSHBUTTON "km" ID VehKmButton AT (66 43 24 12) GROUP 1
+    PUSHBUTTON "mi" ID VehMiButton AT (PREVRIGHT 43 24 12) GROUP 1
+    LABEL "Start odo:" AUTOID AT (18 56) FONT 0
+    FIELD ID VehStartField AT (66 56 50 12) UNDERLINED MAXCHARS 9 NUMERIC
+    LABEL "Tank (L):        " ID VehTankLabel AT (10 69) FONT 0
+    FIELD ID VehTankField AT (66 69 50 12) UNDERLINED MAXCHARS 7 NUMERIC
+    LABEL "Home c/kWh:      " ID VehHomeRateLabel AT (2 82) FONT 0
+    FIELD ID VehHomeRateField AT (66 82 50 12) UNDERLINED MAXCHARS 7 NUMERIC
+    LABEL "Default grade:" ID VehGradeLabel AT (2 95) FONT 0
+    POPUPTRIGGER "Regular" ID VehGradeTrigger AT (66 95 60 12) LEFTANCHOR
+    LIST "Regular" "Mid" "Premium" "Diesel" ID VehGradeList AT (66 95 60 44) NONUSABLE VISIBLEITEMS 4
+    POPUPLIST ID VehGradeTrigger VehGradeList
+    LABEL "Currency:" AUTOID AT (20 108) FONT 0
+    POPUPTRIGGER "Use Prefs" ID VehCurrencyTrigger AT (66 108 60 12) LEFTANCHOR
+    LIST "Use Prefs" "USD" "CAD" "EUR" "AUD" ID VehCurrencyList AT (66 108 60 55) NONUSABLE VISIBLEITEMS 5
+    POPUPLIST ID VehCurrencyTrigger VehCurrencyList
+    LABEL "Trip meter:" AUTOID AT (14 121) FONT 0
+    POPUPTRIGGER "Reset each fill" ID VehTripTrigger AT (66 121 90 12) LEFTANCHOR
+    LIST "Reset each fill" "Never reset" "Not used" ID VehTripList AT (66 121 90 33) NONUSABLE VISIBLEITEMS 3
+    POPUPLIST ID VehTripTrigger VehTripList
+    CHECKBOX "Archived" ID VehArchivedCheckbox AT (64 133 60 12)
+    LABEL "                   " ID VehStatusLabel AT (90 147) FONT 0
+    BUTTON "Done" ID VehDoneButton AT (4 146 36 12)
+    BUTTON "Cancel" ID VehCancelButton AT (46 146 40 12)
+    BUTTON "Delete" ID VehDeleteButton AT (110 146 40 12)
+    GRAFFITISTATEINDICATOR AT (152 150)
+END
+
+ALERT ID NeedNameAlert
+ERROR
+BEGIN
+    TITLE "Name the vehicle"
+    MESSAGE "Give the vehicle a name so it can be picked from the list."
+    BUTTONS "OK"
+END
+
+ALERT ID DeleteVehicleAlert
+CONFIRMATION
+DEFAULTBUTTON 1
+BEGIN
+    TITLE "Delete this vehicle?"
+    MESSAGE "It has no fills, so nothing else is affected."
+    BUTTONS "Delete" "Cancel"
+END
+
+ALERT ID TooManyVehiclesAlert
+ERROR
+BEGIN
+    TITLE "Vehicle limit"
+    MESSAGE "FuelLog keeps up to 16 vehicles. Archive or delete one first."
     BUTTONS "OK"
 END

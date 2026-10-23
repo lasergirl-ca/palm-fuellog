@@ -27,7 +27,7 @@
 #define fillGradePublicAC 5
 #define fillGradeDCFast   6
 
-#define fillPaymentCash 0
+#define fillPaymentCash 0   /* for a charge: on the hydro bill */
 #define fillPaymentCard 1
 
 #define fillMaxPoints 4

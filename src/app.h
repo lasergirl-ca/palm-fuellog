@@ -17,6 +17,18 @@ void   AppTimeText(char *buf, UInt16 minutes);   /* per the Formats panel, buf >
 void   AppSetupDIA(FormType *form);              /* custom policy, 160 to 225 rows */
 void   AppFitForm(FormType *form, const UInt16 *bottomIds, UInt16 n);  /* resize and pin controls */
 
+/* Form scrolling. Palm forms do not scroll, so the content objects move
+ * under the pinned ones (the bottom buttons and anything in the title bar).
+ * Call AppScrollReset in frmOpenEvent before laying out; AppScrollKey from
+ * keyDownEvent for the page keys and the 5-way; AppScrollToField from
+ * fldEnterEvent so a field behind the keyboard comes into view. */
+void    AppScrollReset(void);
+Int16   gScrollYPublic(void);   /* current offset, for a form that must unscroll before refitting */
+Boolean AppScrollKey(FormType *form, const EventType *event, const UInt16 *pinnedIds, UInt16 n);
+void    AppScrollToField(FormType *form, UInt16 fieldId, const UInt16 *pinnedIds, UInt16 n);
+/* Shift every unpinned object by dy (negative = content moves up) and redraw. */
+void    AppScrollBy(FormType *form, Int16 dy, const UInt16 *pinnedIds, UInt16 n);
+
 /* Which fill the fill form edits: dmMaxRecordIndex for a new one. */
 extern UInt16 gEditIndex;
 

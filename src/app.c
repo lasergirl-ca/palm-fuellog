@@ -63,6 +63,90 @@ void AppSetupDIA(FormType *form)
     }
 }
 
+static Int16 gScrollY;          /* how far the content has moved up */
+
+void AppScrollReset(void) { gScrollY = 0; }
+Int16 gScrollYPublic(void) { return gScrollY; }
+
+static Boolean IsPinned(UInt16 id, const UInt16 *pinnedIds, UInt16 n)
+{
+    UInt16 i;
+    for (i = 0; i < n; i++) if (pinnedIds[i] == id) return true;
+    return false;
+}
+
+/* Bottom edge of the lowest unpinned object, in window coordinates now. */
+static Coord ContentBottom(FormType *form, const UInt16 *pinnedIds, UInt16 n)
+{
+    UInt16 count = FrmGetNumberOfObjects(form), i;
+    Coord bottom = 0;
+    RectangleType r;
+    for (i = 0; i < count; i++) {
+        FormObjectKind kind = FrmGetObjectType(form, i);
+        if (kind == frmListObj) continue;                 /* popup lists are hidden and tall */
+        if (IsPinned(FrmGetObjectId(form, i), pinnedIds, n)) continue;
+        FrmGetObjectBounds(form, i, &r);
+        if (r.topLeft.y + r.extent.y > bottom) bottom = r.topLeft.y + r.extent.y;
+    }
+    return bottom;
+}
+
+void AppScrollBy(FormType *form, Int16 dy, const UInt16 *pinnedIds, UInt16 n)
+{
+    UInt16 count = FrmGetNumberOfObjects(form), i;
+    Coord x, y;
+    if (dy == 0) return;
+    for (i = 0; i < count; i++) {
+        if (IsPinned(FrmGetObjectId(form, i), pinnedIds, n)) continue;
+        FrmGetObjectPosition(form, i, &x, &y);
+        FrmSetObjectPosition(form, i, x, (Coord)(y + dy));
+    }
+    gScrollY -= dy;
+    WinEraseWindow();
+    FrmDrawForm(form);
+}
+
+/* The content area runs from under the title bar to above the pinned buttons. */
+static void VisibleArea(Coord *top, Coord *bottom)
+{
+    Coord w, h;
+    WinGetDisplayExtent(&w, &h);
+    *top = 15;
+    *bottom = h - 16;
+}
+
+Boolean AppScrollKey(FormType *form, const EventType *event, const UInt16 *pinnedIds, UInt16 n)
+{
+    Coord top, bottom, content;
+    WChar c = event->data.keyDown.chr;
+    if (c != vchrPageDown && c != vchrPageUp) return false;
+    VisibleArea(&top, &bottom);
+    content = ContentBottom(form, pinnedIds, n);
+    if (c == vchrPageDown) {
+        Int16 room = content - bottom;              /* how much is hidden below */
+        if (room <= 0) return true;
+        AppScrollBy(form, (Int16)-(room < 60 ? room : 60), pinnedIds, n);
+    } else {
+        if (gScrollY <= 0) return true;
+        AppScrollBy(form, (Int16)(gScrollY < 60 ? gScrollY : 60), pinnedIds, n);
+    }
+    return true;
+}
+
+void AppScrollToField(FormType *form, UInt16 fieldId, const UInt16 *pinnedIds, UInt16 n)
+{
+    RectangleType r;
+    Coord top, bottom;
+    UInt16 idx = FrmGetObjectIndex(form, fieldId);
+    if (idx == frmInvalidObjectId) return;
+    VisibleArea(&top, &bottom);
+    FrmGetObjectBounds(form, idx, &r);
+    if (r.topLeft.y + r.extent.y > bottom)
+        AppScrollBy(form, (Int16)(bottom - (r.topLeft.y + r.extent.y)), pinnedIds, n);
+    else if (r.topLeft.y < top)
+        AppScrollBy(form, (Int16)(top - r.topLeft.y), pinnedIds, n);
+}
+
 void AppFitForm(FormType *form, const UInt16 *bottomIds, UInt16 n)
 {
     RectangleType bounds, r;

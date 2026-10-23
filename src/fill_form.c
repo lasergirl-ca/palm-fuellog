@@ -9,6 +9,7 @@
 #include "text.h"
 #include "datecalc.h"
 #include "resources.h"
+#include "vehicles.h"
 
 static FillRecord gFill;
 static UInt16 gDate, gTime;
@@ -16,8 +17,71 @@ static UInt8 gTyped;          /* bits: 1 volume, 2 price, 4 total, in the order 
 static UInt8 gOrder[3];       /* last three fields typed, newest last */
 static UInt32 gPrevOdo;       /* previous fill's odometer for the hint */
 static FillRecord gPrevFill;  /* static: keeps the big record off the stack */
+static VehicleRecord gFillVeh; /* the fill's vehicle: odometer unit, defaults */
+static char gFVNames[vehMaxVehicles + 1][vehNameLen];
+static char *gFVPtrs[vehMaxVehicles + 1];
+static UInt8 gFVIds[vehMaxVehicles + 1];
 static char gDateText[12];    /* CtlSetLabel keeps the pointer, so the text must persist */
 static char gTimeText[timeStringLength];
+/* Grade popup rows for this vehicle: fuel grades, charge kinds, or both. */
+static const char *const kGradeNames[7] = { "Regular", "Mid", "Premium", "Diesel", "Home AC", "Public AC", "DC fast" };
+static char *gGradePtrs[7];
+static UInt8 gGradeMap[7];   /* popup row -> grade value */
+static UInt16 gGradeRows;
+static Boolean gCharge;      /* the fill is a charging session */
+
+static Boolean IsChargeGrade(UInt8 grade) { return grade >= fillGradeHomeAC; }
+
+/* Labels and title follow fuel or charge mode. */
+static void SetMode(FormType *form, Boolean charge)
+{
+    char b[24];
+    gCharge = charge;
+    if (charge) {
+        AppSetLabel(form, FillVolumeLabel, "Energy kWh:");
+        StrCopy(b, gPrefs.priceFormat == unitPriceFormatCents ? "Price c/kWh:" : "Price $/kWh:");
+        AppSetLabel(form, FillPriceLabel, b);
+        AppSetLabel(form, FillGradeLabel, "Where:");
+        CtlSetLabel(FrmGetObjectPtr(form, FrmGetObjectIndex(form, FillFullCheckbox)), "Charged to full");
+        /* Home charging is paid on the hydro bill; payment 0 means that for a charge. */
+        CtlSetLabel(FrmGetObjectPtr(form, FrmGetObjectIndex(form, FillCashButton)), "Bill");
+    } else {
+        StrCopy(b, "Volume ("); StrCat(b, UnitVolLabel(gPrefs.volumeUnit)); StrCat(b, "):");
+        AppSetLabel(form, FillVolumeLabel, b);
+        StrCopy(b, gPrefs.priceFormat == unitPriceFormatCents ? "Price (c" : "Price ($");
+        StrCat(b, UnitPriceLabel(gPrefs.priceUnit)); StrCat(b, "):");
+        AppSetLabel(form, FillPriceLabel, b);
+        AppSetLabel(form, FillGradeLabel, "Grade:");
+        CtlSetLabel(FrmGetObjectPtr(form, FrmGetObjectIndex(form, FillFullCheckbox)), "Full tank");
+        CtlSetLabel(FrmGetObjectPtr(form, FrmGetObjectIndex(form, FillCashButton)), "Cash");
+    }
+    FrmSetTitle(form, gEditIndex == dmMaxRecordIndex ? (charge ? "New Charge" : "New Fill") : (charge ? "Edit Charge" : "Edit Fill"));
+}
+
+/* Build the grade popup for the vehicle and select the fill's grade. */
+static void BuildGradeList(FormType *form, UInt8 powertrain, UInt8 grade)
+{
+    ListType *lst = FrmGetObjectPtr(form, FrmGetObjectIndex(form, FillGradeList));
+    UInt8 from = powertrain == vehPowerElectric ? 4 : 0, to = powertrain == vehPowerFuel || powertrain == vehPowerHybrid ? 4 : 7, g;
+    Int16 sel = 0;
+    gGradeRows = 0;
+    for (g = from; g < to; g++) {
+        gGradePtrs[gGradeRows] = (char *)kGradeNames[g];
+        gGradeMap[gGradeRows] = g;
+        if (g == grade) sel = (Int16)gGradeRows;
+        gGradeRows++;
+    }
+    LstSetListChoices(lst, gGradePtrs, (Int16)gGradeRows);
+    LstSetHeight(lst, (Int16)gGradeRows);
+    LstSetSelection(lst, sel);
+    CtlSetLabel(FrmGetObjectPtr(form, FrmGetObjectIndex(form, FillGradeTrigger)), gGradePtrs[sel]);
+}
+
+static UInt8 SelectedGrade(FormType *form)
+{
+    Int16 sel = LstGetSelection(FrmGetObjectPtr(form, FrmGetObjectIndex(form, FillGradeList)));
+    return (sel >= 0 && sel < (Int16)gGradeRows) ? gGradeMap[sel] : 0;
+}
 
 #define typedVolume 1
 #define typedPrice  2
@@ -34,10 +98,17 @@ static void Touch(UInt8 which)
     gTyped |= which;
 }
 
+/* Volume is mL for fuel and Wh for a charge (typed as kWh to one decimal). */
 static Int32 ReadVolume(FormType *form, UInt32 *ml)
 {
     UInt32 v;
-    Int32 r = TextParseFixed(AppGetFieldText(form, FillVolumeField), UnitVolDecimals(gPrefs.volumeUnit), gPoint, gThousands, &v);
+    Int32 r;
+    if (gCharge) {
+        r = TextParseFixed(AppGetFieldText(form, FillVolumeField), 1, gPoint, gThousands, &v);
+        if (r == 1) *ml = v * 100;
+        return r;
+    }
+    r = TextParseFixed(AppGetFieldText(form, FillVolumeField), UnitVolDecimals(gPrefs.volumeUnit), gPoint, gThousands, &v);
     if (r == 1) *ml = UnitVolFromDisplay(v, gPrefs.volumeUnit);
     return r;
 }
@@ -46,7 +117,7 @@ static Int32 ReadPrice(FormType *form, UInt32 *price)
 {
     UInt32 v;
     Int32 r = TextParsePrice(AppGetFieldText(form, FillPriceField), gPrefs.priceFormat == unitPriceFormatCents, gPoint, gThousands, &v);
-    if (r == 1) *price = UnitPriceFromDisplay(v, gPrefs.priceUnit);
+    if (r == 1) *price = gCharge ? v : UnitPriceFromDisplay(v, gPrefs.priceUnit);
     return r;
 }
 
@@ -57,12 +128,14 @@ static Int32 ReadTotal(FormType *form, UInt32 *cents)
 
 static void ShowVolume(FormType *form, UInt32 ml)
 {
-    char b[16]; TextFixed(b, (Int32)UnitVolToDisplay(ml, gPrefs.volumeUnit), UnitVolDecimals(gPrefs.volumeUnit), gPoint, 0);
+    char b[16];
+    if (gCharge) TextFixed(b, (Int32)((ml + 50) / 100), 1, gPoint, 0);
+    else TextFixed(b, (Int32)UnitVolToDisplay(ml, gPrefs.volumeUnit), UnitVolDecimals(gPrefs.volumeUnit), gPoint, 0);
     AppSetFieldText(form, FillVolumeField, b);
 }
 static void ShowPrice(FormType *form, UInt32 price)
 {
-    char b[16]; TextPrice(b, UnitPriceToDisplay(price, gPrefs.priceUnit), gPrefs.priceFormat == unitPriceFormatCents, gPoint);
+    char b[16]; TextPrice(b, gCharge ? price : UnitPriceToDisplay(price, gPrefs.priceUnit), gPrefs.priceFormat == unitPriceFormatCents, gPoint);
     AppSetFieldText(form, FillPriceField, b);
 }
 static void ShowTotal(FormType *form, UInt32 cents)
@@ -103,8 +176,9 @@ static void CheckTrip(FormType *form)
     Int32 ho = TextParseFixed(AppGetFieldText(form, FillOdoField), 1, gPoint, gThousands, &odo);
     Int32 ht = TextParseFixed(AppGetFieldText(form, FillTripField), 1, gPoint, gThousands, &trip);
     char b[24];
-    if (ho == 1) odo = UnitDistFromDisplay(odo, gPrefs.distanceUnit);
-    if (ht == 1) trip = UnitDistFromDisplay(trip, gPrefs.distanceUnit);
+    if (ho == 1) odo = UnitDistFromDisplay(odo, gFillVeh.odoUnit);
+    if (ht == 1) trip = UnitDistFromDisplay(trip, gFillVeh.odoUnit);
+    if (ht == 1 && trip == 0) ht = 0;          /* a trip of 0 means not entered */
     if (ho == 1 && ht == 1 && gPrevOdo && odo > gPrevOdo) {
         UInt32 moved = odo - gPrevOdo, gap = moved > trip ? moved - trip : trip - moved;
         UInt32 tol = moved / 50 > 50 ? moved / 50 : 50;   /* 2 % or 5.0 km, whichever is larger */
@@ -112,7 +186,7 @@ static void CheckTrip(FormType *form)
     } else if (ho != 1 && ht == 1 && gPrevOdo) {
         /* Blank odometer: it will be the previous one plus the trip. */
         StrCopy(b, "odo ");
-        TextFixed(b + 4, (Int32)(UnitDistToDisplay(gPrevOdo + trip, gPrefs.distanceUnit) / 10), 0, gPoint, gThousands);
+        TextFixed(b + 4, (Int32)(UnitDistToDisplay(gPrevOdo + trip, gFillVeh.odoUnit) / 10), 0, gPoint, gThousands);
         AppSetLabel(form, FillTripHint, b);
     } else {
         AppSetLabel(form, FillTripHint, "              ");
@@ -135,7 +209,6 @@ static void AfterEdit(FormType *form, UInt16 fieldId)
 static void Load(FormType *form)
 {
     char b[24];
-    UInt16 count = DbCount(dbFills);
     FillRecord *prev = &gPrevFill;
 
     MemSet(&gFill, sizeof gFill, 0);
@@ -147,12 +220,21 @@ static void Load(FormType *form)
         gEditIndex = dmMaxRecordIndex;
         gFill.date = AppToday();
         gFill.time = AppNowMinutes();
-        gFill.vehicle = gPrefs.currentVehicle == 255 ? 1 : gPrefs.currentVehicle;
+        gFill.vehicle = VehDefaultForNewFill();
         gFill.flags = fillFlagFullTank;
-        gFill.currency = CurrencyForNewEntry(vehCurrencyUsePrefs, gPrefs.defaultCurrency, gPrefs.lastCurrency);
+        VehGet(gFill.vehicle, &gFillVeh);
+        gFill.grade = gFillVeh.fuelDefault;
+        gFill.currency = CurrencyForNewEntry(gFillVeh.defaultCurrency, gPrefs.defaultCurrency, gPrefs.lastCurrency);
         gFill.fxRate = CurrencyDefaultRate(gFill.currency, gPrefs.homeCurrency, gPrefs.fxRate);
         gFill.payment = gPrefs.lastPayment;
-        if (count && DbGetFill(count - 1, prev) == errNone) gPrevOdo = prev->odometer;
+        gPrevOdo = VehLastOdometer(gFill.vehicle);
+    }
+    VehGet(gFill.vehicle, &gFillVeh);
+    {
+        ListType *lst = FrmGetObjectPtr(form, FrmGetObjectIndex(form, FillVehicleList));
+        Int16 sel;
+        VehBuildChoices(lst, gFVNames, gFVPtrs, gFVIds, false, gFill.vehicle, gFill.vehicle, &sel);
+        CtlSetLabel(FrmGetObjectPtr(form, FrmGetObjectIndex(form, FillVehicleTrigger)), gFVNames[sel]);
     }
     gDate = gFill.date;
     gTime = gFill.time;
@@ -161,35 +243,33 @@ static void Load(FormType *form)
     AppTimeText(gTimeText, gTime);
     CtlSetLabel(FrmGetObjectPtr(form, FrmGetObjectIndex(form, FillTimeTrigger)), gTimeText);
     /* The odometer shows whole units like the dash; tenths are accepted when typed. */
-    if (gFill.odometer) { TextFixed(b, (Int32)(UnitDistToDisplay(gFill.odometer, gPrefs.distanceUnit) / 10), 0, gPoint, 0); AppSetFieldText(form, FillOdoField, b); }
-    if (gFill.trip) { TextFixed(b, (Int32)(UnitDistToDisplay(gFill.trip, gPrefs.distanceUnit)), 1, gPoint, 0); AppSetFieldText(form, FillTripField, b); }
+    if (gFill.odometer) { TextFixed(b, (Int32)(UnitDistToDisplay(gFill.odometer, gFillVeh.odoUnit) / 10), 0, gPoint, 0); AppSetFieldText(form, FillOdoField, b); }
+    if (gFill.trip) { TextFixed(b, (Int32)(UnitDistToDisplay(gFill.trip, gFillVeh.odoUnit)), 1, gPoint, 0); AppSetFieldText(form, FillTripField, b); }
     if (gFill.volume) ShowVolume(form, gFill.volume);
     if (gFill.price) ShowPrice(form, gFill.price);
     if (gFill.total) ShowTotal(form, gFill.total);
     if (gPrevOdo) {
         StrCopy(b, "p: ");
-        TextFixed(b + 3, (Int32)(UnitDistToDisplay(gPrevOdo, gPrefs.distanceUnit) / 10), 0, gPoint, gThousands);
+        TextFixed(b + 3, (Int32)(UnitDistToDisplay(gPrevOdo, gFillVeh.odoUnit) / 10), 0, gPoint, gThousands);
         AppSetLabel(form, FillOdoHint, b);
     }
-    /* Unit labels follow Prefs. */
-    StrCopy(b, "Volume ("); StrCat(b, UnitVolLabel(gPrefs.volumeUnit)); StrCat(b, "):");
-    AppSetLabel(form, FillVolumeLabel, b);
-    StrCopy(b, gPrefs.priceFormat == unitPriceFormatCents ? "Price (c" : "Price ($");
-    StrCat(b, UnitPriceLabel(gPrefs.priceUnit)); StrCat(b, "):");
-    AppSetLabel(form, FillPriceLabel, b);
     CtlSetLabel(FrmGetObjectPtr(form, FrmGetObjectIndex(form, FillCurrencyTrigger)), CurrencyCode(gFill.currency));
     LstSetSelection(FrmGetObjectPtr(form, FrmGetObjectIndex(form, FillCurrencyList)), gFill.currency);
     FrmSetControlGroupSelection(form, 1, gFill.payment == fillPaymentCard ? FillCardButton : FillCashButton);
-    {
-        static const char *const grades[] = { "Regular", "Mid", "Premium", "Diesel" };
-        UInt8 g = gFill.grade < 4 ? gFill.grade : 0;
-        CtlSetLabel(FrmGetObjectPtr(form, FrmGetObjectIndex(form, FillGradeTrigger)), grades[g]);
-        LstSetSelection(FrmGetObjectPtr(form, FrmGetObjectIndex(form, FillGradeList)), g);
+    /* An electric car charges; a plug-in may do either; the grade list says which. */
+    if (gEditIndex == dmMaxRecordIndex && gFillVeh.powertrain == vehPowerElectric && !IsChargeGrade(gFill.grade))
+        gFill.grade = fillGradeHomeAC;
+    BuildGradeList(form, gFillVeh.powertrain, gFill.grade);
+    SetMode(form, IsChargeGrade(gFill.grade));
+    /* Show the stored volume and price in the mode's units (fuel values were shown above in litres). */
+    if (gCharge) {
+        if (gFill.volume) ShowVolume(form, gFill.volume);
+        if (gFill.price) ShowPrice(form, gFill.price);
+        else if (gEditIndex == dmMaxRecordIndex && gFill.grade == fillGradeHomeAC && gFillVeh.homeRate) ShowPrice(form, gFillVeh.homeRate);
     }
     CtlSetValue(FrmGetObjectPtr(form, FrmGetObjectIndex(form, FillFullCheckbox)), (gFill.flags & fillFlagFullTank) ? 1 : 0);
     FrmShowObject(form, FrmGetObjectIndex(form, FillDeleteButton));
     if (gEditIndex == dmMaxRecordIndex) FrmHideObject(form, FrmGetObjectIndex(form, FillDeleteButton));
-    FrmSetTitle(form, gEditIndex == dmMaxRecordIndex ? "New Fill" : "Edit Fill");   /* literals persist */
     FrmSetFocus(form, FrmGetObjectIndex(form, FillOdoField));
 }
 
@@ -201,8 +281,9 @@ static Boolean Save(FormType *form)
     Int32 hv = ReadVolume(form, &ml), hp = ReadPrice(form, &price), hc = ReadTotal(form, &cents);
     Err err;
 
-    if (ho == 1) odo = UnitDistFromDisplay(odo, gPrefs.distanceUnit);
-    if (ht == 1) trip = UnitDistFromDisplay(trip, gPrefs.distanceUnit);
+    if (ho == 1) odo = UnitDistFromDisplay(odo, gFillVeh.odoUnit);
+    if (ht == 1) trip = UnitDistFromDisplay(trip, gFillVeh.odoUnit);
+    if (ht == 1 && trip == 0) ht = 0;
     if (ho != 1 && ht == 1 && gPrevOdo) odo = gPrevOdo + trip;     /* quick entry */
     if (ho < 0 || ht < 0 || hv < 0 || hp < 0 || hc < 0 || odo == 0) {
         FrmAlert(BadNumberAlert);
@@ -217,12 +298,13 @@ static Boolean Save(FormType *form)
     gFill.volume = ml;
     gFill.price = price;
     gFill.total = cents;
-    gFill.flags = (UInt16)((gFill.flags & ~(fillFlagFullTank | fillFlagTripEntered))
+    gFill.grade = SelectedGrade(form);
+    gFill.flags = (UInt16)((gFill.flags & ~(fillFlagFullTank | fillFlagTripEntered | fillFlagCharge))
                  | (CtlGetValue(FrmGetObjectPtr(form, FrmGetObjectIndex(form, FillFullCheckbox))) ? fillFlagFullTank : 0)
-                 | (ht == 1 ? fillFlagTripEntered : 0));
+                 | (ht == 1 ? fillFlagTripEntered : 0)
+                 | (IsChargeGrade(gFill.grade) ? fillFlagCharge : 0));
     gFill.payment = FrmGetControlGroupSelection(form, 1) == FillCardButton ? fillPaymentCard : fillPaymentCash;
     gFill.currency = (UInt8)LstGetSelection(FrmGetObjectPtr(form, FrmGetObjectIndex(form, FillCurrencyList)));
-    gFill.grade = (UInt8)LstGetSelection(FrmGetObjectPtr(form, FrmGetObjectIndex(form, FillGradeList)));
     if (gEditIndex != dmMaxRecordIndex) DbRemove(dbFills, gEditIndex);
     err = DbAddFill(&gFill, NULL);
     if (err) { FrmAlert(SaveFailedAlert); return false; }
@@ -236,17 +318,23 @@ Boolean FillFormHandleEvent(EventType *event)
 {
     FormType *form = FrmGetActiveForm();
     static const UInt16 bottom[] = { FillDoneButton, FillCancelButton, FillDeleteButton };
+    static const UInt16 pinned[] = { FillDoneButton, FillCancelButton, FillDeleteButton, FillVehicleTrigger, FillVehicleList };
 
     switch (event->eType) {
     case frmOpenEvent:
+        AppScrollReset();
         AppFitForm(form, bottom, 3);
         Load(form);
         FrmDrawForm(form);
         return true;
+    case fldEnterEvent:
+        AppScrollToField(form, event->data.fldEnter.fieldID, pinned, 5);
+        break;
     case frmUpdateEvent:
         FrmDrawForm(form);
         return true;
     case winDisplayChangedEvent:
+        if (gScrollYPublic()) AppScrollBy(form, gScrollYPublic(), pinned, 5);   /* back to the top before refitting */
         AppFitForm(form, bottom, 3);
         WinEraseWindow();
         FrmDrawForm(form);
@@ -258,7 +346,9 @@ Boolean FillFormHandleEvent(EventType *event)
     case keyDownEvent: {
         /* Let the field take the character first, then recompute from what
          * it now holds. This does not rely on fldChangedEvent arriving. */
-        UInt16 focus = FrmGetFocus(form);
+        UInt16 focus;
+        if (AppScrollKey(form, event, pinned, 5)) return true;
+        focus = FrmGetFocus(form);
         if (focus != noFocus) {
             UInt16 id = FrmGetObjectId(form, focus);
             if (id == FillVolumeField || id == FillPriceField || id == FillTotalField ||
@@ -271,9 +361,59 @@ Boolean FillFormHandleEvent(EventType *event)
         break;
     }
     case popSelectEvent:
+        if (event->data.popSelect.listID == FillVehicleList) {
+            UInt8 id = gFVIds[event->data.popSelect.selection];
+            if (id != gFill.vehicle) {
+                char b[24];
+                gFill.vehicle = id;
+                VehGet(id, &gFillVeh);
+                gPrevOdo = (gEditIndex == dmMaxRecordIndex) ? VehLastOdometer(id) : gPrevOdo;
+                if (gPrevOdo) {
+                    StrCopy(b, "p: ");
+                    TextFixed(b + 3, (Int32)(UnitDistToDisplay(gPrevOdo, gFillVeh.odoUnit) / 10), 0, gPoint, gThousands);
+                } else StrCopy(b, "               ");
+                AppSetLabel(form, FillOdoHint, b);
+                CheckTrip(form);
+                if (gFillVeh.powertrain == vehPowerElectric && !IsChargeGrade(gFill.grade)) gFill.grade = fillGradeHomeAC;
+                if (gFillVeh.powertrain == vehPowerFuel && IsChargeGrade(gFill.grade)) gFill.grade = gFillVeh.fuelDefault;
+                BuildGradeList(form, gFillVeh.powertrain, gFill.grade);
+                if (IsChargeGrade(gFill.grade) != gCharge) {
+                    SetMode(form, IsChargeGrade(gFill.grade));
+                    AppSetFieldText(form, FillVolumeField, "");
+                    AppSetFieldText(form, FillPriceField, "");
+                    AppSetFieldText(form, FillTotalField, "");
+                    gOrder[0] = gOrder[1] = gOrder[2] = 0;
+                }
+            }
+            CtlSetLabel(FrmGetObjectPtr(form, FrmGetObjectIndex(form, FillVehicleTrigger)), gFVNames[event->data.popSelect.selection]);
+            return true;
+        }
         if (event->data.popSelect.listID == FillCurrencyList) {
             gFill.currency = (UInt8)event->data.popSelect.selection;
             gFill.fxRate = CurrencyDefaultRate(gFill.currency, gPrefs.homeCurrency, gPrefs.fxRate);
+        }
+        if (event->data.popSelect.listID == FillGradeList) {
+            UInt8 g = gGradeMap[event->data.popSelect.selection];
+            Boolean charge = IsChargeGrade(g);
+            UInt32 ml = 0, price = 0;
+            Boolean hadVol = ReadVolume(form, &ml) == 1, hadPrice = ReadPrice(form, &price) == 1;
+            if (charge != gCharge) {
+                /* Switching between fuel and charge: clear the typed quantities,
+                 * since litres are not kWh, and offer the home rate for a Home charge. */
+                SetMode(form, charge);
+                AppSetFieldText(form, FillVolumeField, "");
+                AppSetFieldText(form, FillPriceField, "");
+                AppSetFieldText(form, FillTotalField, "");
+                AppSetLabel(form, FillCalcHint, "            ");
+                gOrder[0] = gOrder[1] = gOrder[2] = 0;
+                (void)hadVol; (void)hadPrice;
+            }
+            if (charge && g == fillGradeHomeAC && gFillVeh.homeRate && AppGetFieldText(form, FillPriceField)[0] == 0) {
+                ShowPrice(form, gFillVeh.homeRate);
+                Touch(typedPrice);
+                Recompute(form);
+            }
+            gFill.grade = g;
         }
         break;
     case ctlSelectEvent:
