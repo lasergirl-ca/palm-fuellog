@@ -26,10 +26,11 @@ int main(void)
     /* Fleet lifetime: 10 x 1,664,000,000 mL passes 32 bits. */
     check("fleet 1,664,000 L / 4,000,000 km", CalcL100kmX10(1664000000UL, 40000000UL), 416);
 
-    /* Totals: 178.9 c/L x 47.30 L = $84.62 (fill form sample). */
-    check("total 1789 x 47300", CalcTotalCents(1789, 47300), 8462);
-    /* $21.475/L x 200 L: the product passes 32 bits. */
-    check("total 21475 x 200000", CalcTotalCents(21475, 200000), 429500);
+    /* Totals: 178.9 c/L x 47.30 L = $84.62 (fill form sample); prices are ten-thousandths per litre. */
+    check("total 17890 x 47300", CalcTotalCents(17890, 47300), 8462);
+    /* $21.475/L x 200 L: the product (4.3e10) passes 32 bits, so this is always a 64-bit path. */
+    check("total 214750 x 200000", CalcTotalCents(214750, 200000), 429500);
+    check("total of a hydro rate 11.62 c/kWh x 38.6 kWh", CalcTotalCents(1162, 38600), 449);
 
     /* Home currency: $84.62 x 1.36 (product 11,508,320,000 passes 32 bits). */
     check("home 8462 x 1.36", CalcHomeCents(8462, 1360000), 11508);

@@ -32,17 +32,17 @@ static int OpenOut(OutStream *s, const char *path, int seekable)
 }
 
 /* The eight sample fills from the mock-ups. Dates are days since 1904-01-01. */
-typedef struct { UInt16 date; const char *label; UInt32 odo; UInt32 ml; UInt32 priceTh; UInt32 cents; UInt8 full; UInt16 l100x10; } Fill;
+typedef struct { UInt16 date; const char *label; UInt32 odo; UInt32 ml; UInt32 price; UInt32 cents; UInt8 full; UInt16 l100x10; } Fill;
 #define kJul29 44770   /* 2026-07-29 as days since 1904-01-01 */
 static const Fill kFills[] = {
-    { kJul29 +  0, "Jul 29", 806500, 45200, 1756, 7937, 1, 0 },
-    { kJul29 + 12, "Aug 10", 811900, 46000, 1769, 8137, 1, 85 },
-    { kJul29 + 24, "Aug 22", 817240, 44100, 1776, 7832, 1, 83 },
-    { kJul29 + 36, "Sep 3",  822620, 43900, 1757, 7713, 1, 82 },
-    { kJul29 + 48, "Sep 15", 828000, 44600, 1790, 7983, 1, 83 },
-    { kJul29 + 60, "Sep 27", 830920, 22000, 1759, 3870, 0, 0 },
-    { kJul29 + 71, "Oct 8",  836400, 45900, 1766, 8106, 1, 81 },
-    { kJul29 + 82, "Oct 19", 842120, 48200, 1749, 8430, 1, 84 },
+    { kJul29 +  0, "Jul 29", 806500, 45200, 17560, 7937, 1, 0 },
+    { kJul29 + 12, "Aug 10", 811900, 46000, 17690, 8137, 1, 85 },
+    { kJul29 + 24, "Aug 22", 817240, 44100, 17760, 7832, 1, 83 },
+    { kJul29 + 36, "Sep 3",  822620, 43900, 17570, 7713, 1, 82 },
+    { kJul29 + 48, "Sep 15", 828000, 44600, 17900, 7983, 1, 83 },
+    { kJul29 + 60, "Sep 27", 830920, 22000, 17590, 3870, 0, 0 },
+    { kJul29 + 71, "Oct 8",  836400, 45900, 17660, 8106, 1, 81 },
+    { kJul29 + 82, "Oct 19", 842120, 48200, 17490, 8430, 1, 84 },
 };
 #define kNumFills (sizeof kFills / sizeof kFills[0])
 
@@ -77,7 +77,7 @@ static void WriteWorkbook(const char *path, int seekable)
         XlsxCellDate(&w, f->date);
         XlsxCellNumber(&w, (Int32)f->odo, 1, xlsxStyle1dp);
         XlsxCellNumber(&w, (Int32)f->ml, 3, xlsxStyle2dp);
-        XlsxCellNumber(&w, (Int32)f->priceTh, 3, xlsxStyleGeneral);
+        XlsxCellNumber(&w, (Int32)(f->price + 5) / 10, 3, xlsxStyleGeneral);
         XlsxCellNumber(&w, (Int32)f->cents, 2, xlsxStyleCAD);
         XlsxCellText(&w, "CAD", xlsxStyleGeneral);
         XlsxCellNumber(&w, (Int32)f->cents, 2, xlsxStyleCAD);
@@ -156,7 +156,7 @@ static void WritePdf(const char *path)
             PdfText(&w, pdfFontRegular, 10, cols[2] + 4, ty, buf);
             sprintf(buf, "%lu.%02lu L", (unsigned long)f->ml / 1000, ((unsigned long)f->ml % 1000) / 10);
             PdfText(&w, pdfFontRegular, 10, cols[3] + 4, ty, buf);
-            sprintf(buf, "%lu.%03lu", (unsigned long)f->priceTh / 1000, (unsigned long)f->priceTh % 1000);
+            sprintf(buf, "%lu.%03lu", (unsigned long)(f->price + 5) / 10000, ((unsigned long)(f->price + 5) % 10000) / 10);
             PdfText(&w, pdfFontRegular, 10, cols[4] + 4, ty, buf);
             sprintf(buf, "$%lu.%02lu", (unsigned long)f->cents / 100, (unsigned long)f->cents % 100);
             PdfText(&w, pdfFontRegular, 10, cols[5] + 4, ty, buf);

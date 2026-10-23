@@ -8,10 +8,10 @@ UInt32 CalcMulDiv(UInt32 a, UInt32 b, UInt32 c)
     return (UInt32)((n + c / 2) / c);
 }
 
-UInt32 CalcTotalCents(UInt32 priceTh, UInt32 volumeMl)
+UInt32 CalcTotalCents(UInt32 price, UInt32 volumeMl)
 {
-    /* th/L * mL = th*mL; / 1,000 (mL->L) / 1,000 (th->units) * 100 (cents) */
-    return CalcMulDiv(priceTh, volumeMl, 10000);
+    /* (units x 10^-4 / L) x mL: / 1,000 (mL to L) / 10,000 (to units) x 100 (cents) */
+    return CalcMulDiv(price, volumeMl, 100000UL);
 }
 
 UInt32 CalcHomeCents(UInt32 cents, UInt32 fxRate)

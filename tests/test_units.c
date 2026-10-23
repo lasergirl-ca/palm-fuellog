@@ -43,11 +43,11 @@ int main(void)
     check("EV Wh/km x10", UnitEcoElectricToDisplay(38600, 2540, unitEcoWhPerKm), 1520);
     check("EV mi/kWh x100", UnitEcoElectricToDisplay(38600, 2540, unitEcoMiPerKwh), 409);
     check("EV MPGe x10", UnitEcoElectricToDisplay(38600, 2540, unitEcoMpge), 1378);
-    /* Price: $1.789/L = $6.772/US gal = $8.133/Imp gal; the paper log's $3.459/gal = $0.914/L. */
-    check("1789 th/L per US gal", UnitPriceToDisplay(1789, unitPricePerUSGal), 6772);
-    check("1789 th/L per Imp gal", UnitPriceToDisplay(1789, unitPricePerImpGal), 8133);
-    check("3459 th/US gal per L", UnitPriceFromDisplay(3459, unitPricePerUSGal), 914);
-    check("per kWh is identity", UnitPriceFromDisplay(1162, unitPricePerKwh), 1162);
+    /* Price in ten-thousandths: $1.789/L = $6.7721/US gal = $8.1330/Imp gal; the paper log's $3.459/gal = $0.9138/L. */
+    check("17890 /L per US gal", UnitPriceToDisplay(17890, unitPricePerUSGal), 67721);
+    check("17890 /L per Imp gal", UnitPriceToDisplay(17890, unitPricePerImpGal), 81330);
+    check("34590 /US gal per L", UnitPriceFromDisplay(34590, unitPricePerUSGal), 9138);
+    check("per kWh is identity (11.62 c/kWh exact)", UnitPriceFromDisplay(1162, unitPricePerKwh), 1162);
 
     /* Round trips: display -> stored -> display within one display digit,
      * and stored -> display -> stored within the display digit's worth. */
@@ -61,11 +61,16 @@ int main(void)
         if (d != v && d + 1 != v && d != v + 1) { bad++; printf("  Imp gal %lu -> %lu\n", (unsigned long)v, (unsigned long)d); }
         d = UnitVolToDisplay(UnitVolFromDisplay(v, unitVolLitres), unitVolLitres);
         if (d != v) { bad++; printf("  litres %lu -> %lu\n", (unsigned long)v, (unsigned long)d); }
-        /* Prices are stored in thousandths per litre, and a gallon is 3.785 L,
-         * so a per-gallon price can come back up to 2 thousandths off: the
-         * stored grain is coarser than the typed one. See docs/M1.md. */
-        d = UnitPriceToDisplay(UnitPriceFromDisplay(v, unitPricePerUSGal), unitPricePerUSGal);
-        if (d + 2 < v || d > v + 2) { bad++; printf("  price/gal %lu -> %lu\n", (unsigned long)v, (unsigned long)d); }
+        /* Prices are stored in ten-thousandths per litre and shown to three
+         * decimals per unit, so a typed per-gallon price must come back exactly
+         * at display precision. */
+        {
+            UInt32 typed = v - v % 10;   /* a typed price has three decimals */
+            d = UnitPriceToDisplay(UnitPriceFromDisplay(typed, unitPricePerUSGal), unitPricePerUSGal);
+            if ((d + 5) / 10 != typed / 10) { bad++; printf("  price/gal %lu -> %lu\n", (unsigned long)typed, (unsigned long)d); }
+            d = UnitPriceToDisplay(UnitPriceFromDisplay(typed, unitPricePerImpGal), unitPricePerImpGal);
+            if ((d + 5) / 10 != typed / 10) { bad++; printf("  price/Imp gal %lu -> %lu\n", (unsigned long)typed, (unsigned long)d); }
+        }
     }
     check("round trips off by more than one digit", bad, 0);
     near("mL -> gal -> mL within 2 mL", UnitVolFromDisplay(UnitVolToDisplay(47300, unitVolUSGal), unitVolUSGal), 47300, 2);

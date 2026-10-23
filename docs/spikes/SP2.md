@@ -36,7 +36,7 @@ worst case, so the real headroom on every sum is in the hundreds.
 
 | Product | Worst case | Fits 32 bits? | Where |
 | --- | --- | --- | --- |
-| price (thousandths/L) x volume (mL) | 4,294,800,000 at $21.474/L x 200 L | barely; $9.999/L x 200 L is 2.0e9 | `CalcTotalCents` |
+| price (ten-thousandths/L) x volume (mL) | 42,948,000,000 at $21.474/L x 200 L | **no** (prices moved to ten-thousandths after M1) | `CalcTotalCents` |
 | cents x fxRate (x 1e6) | 11,508,320,000 for an ordinary $84.62 at 1.36 | **no** | `CalcHomeCents` |
 | 10 x mL for economy, one segment (3 x 200 L) | 6,000,000 | yes | `CalcL100kmX10` |
 | 10 x mL for economy, one car lifetime | 4,160,000,000 | barely | `CalcL100kmX10` |

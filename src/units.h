@@ -1,6 +1,6 @@
 /* Display-unit conversions. Everything is stored metric in fixed point:
  * distance km x 10, volume mL (or Wh), economy L/100 km x 10, price in
- * thousandths of a currency unit per litre (or per kWh). These functions
+ * ten-thousandths of a currency unit per litre (or per kWh). These functions
  * convert to and from the units the user picked in Prefs, always through
  * 64-bit intermediates, rounding to nearest. Display values carry a fixed
  * number of decimals noted beside each function. */
@@ -48,7 +48,7 @@ UInt32 UnitVolFromDisplay(UInt32 value, UInt8 unit) EXPORT_SEC;
 UInt32 UnitEcoFuelToDisplay(UInt32 l100x10, UInt8 unit) EXPORT_SEC;
 UInt32 UnitEcoElectricToDisplay(UInt32 wh, UInt32 dkm, UInt8 unit) EXPORT_SEC;
 
-/* Price: stored thousandths per litre <-> thousandths per display unit.
+/* Price: stored ten-thousandths per litre <-> ten-thousandths per display unit.
  * Per-kWh prices are stored as typed, so that case is the identity. */
 UInt32 UnitPriceToDisplay(UInt32 thPerLitre, UInt8 unit) EXPORT_SEC;
 UInt32 UnitPriceFromDisplay(UInt32 thPerUnit, UInt8 unit) EXPORT_SEC;

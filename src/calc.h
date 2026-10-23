@@ -1,6 +1,6 @@
 /* Fixed-point fuel maths. Plain C with no Palm headers, so it is unit-tested
  * on the host. Units follow the data model: mL (or Wh), km x 10 (dkm),
- * cents, price in thousandths of a currency unit per litre (or per kWh),
+ * cents, price in ten-thousandths of a currency unit per litre (or per kWh),
  * fxRate in home units per fill unit x 1,000,000.
  *
  * Every product that can pass 32 bits goes through a 64-bit intermediate
@@ -12,9 +12,9 @@
 /* a * b / c rounded to nearest, with a 64-bit intermediate. c must be > 0. */
 UInt32 CalcMulDiv(UInt32 a, UInt32 b, UInt32 c);
 
-/* Total in cents for priceTh thousandths per litre and volumeMl millilitres
- * (or thousandths per kWh and Wh). */
-UInt32 CalcTotalCents(UInt32 priceTh, UInt32 volumeMl);
+/* Total in cents for price in ten-thousandths per litre and volumeMl
+ * millilitres (or ten-thousandths per kWh and Wh). */
+UInt32 CalcTotalCents(UInt32 price, UInt32 volumeMl);
 
 /* Cents in the home currency for cents in the fill currency at fxRate. */
 UInt32 CalcHomeCents(UInt32 cents, UInt32 fxRate);
