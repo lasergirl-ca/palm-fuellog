@@ -82,6 +82,9 @@ test: $(BUILD)
 	$(BUILD)/test_csv
 	$(HOSTCC) -Wall -Wextra -o $(BUILD)/test_xlsxread tests/test_xlsxread.c src/xlsxread.c src/zipread.c src/inflate.c src/crc32.c src/csv.c src/units.c src/currency.c src/calc.c src/datecalc.c src/outstream.c src/records.c
 	$(BUILD)/test_xlsxread docs/spikes/samples/fuellog-seek.xlsx docs/spikes/samples/sp6.xlsx
+	$(HOSTCC) -Wall -o $(BUILD)/mkpdb tools/mkpdb/mkpdb.c src/records.c src/datecalc.c
+	mkdir -p $(BUILD)/pdb && $(BUILD)/mkpdb $(BUILD)/pdb
+	@if command -v go >/dev/null; then (cd tools/fuellogdump && go build -o ../../$(BUILD)/fuellogdump .) && $(BUILD)/fuellogdump dump $(BUILD)/pdb | diff - tests/expected_dump.csv && echo "ok   Go reader matches the C fixture"; else echo "skip Go reader (go not installed)"; fi
 	mkdir -p $(BUILD)/out
 	$(HOSTCC) -Wall -Wextra -o $(BUILD)/test_export tests/test_export.c $(EXPORT_SRCS)
 	$(BUILD)/test_export

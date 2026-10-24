@@ -1,0 +1,4 @@
+Date,Time,Vehicle,Odometer (km),Trip (km),Volume (L or kWh),Price (per L or kWh),Total,Currency,Rate,Payment,Grade,Full,Missed,Discount,Points,Notes
+2026-07-29,09:05,"Outback",80650.0,,45.200,1.7560,79.37,CAD,1.0000,Card,Regular,yes,,,"Petro-Points +452","Petro-Canada on 152 St., café"
+2026-08-10,,"Outback",81190.0,540.0,46.000,1.7690,81.37,CAD,1.0000,Cash,Regular,yes,,,"",""
+2026-08-12,,"Ioniq 5",18420.0,,38.600,0.1800,0.69,CAD,1.0000,Bill,Home AC,yes,,,"",""
