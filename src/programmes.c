@@ -272,8 +272,12 @@ Boolean ProgrammesFormHandleEvent(EventType *event)
         /* Page keys move through a long list by a screenful. */
         UInt16 visible = (UInt16)(gPgmRows.extent.y / kPgmRowH);
         WChar c = event->data.keyDown.chr;
-        if (c == vchrPageDown && gPgmFirst + visible < gOrderCount) { gPgmFirst += visible; DrawProgrammes(); return true; }
-        if (c == vchrPageUp && gPgmFirst > 0) { gPgmFirst = gPgmFirst > visible ? gPgmFirst - visible : 0; DrawProgrammes(); return true; }
+        Boolean page;
+        Int16 dir = AppScrollDirection(event, &page);
+        UInt16 step = page ? visible : 1;
+        (void)c;
+        if (dir > 0 && gPgmFirst + visible < gOrderCount) { gPgmFirst += step; DrawProgrammes(); return true; }
+        if (dir < 0 && gPgmFirst > 0) { gPgmFirst = gPgmFirst > step ? gPgmFirst - step : 0; DrawProgrammes(); return true; }
         break;
     }
     case ctlSelectEvent:

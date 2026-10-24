@@ -32,6 +32,8 @@ Boolean AppScrollEvent(FormType *form, const EventType *event, const UInt16 *pin
 void    AppListScrollBar(FormType *form, UInt16 sbId, Int16 value, Int16 max, Int16 page, Coord top, Coord bottom);
 /* True for a scrollbar event, with the new position in *value. */
 Boolean AppListScrollEvent(const EventType *event, Int16 *value);
+/* -1 up, +1 down, 0 for any other key. Page keys set *page; the 5-way pad does not. */
+Int16   AppScrollDirection(const EventType *event, Boolean *page);
 /* The modal lined note over the current form; edits notes (fillMaxNotes bytes) in place. */
 void   AppNoteDialog(char *notes);   /* the window height after AppFitForm: lay rows out to this, not the display */
 extern UInt16 gDisplayChanges;          /* winDisplayChangedEvents seen, for the About diagnostics */

@@ -115,20 +115,40 @@ static void VisibleArea(Coord *top, Coord *bottom)
     *bottom = AppFormHeight(FrmGetActiveForm()) - 16;
 }
 
+#ifndef vchrRockerUp
+#define vchrRockerUp   0x0132
+#define vchrRockerDown 0x0133
+#endif
+
+Int16 AppScrollDirection(const EventType *event, Boolean *page)
+{
+    WChar c;
+    *page = false;
+    if (event->eType != keyDownEvent) return 0;
+    c = event->data.keyDown.chr;
+    if (c == vchrPageDown) { *page = true; return 1; }
+    if (c == vchrPageUp) { *page = true; return -1; }
+    if (c == vchrRockerDown) return 1;
+    if (c == vchrRockerUp) return -1;
+    return 0;
+}
+
 Boolean AppScrollKey(FormType *form, const EventType *event, const UInt16 *pinnedIds, UInt16 n)
 {
     Coord top, bottom, content;
-    WChar c = event->data.keyDown.chr;
-    if (c != vchrPageDown && c != vchrPageUp) return false;
+    Boolean page;
+    Int16 dir = AppScrollDirection(event, &page), step;
+    if (dir == 0) return false;
+    step = page ? 60 : 26;                          /* a screenful or two rows */
     VisibleArea(&top, &bottom);
     content = ContentBottom(form, pinnedIds, n);
-    if (c == vchrPageDown) {
+    if (dir > 0) {
         Int16 room = content - bottom;              /* how much is hidden below */
         if (room <= 0) return true;
-        AppScrollBy(form, (Int16)-(room < 60 ? room : 60), pinnedIds, n);
+        AppScrollBy(form, (Int16)-(room < step ? room : step), pinnedIds, n);
     } else {
         if (gScrollY <= 0) return true;
-        AppScrollBy(form, (Int16)(gScrollY < 60 ? gScrollY : 60), pinnedIds, n);
+        AppScrollBy(form, (Int16)(gScrollY < step ? gScrollY : step), pinnedIds, n);
     }
     return true;
 }

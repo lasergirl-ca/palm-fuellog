@@ -238,8 +238,11 @@ Boolean StatsFormHandleEvent(EventType *event)
         /* Page keys scroll when the content outruns the screen (input area open). */
         WChar c = event->data.keyDown.chr;
         Int16 room = gStatsHeight - gStatsArea.extent.y - gStatsScroll;
-        if (c == vchrPageDown && room > 0) { gStatsScroll += room < 60 ? room : 60; DrawStats(); return true; }
-        if (c == vchrPageUp && gStatsScroll > 0) { gStatsScroll -= gStatsScroll < 60 ? gStatsScroll : 60; DrawStats(); return true; }
+        Boolean page;
+        Int16 dir = AppScrollDirection(event, &page), step = page ? 60 : 22;
+        (void)c;
+        if (dir > 0 && room > 0) { gStatsScroll += room < step ? room : step; DrawStats(); return true; }
+        if (dir < 0 && gStatsScroll > 0) { gStatsScroll -= gStatsScroll < step ? gStatsScroll : step; DrawStats(); return true; }
         break;
     }
     case popSelectEvent:

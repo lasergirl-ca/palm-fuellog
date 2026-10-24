@@ -419,8 +419,12 @@ Boolean ServiceFormHandleEvent(EventType *event)
     case keyDownEvent: {
         UInt16 visible = (UInt16)(gSvcArea.extent.y / kSvcRowH);
         WChar c = event->data.keyDown.chr;
-        if (c == vchrPageDown && gSvcFirst + visible < gSvcRowCount) { gSvcFirst += visible; DrawService(); return true; }
-        if (c == vchrPageUp && gSvcFirst > 0) { gSvcFirst = gSvcFirst > visible ? gSvcFirst - visible : 0; DrawService(); return true; }
+        Boolean page;
+        Int16 dir = AppScrollDirection(event, &page);
+        UInt16 step = page ? visible : 1;
+        (void)c;
+        if (dir > 0 && gSvcFirst + visible < gSvcRowCount) { gSvcFirst = (UInt8)(gSvcFirst + step); DrawService(); return true; }
+        if (dir < 0 && gSvcFirst > 0) { gSvcFirst = (UInt8)(gSvcFirst > step ? gSvcFirst - step : 0); DrawService(); return true; }
         break;
     }
     case popSelectEvent:

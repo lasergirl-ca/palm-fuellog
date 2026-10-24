@@ -204,8 +204,12 @@ Boolean VehiclesFormHandleEvent(EventType *event)
     case keyDownEvent: {
         UInt16 visible = (UInt16)(gVehRows.extent.y / kVehRowH), idx;
         WChar c = event->data.keyDown.chr;
-        if (c == vchrPageDown && VisibleAt(gVehFirst + visible, &idx)) { gVehFirst += visible; DrawVehicles(); return true; }
-        if (c == vchrPageUp && gVehFirst > 0) { gVehFirst = gVehFirst > visible ? gVehFirst - visible : 0; DrawVehicles(); return true; }
+        Boolean page;
+        Int16 dir = AppScrollDirection(event, &page);
+        UInt16 step = page ? visible : 1;
+        (void)c;
+        if (dir > 0 && VisibleAt(gVehFirst + visible, &idx)) { gVehFirst += step; DrawVehicles(); return true; }
+        if (dir < 0 && gVehFirst > 0) { gVehFirst = gVehFirst > step ? gVehFirst - step : 0; DrawVehicles(); return true; }
         break;
     }
     case ctlSelectEvent:

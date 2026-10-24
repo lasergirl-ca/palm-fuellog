@@ -286,6 +286,13 @@ Boolean FillListHandleEvent(EventType *event)
     }
     case keyDownEvent: {
         UInt16 rows = (UInt16)(gRows.extent.y / kRowH), count = gVisibleCount;
+        {
+            Boolean page;
+            Int16 dir = AppScrollDirection(event, &page);
+            UInt16 step = page ? rows : 1;
+            if (dir > 0) { if (gFirstRow + rows < count) { gFirstRow = (UInt16)(gFirstRow + step + rows > count ? count - rows : gFirstRow + step); DrawRows(); } return true; }
+            if (dir < 0) { gFirstRow = gFirstRow > step ? gFirstRow - step : 0; DrawRows(); return true; }
+        }
         if (event->data.keyDown.chr == vchrPageDown) {
             if (gFirstRow + rows < count) { gFirstRow += rows; DrawRows(); }
             return true;
