@@ -554,6 +554,7 @@ static Boolean SaveSvt(FormType *form)
     if (gEditSvtIndex == dmMaxRecordIndex) err = DbAdd(dbServiceTypes, gSvcPacked, ServiceTypePack(&gSvt, gSvcPacked), NULL);
     else err = DbReplace(dbServiceTypes, gEditSvtIndex, gSvcPacked, ServiceTypePack(&gSvt, gSvcPacked));
     if (err) { FrmAlert(SaveFailedAlert); return false; }
+    SvcScheduleAlarm();
     return true;
 }
 
@@ -760,6 +761,7 @@ static Boolean SaveSvl(FormType *form)
     if (DbAdd(dbServiceVisits, gSvcPacked, ServiceVisitPack(&gSvl, gSvcPacked), NULL)) { FrmAlert(SaveFailedAlert); return false; }
     gPrefs.lastPayment = gSvl.payment;
     PrefsSave(&gPrefs);
+    SvcScheduleAlarm();
     return true;
 }
 
@@ -811,6 +813,7 @@ Boolean LogServiceFormHandleEvent(EventType *event)
         case SvlDeleteButton:
             if (gEditSvlIndex != dmMaxRecordIndex && FrmAlert(DeleteVisitAlert) == 0) {
                 DbRemove(dbServiceVisits, gEditSvlIndex);
+                SvcScheduleAlarm();
                 FrmGotoForm(gSvlReturn);
             }
             return true;
@@ -1015,4 +1018,35 @@ Boolean HistoryFormHandleEvent(EventType *event)
     default: break;
     }
     return false;
+}
+
+/* ---- alarm ---- */
+
+void SvcScheduleAlarm(void)
+{
+    UInt16 n = DbCount(dbServiceTypes), i, today = AppToday(), best = 0;
+    UInt8 lastVehicle = 255;
+    UInt32 odoNow = 0, pace = 0, seconds = 0;
+    UInt16 card; LocalID dbId;
+    for (i = 0; i < n; i++) {
+        SvcDue d;
+        if (SvtGetAt(i, &gSvt) != errNone || gSvt.archived || !gSvt.alarm) continue;
+        if (gSvt.vehicle != lastVehicle) {
+            if (!VehGet(gSvt.vehicle, &gSvcVeh) || gSvcVeh.archived) continue;
+            lastVehicle = gSvt.vehicle; odoNow = VehLastOdometer(gSvt.vehicle); pace = Pace(gSvt.vehicle);
+        }
+        DueFor(&gSvt, odoNow, pace, &d);
+        if (!d.due || d.due <= today) continue;      /* today or past: the list already says so */
+        if (!best || d.due < best) best = d.due;
+    }
+    if (best) {
+        DateTimeType dt;
+        UInt16 y; UInt8 m, dd;
+        DateDaysToYmd(best, &y, &m, &dd);
+        MemSet(&dt, sizeof dt, 0);
+        dt.year = (Int16)y; dt.month = m; dt.day = dd; dt.hour = 9;
+        seconds = TimDateTimeToSeconds(&dt);
+    }
+    if (SysCurAppDatabase(&card, &dbId) == errNone) AlmSetAlarm(card, dbId, 0, seconds, true);
+    if (gPrefs.nextAlarm != seconds) { gPrefs.nextAlarm = seconds; PrefsSave(&gPrefs); }
 }

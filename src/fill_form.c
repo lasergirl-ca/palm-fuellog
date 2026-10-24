@@ -11,6 +11,7 @@
 #include "resources.h"
 #include "vehicles.h"
 #include "programmes.h"
+#include "service_form.h"
 
 static FillRecord gFill;
 static UInt16 gDate, gTime;
@@ -680,12 +681,21 @@ static Boolean Save(FormType *form)
             gFill.pointCount++;
         }
     }
-    if (gEditIndex != dmMaxRecordIndex) DbRemove(dbFills, gEditIndex);
-    err = DbAddFill(&gFill, NULL);
-    if (err) { FrmAlert(SaveFailedAlert); return false; }
-    gPrefs.lastPayment = gFill.payment;
-    gPrefs.lastCurrency = gFill.currency;
-    PrefsSave(&gPrefs);
+    {
+        char before[44], after[44];
+        UInt8 wasDue = SvcBanner(gFill.vehicle, before), nowDue;
+        if (gEditIndex != dmMaxRecordIndex) DbRemove(dbFills, gEditIndex);
+        err = DbAddFill(&gFill, NULL);
+        if (err) { FrmAlert(SaveFailedAlert); return false; }
+        gPrefs.lastPayment = gFill.payment;
+        gPrefs.lastCurrency = gFill.currency;
+        PrefsSave(&gPrefs);
+        /* One alert when this fill tips a service into Soon or Overdue. */
+        nowDue = SvcBanner(gFill.vehicle, after);
+        if ((nowDue == svcStatusSoon || nowDue == svcStatusOverdue) && nowDue != wasDue && after[0])
+            FrmCustomAlert(ServiceDueAlert, after, "", "");
+        SvcScheduleAlarm();
+    }
     return true;
 }
 
@@ -854,6 +864,7 @@ Boolean FillFormHandleEvent(EventType *event)
         case FillDeleteButton:
             if (gEditIndex != dmMaxRecordIndex && FrmAlert(DeleteFillAlert) == 0) {
                 DbRemove(dbFills, gEditIndex);
+                SvcScheduleAlarm();
                 FrmGotoForm(FillListForm);
             }
             return true;

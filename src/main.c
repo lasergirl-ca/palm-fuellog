@@ -314,8 +314,29 @@ static Err RomVersionCompatible(UInt32 required, UInt16 launchFlags)
     return errNone;
 }
 
+/* Without globals (alarm and reset launches) nothing here may touch gPrefs,
+ * the databases or any other code section: system traps and locals only. */
+static void RestoreAlarmAfterReset(void)
+{
+    FuelPrefs p;
+    UInt16 size = sizeof p, card;
+    LocalID dbId;
+    Int16 version = PrefGetAppPreferences('ZFlg', prefsAppPrefId, &p, &size, true);
+    if (version == noPreferenceFound || version < 2 || size < sizeof p || p.nextAlarm == 0) return;
+    if (SysCurAppDatabase(&card, &dbId) == errNone) AlmSetAlarm(card, dbId, 0, p.nextAlarm, true);
+}
+
 UInt32 PilotMain(UInt16 cmd, MemPtr cmdPBP, UInt16 launchFlags)
 {
+    if (cmd == sysAppLaunchCmdSystemReset) {
+        RestoreAlarmAfterReset();
+        return errNone;
+    }
+    if (cmd == sysAppLaunchCmdDisplayAlarm) {
+        FrmAlert(ServiceAlarmAlert);
+        return errNone;
+    }
+    if (cmd == sysAppLaunchCmdAlarmTriggered) return errNone;   /* the system plays the alarm sound */
     if (cmd == sysAppLaunchCmdNormalLaunch) {
         if (RomVersionCompatible(kMinRomVersion, launchFlags) != errNone)
             return sysErrRomIncompatible;
@@ -327,6 +348,7 @@ UInt32 PilotMain(UInt16 cmd, MemPtr cmdPBP, UInt16 launchFlags)
             return errNone;
         }
         PgmInstallPresets();
+        SvcScheduleAlarm();
         /* First launch: no vehicle yet means the Welcome steps, never an empty table. */
         if (DbCount(dbVehicles) == 0) { gSetupStep = 1; FrmGotoForm(WelcomeForm); }
         else FrmGotoForm(FillListForm);

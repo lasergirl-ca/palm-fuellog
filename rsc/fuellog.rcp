@@ -632,3 +632,19 @@ BEGIN
     MESSAGE "The services it covered will count from the visit before it."
     BUTTONS "Delete" "Cancel"
 END
+
+ALERT ID ServiceAlarmAlert
+INFORMATION
+BEGIN
+    TITLE "FuelLog: service due"
+    MESSAGE "A service reaches its due date today. Open FuelLog and tap Service for details."
+    BUTTONS "OK"
+END
+
+ALERT ID ServiceDueAlert
+INFORMATION
+BEGIN
+    TITLE "Service coming up"
+    MESSAGE "^1. Tap Service on the fill list for details."
+    BUTTONS "OK"
+END

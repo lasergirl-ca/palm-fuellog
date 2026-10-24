@@ -7,7 +7,7 @@
 #include "ptypes.h"
 #include "sections.h"
 
-#define prefsVersion 1
+#define prefsVersion 2
 #define prefsAppPrefId 0
 
 typedef struct {
@@ -28,6 +28,7 @@ typedef struct {
     UInt8  currentVehicle;    /* vehicle id, 255 = all */
     UInt16 lastFormId;
     UInt16 lastScrollRow;
+    UInt32 nextAlarm;         /* v2: seconds of the service alarm set, 0 = none; re-set after a reset */
 } FuelPrefs;
 
 void PrefsSetDefaults(FuelPrefs *p) EXPORT_SEC;

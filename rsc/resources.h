@@ -301,3 +301,6 @@
 #define HistIntervalsButton  2902
 #define HistScrollBar        2903
 #define DeleteVisitAlert     1517
+
+#define ServiceAlarmAlert    1518
+#define ServiceDueAlert      1519
