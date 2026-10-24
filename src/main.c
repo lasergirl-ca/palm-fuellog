@@ -25,6 +25,7 @@
 #include "service_form.h"
 #include "reports_form.h"
 #include "export_form.h"
+#include "import.h"
 #include "backup.h"
 
 #define kMinRomVersion sysMakeROMVersion(3, 0, 0, sysROMStageRelease, 0)
@@ -287,6 +288,14 @@ static Boolean AppHandleEvent(EventType *event)
             break;
         case RestoreForm:
             FrmSetEventHandler(form, RestoreFormHandleEvent);
+            AppSetupDIA(form);
+            break;
+        case ChooseFileForm:
+            FrmSetEventHandler(form, ChooseFileFormHandleEvent);
+            AppSetupDIA(form);
+            break;
+        case ImportForm:
+            FrmSetEventHandler(form, ImportFormHandleEvent);
             AppSetupDIA(form);
             break;
         case DiagForm:

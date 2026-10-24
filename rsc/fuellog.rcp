@@ -786,3 +786,40 @@ BEGIN
     MESSAGE "That set was written by a newer FuelLog and cannot be restored here."
     BUTTONS "OK"
 END
+
+FORM ID ChooseFileForm AT (0 0 160 160)
+NOFRAME
+USABLE
+BEGIN
+    TITLE "Choose a file"
+    LABEL "Files in Import/ on the card:" AUTOID AT (4 17) FONT 0
+    LIST "" ID ChooseList AT (4 30 150 99) USABLE VISIBLEITEMS 9
+    BUTTON "Open" ID ChooseOpenButton AT (4 146 36 12)
+    BUTTON "Cancel" ID ChooseCancelButton AT (46 146 40 12)
+END
+
+FORM ID ImportForm AT (0 0 160 160)
+NOFRAME
+USABLE
+BEGIN
+    TITLE "Import"
+    BUTTON "Import" ID ImpImportButton AT (4 146 60 12)
+    BUTTON "Cancel" ID ImpCancelButton AT (70 146 40 12)
+    SCROLLBAR ID ImpScrollBar AT (152 15 7 120) VALUE 0 MIN 0 MAX 0 PAGESIZE 100
+END
+
+ALERT ID ImportDoneAlert
+INFORMATION
+BEGIN
+    TITLE "Imported"
+    MESSAGE "^1 fills added; ^2 skipped as already in the log."
+    BUTTONS "OK"
+END
+
+ALERT ID NoImportFilesAlert
+INFORMATION
+BEGIN
+    TITLE "Nothing to import"
+    MESSAGE "Put a CSV file in /PALM/Programs/FuelLog/Import on the card first."
+    BUTTONS "OK"
+END

@@ -356,3 +356,14 @@
 #define RestoreDoneAlert     1524
 #define BackupDoneAlert      1525
 #define NewerBackupAlert     1526
+
+#define ChooseFileForm       3500
+#define ChooseList           3501
+#define ChooseOpenButton     3502
+#define ChooseCancelButton   3503
+#define ImportForm           3400
+#define ImpImportButton      3401
+#define ImpCancelButton      3402
+#define ImpScrollBar         3403
+#define ImportDoneAlert      1527
+#define NoImportFilesAlert   1528

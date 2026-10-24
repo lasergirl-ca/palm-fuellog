@@ -150,7 +150,7 @@ Boolean ExportFormHandleEvent(EventType *event)
         case ExpExportButton: DoExport(form); return true;
         case ExpBackupButton: DoBackup(form); return true;
         case ExpRestoreButton: FrmGotoForm(RestoreForm); return true;
-        case ExpImportButton: FrmAlert(NotYetAlert); return true;
+        case ExpImportButton: FrmGotoForm(ChooseFileForm); return true;
         case ExpDoneButton: FrmGotoForm(FillListForm); return true;
         default: break;
         }
