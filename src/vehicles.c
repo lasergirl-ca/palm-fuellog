@@ -144,7 +144,7 @@ static void DrawVehicles(void)
         if (odo) {
             TextFixed(num, (Int32)(UnitDistToDisplay(odo, gPrefs.distanceUnit) / 10), 0, gPoint, gThousands);
             StrCopy(buf, num); StrCat(buf, " "); StrCat(buf, UnitDistLabel(gPrefs.distanceUnit));
-            WinDrawChars(buf, StrLen(buf), 156 - FntCharsWidth(buf, StrLen(buf)), y);
+            WinDrawChars(buf, StrLen(buf), 150 - FntCharsWidth(buf, StrLen(buf)), y);
         }
         {
             static const char *power[] = { "Fuel", "Hybrid", "Plug-in hybrid", "Electric" };
@@ -154,6 +154,12 @@ static void DrawVehicles(void)
             WinDrawChars(buf, StrLen(buf), 10, y + 10);
         }
         y += kVehRowH; row++;
+    }
+    {
+        UInt16 total = 0, visible = (UInt16)(gVehRows.extent.y / kVehRowH);
+        while (VisibleAt(total, &idx)) total++;
+        AppListScrollBar(FrmGetActiveForm(), VehiclesScrollBar, (Int16)gVehFirst, (Int16)((Int16)total - (Int16)visible), (Int16)visible,
+                         gVehRows.topLeft.y, (Coord)(gVehRows.topLeft.y + gVehRows.extent.y));
     }
 }
 
@@ -190,6 +196,11 @@ Boolean VehiclesFormHandleEvent(EventType *event)
             if (VisibleAt(row, &idx)) { gEditVehicleIndex = idx; FrmGotoForm(EditVehicleForm); return true; }
         }
         break;
+    case sclRepeatEvent: case sclExitEvent: {
+        Int16 v;
+        if (AppListScrollEvent(event, &v)) { gVehFirst = (UInt16)(v < 0 ? 0 : v); DrawVehicles(); return true; }
+        break;
+    }
     case keyDownEvent: {
         UInt16 visible = (UInt16)(gVehRows.extent.y / kVehRowH), idx;
         WChar c = event->data.keyDown.chr;
@@ -337,19 +348,23 @@ Boolean EditVehicleFormHandleEvent(EventType *event)
 {
     FormType *form = FrmGetActiveForm();
     static UInt16 bottom[] = { VehDoneButton, VehCancelButton, VehDeleteButton, VehStatusLabel };
+    static UInt16 pinned[] = { VehDoneButton, VehCancelButton, VehDeleteButton, VehStatusLabel, VehScrollBar };
     switch (event->eType) {
     case frmOpenEvent:
         AppScrollReset();
         AppFitForm(form, bottom, 4);
         LoadVehicle(form);
+        AppScrollBarUpdate(form, VehScrollBar, pinned, 5);
         FrmDrawForm(form);
         return true;
     case frmUpdateEvent: FrmDrawForm(form); return true;
-    case fldEnterEvent: AppScrollToField(form, event->data.fldEnter.fieldID, bottom, 4); break;
-    case keyDownEvent: if (AppScrollKey(form, event, bottom, 4)) return true; break;
+    case fldEnterEvent: AppScrollToField(form, event->data.fldEnter.fieldID, pinned, 5); AppScrollBarUpdate(form, VehScrollBar, pinned, 5); break;
+    case keyDownEvent: case sclRepeatEvent: case sclExitEvent:
+        if (AppScrollEvent(form, event, pinned, 5, VehScrollBar)) return true;
+        break;
     case winDisplayChangedEvent:
-        if (gScrollYPublic()) AppScrollBy(form, gScrollYPublic(), bottom, 4);
-        AppFitForm(form, bottom, 4); WinEraseWindow(); FrmDrawForm(form); return true;
+        if (gScrollYPublic()) AppScrollBy(form, gScrollYPublic(), pinned, 5);
+        AppFitForm(form, bottom, 4); AppScrollBarUpdate(form, VehScrollBar, pinned, 5); WinEraseWindow(); FrmDrawForm(form); return true;
     case popSelectEvent:
         if (event->data.popSelect.listID == VehPowerList) {
             ShowElectricFields(form, (UInt8)event->data.popSelect.selection);

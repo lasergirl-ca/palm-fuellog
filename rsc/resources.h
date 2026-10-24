@@ -227,3 +227,69 @@
 #define PgmExpiresLabel      2037
 #define PgmOpeningLabel      2038
 #define PgmAliasesLabel      2039
+
+#define ServiceForm          2600
+#define ServiceVehicleTrigger 2601
+#define ServiceVehicleList   2602
+#define ServiceLogButton     2603
+#define ServiceNewButton     2604
+#define ServiceDoneButton    2605
+
+#define EditServiceForm      2700
+#define SvtNameField         2701
+#define SvtDistField         2702
+#define SvtDistUnitLabel     2703
+#define SvtMonthsField       2704
+#define SvtWarnDistField     2705
+#define SvtWarnUnitLabel     2706
+#define SvtWarnDaysField     2707
+#define SvtAlarmCheckbox     2708
+#define SvtDetailField       2709
+#define SvtSummary1          2710
+#define SvtSummary2          2711
+#define SvtSummary3          2712
+#define SvtDoneButton        2713
+#define SvtCancelButton      2714
+#define SvtArchiveButton     2715
+
+#define LogServiceForm       2800
+#define SvlDateTrigger       2801
+#define SvlOdoField          2802
+#define SvlOdoHint           2803
+#define SvlDoneLabel         2804
+#define SvlCheck0            2810   /* + i, 12 of them */
+#define SvlOtherCheckbox     2822
+#define SvlOtherField        2823
+#define SvlCostLabel         2824
+#define SvlCostField         2825
+#define SvlCurrencyTrigger   2826
+#define SvlCurrencyList      2827
+#define SvlPaidLabel         2828
+#define SvlCashButton        2829
+#define SvlCardButton        2830
+#define SvlShopLabel         2831
+#define SvlShopField         2832
+#define SvlDetailLabel       2833
+#define SvlDetailField       2834
+#define SvlNextLabel         2835
+#define SvlDoneButton        2836
+#define SvlCancelButton      2837
+#define SvlNoteButton        2838
+
+#define NeedServiceNameAlert 1513
+#define DeleteServiceAlert   1514
+#define NothingDoneAlert     1515
+#define TooManyServicesAlert 1516
+
+#define FillScrollBar        1334
+#define PgmScrollBar         2040
+#define SvlScrollBar         2839
+
+#define FillListScrollBar    1206
+#define VehiclesScrollBar    1704
+#define PgmsScrollBar        1903
+#define ServiceScrollBar     2606
+#define StatsScrollBar       2506
+#define VehScrollBar         1823
+#define SvtScrollBar         2716
+#define PrefsScrollBar       1621

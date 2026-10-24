@@ -23,7 +23,17 @@ UInt16 AppGroupSelection(FormType *form, UInt8 group);
  * that have scrolled under the title or the pinned buttons. Pass only objects
  * the form itself wants visible. */
 void   AppShowByPosition(FormType *form, const UInt16 *ids, UInt16 n);
-Coord  AppFormHeight(FormType *form);   /* the window height after AppFitForm: lay rows out to this, not the display */
+Coord  AppFormHeight(FormType *form);
+/* A scrollbar pinned at the right edge of a scrolling form: size and hide or
+ * show it after layout or a scroll, and feed it page keys and drags. */
+void    AppScrollBarUpdate(FormType *form, UInt16 sbId, const UInt16 *pinnedIds, UInt16 n);
+Boolean AppScrollEvent(FormType *form, const EventType *event, const UInt16 *pinnedIds, UInt16 n, UInt16 sbId);
+/* A scrollbar beside a hand-drawn list: spans top..bottom, hidden when max <= 0. */
+void    AppListScrollBar(FormType *form, UInt16 sbId, Int16 value, Int16 max, Int16 page, Coord top, Coord bottom);
+/* True for a scrollbar event, with the new position in *value. */
+Boolean AppListScrollEvent(const EventType *event, Int16 *value);
+/* The modal lined note over the current form; edits notes (fillMaxNotes bytes) in place. */
+void   AppNoteDialog(char *notes);   /* the window height after AppFitForm: lay rows out to this, not the display */
 extern UInt16 gDisplayChanges;          /* winDisplayChangedEvents seen, for the About diagnostics */
 
 /* Form scrolling. Palm forms do not scroll, so the content objects move

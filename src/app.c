@@ -1,6 +1,7 @@
 #include "app.h"
 #include "device.h"
 #include "datecalc.h"
+#include "resources.h"
 #include <PenInputMgr.h>
 
 FuelPrefs gPrefs;
@@ -132,6 +133,58 @@ Boolean AppScrollKey(FormType *form, const EventType *event, const UInt16 *pinne
     return true;
 }
 
+void AppScrollBarUpdate(FormType *form, UInt16 sbId, const UInt16 *pinnedIds, UInt16 n)
+{
+    UInt16 idx = FrmGetObjectIndex(form, sbId);
+    RectangleType r;
+    Coord top, bottom, content, h = AppFormHeight(form);
+    Int16 overflow;
+    if (idx == frmInvalidObjectId) return;
+    FrmGetObjectBounds(form, idx, &r);
+    r.topLeft.y = 15; r.extent.y = (Coord)(h - 16 - 15);
+    FrmSetObjectBounds(form, idx, &r);
+    VisibleArea(&top, &bottom);
+    content = (Coord)(ContentBottom(form, pinnedIds, n) + gScrollY);   /* height before any scrolling */
+    overflow = (Int16)(content - bottom);
+    if (overflow <= 0) { FrmHideObject(form, idx); return; }
+    SclSetScrollBar(FrmGetObjectPtr(form, idx), gScrollY, 0, overflow, (Int16)(bottom - top));
+    FrmShowObject(form, idx);
+}
+
+Boolean AppScrollEvent(FormType *form, const EventType *event, const UInt16 *pinnedIds, UInt16 n, UInt16 sbId)
+{
+    Boolean handled;
+    if (event->eType == keyDownEvent) handled = AppScrollKey(form, event, pinnedIds, n);
+    else if (event->eType == sclRepeatEvent || event->eType == sclExitEvent) {
+        Int16 value = event->eType == sclRepeatEvent ? event->data.sclRepeat.newValue : event->data.sclExit.newValue;
+        if (value != gScrollY) AppScrollBy(form, (Int16)(gScrollY - value), pinnedIds, n);
+        handled = true;
+    } else return false;
+    if (handled) AppScrollBarUpdate(form, sbId, pinnedIds, n);
+    return handled;
+}
+
+void AppListScrollBar(FormType *form, UInt16 sbId, Int16 value, Int16 max, Int16 page, Coord top, Coord bottom)
+{
+    UInt16 idx = FrmGetObjectIndex(form, sbId);
+    RectangleType r;
+    if (idx == frmInvalidObjectId) return;
+    FrmGetObjectBounds(form, idx, &r);
+    r.topLeft.y = top; r.extent.y = (Coord)(bottom - top);
+    FrmSetObjectBounds(form, idx, &r);
+    if (max <= 0) { FrmHideObject(form, idx); return; }
+    if (value > max) value = max;
+    SclSetScrollBar(FrmGetObjectPtr(form, idx), value, 0, max, page);
+    FrmShowObject(form, idx);
+}
+
+Boolean AppListScrollEvent(const EventType *event, Int16 *value)
+{
+    if (event->eType == sclRepeatEvent) { *value = event->data.sclRepeat.newValue; return true; }
+    if (event->eType == sclExitEvent) { *value = event->data.sclExit.newValue; return true; }
+    return false;
+}
+
 void AppScrollToField(FormType *form, UInt16 fieldId, const UInt16 *pinnedIds, UInt16 n)
 {
     RectangleType r;
@@ -193,4 +246,40 @@ Coord AppFormHeight(FormType *form)
     RectangleType b;
     FrmGetFormBounds(form, &b);
     return b.extent.y;
+}
+
+/* ---- note dialog ---- */
+
+static void NoteCount(FormType *dlg)
+{
+    char b[20];
+    FieldType *fld = FrmGetObjectPtr(dlg, FrmGetObjectIndex(dlg, FillNoteField));
+    StrIToA(b, FldGetTextLength(fld));
+    StrCat(b, " of 255 bytes");
+    AppSetLabel(dlg, NoteCountLabel, b);
+}
+
+static Boolean NoteDialogHandleEvent(EventType *e)
+{
+    FormType *dlg = FrmGetActiveForm();
+    if (e->eType == keyDownEvent) {
+        FrmHandleEvent(dlg, e);
+        NoteCount(dlg);
+        return true;
+    }
+    return false;
+}
+
+void AppNoteDialog(char *notes)
+{
+    FormType *dlg = FrmInitForm(NoteForm);
+    UInt16 hit;
+    FrmSetEventHandler(dlg, NoteDialogHandleEvent);
+    AppSetFieldText(dlg, FillNoteField, notes);
+    NoteCount(dlg);
+    FrmSetFocus(dlg, FrmGetObjectIndex(dlg, FillNoteField));
+    hit = FrmDoDialog(dlg);
+    if (hit == NoteOkButton) { StrNCopy(notes, AppGetFieldText(dlg, FillNoteField), fillMaxNotes - 1); notes[fillMaxNotes - 1] = 0; }
+    else if (hit == NoteClearButton) notes[0] = 0;
+    FrmDeleteForm(dlg);
 }

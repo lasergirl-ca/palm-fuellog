@@ -51,8 +51,20 @@ static void Row(const char *label, const char *value, Coord *y)
 {
     FntSetFont(stdFont);
     DrawLeft(label, *y);
-    DrawRightAt(value, 156, *y);
+    DrawRightAt(value, 150, *y);
     *y += kStatsRow;
+}
+
+/* Volume to one decimal in the display unit (UnitVolToDisplay carries the unit's own decimals). */
+/* Section placement: see sections.h. */
+static void VolText(char *b, UInt32 ml, char thousands) FORMS_SEC;
+
+static void VolText(char *b, UInt32 ml, char thousands)
+{
+    UInt32 shown = UnitVolToDisplay(ml, gPrefs.volumeUnit), div = 1;
+    UInt8 d = UnitVolDecimals(gPrefs.volumeUnit);
+    while (d-- > 1) div *= 10;
+    TextFixed(b, (Int32)((shown + div / 2) / div), 1, gPoint, thousands);
 }
 
 static void EcoText(char *b, UInt32 l100x10)
@@ -89,21 +101,21 @@ static void DrawStats(void)
     if ((electricOnly ? StatsAvgEcoElectric(s) : StatsAvgEco(s)) == 0) StrCopy(n1, "--");
     DrawLeft(n1, y);
     StrCopy(n2, "$"); TextFixed(n2 + 1, (Int32)s->homeCents, 2, gPoint, gThousands);
-    DrawRightAt(n2, 156, y);
+    DrawRightAt(n2, 150, y);
     y += 18;
     FntSetFont(stdFont);
     StrCopy(b, electricOnly ? "kWh/100 km" : UnitEcoLabel(gPrefs.economyUnit)); StrCat(b, " average");
     DrawLeft(b, y);
     StrCopy(b, electricOnly ? "energy spend, " : (s->chargeCount ? "fuel and power, " : "fuel spend, ")); StrCat(b, CurrencyCode(gPrefs.homeCurrency));
-    DrawRightAt(b, 156, y);
+    DrawRightAt(b, 150, y);
     y += 14;
-    WinDrawLine(4, y, 156, y); y += 4;
+    WinDrawLine(4, y, 150, y); y += 4;
 
     TextFixed(n1, (Int32)(UnitDistToDisplay(s->distance, gPrefs.distanceUnit) / 10), 0, gPoint, gThousands);
     StrCopy(b, n1); StrCat(b, " "); StrCat(b, UnitDistLabel(gPrefs.distanceUnit));
     Row("Distance", b, &y);
     if (s->fuelCount) {
-        TextFixed(n1, (Int32)UnitVolToDisplay(s->fuelMl, gPrefs.volumeUnit), 1, gPoint, gThousands);
+        VolText(n1, s->fuelMl, gThousands);
         StrCopy(b, n1); StrCat(b, " "); StrCat(b, UnitVolLabel(gPrefs.volumeUnit));
         Row("Fuel used", b, &y);
     }
@@ -138,7 +150,7 @@ static void DrawStats(void)
         Row(n1, b, &y);
     }
     if (s->fuelCount) {
-        TextFixed(n1, (Int32)UnitVolToDisplay(StatsAvgFillMl(s), gPrefs.volumeUnit), 1, gPoint, 0);
+        VolText(n1, StatsAvgFillMl(s), 0);
         StrCopy(b, n1); StrCat(b, " "); StrCat(b, UnitVolLabel(gPrefs.volumeUnit));
         Row("Average fill", b, &y);
     }
@@ -163,7 +175,7 @@ static void DrawStats(void)
         Boolean any = false;
         for (id = 1; id < statsMaxId; id++) if (s->pgmUsed[id]) any = true;
         if (any) {
-            y += 3; WinDrawLine(4, y, 156, y); y += 4;
+            y += 3; WinDrawLine(4, y, 150, y); y += 4;
             FntSetFont(boldFont); DrawLeft("Points", y); y += kStatsRow;
             for (id = 1; id < statsMaxId; id++) {
                 Int32 bal;
@@ -182,7 +194,8 @@ static void DrawStats(void)
     }
     WinResetClip();
     gStatsHeight = (Coord)(y + gStatsScroll - top);
-    (void)top;
+    AppListScrollBar(FrmGetActiveForm(), StatsScrollBar, gStatsScroll, (Int16)(gStatsHeight - gStatsArea.extent.y), gStatsArea.extent.y,
+                     gStatsArea.topLeft.y, (Coord)(gStatsArea.topLeft.y + gStatsArea.extent.y));
 }
 
 static void Layout(FormType *form)
@@ -216,6 +229,11 @@ Boolean StatsFormHandleEvent(EventType *event)
         return true;
     case frmUpdateEvent: FrmDrawForm(form); DrawStats(); return true;
     case winDisplayChangedEvent: Layout(form); gStatsScroll = 0; WinEraseWindow(); FrmDrawForm(form); DrawStats(); return true;
+    case sclRepeatEvent: case sclExitEvent: {
+        Int16 v;
+        if (AppListScrollEvent(event, &v)) { gStatsScroll = v < 0 ? 0 : v; DrawStats(); return true; }
+        break;
+    }
     case keyDownEvent: {
         /* Page keys scroll when the content outruns the screen (input area open). */
         WChar c = event->data.keyDown.chr;

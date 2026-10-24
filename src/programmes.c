@@ -216,7 +216,7 @@ static void DrawProgrammes(void)
         bal = PgmBalance(gScanPgm.id, gScanPgm.openingBalance);
         PgmGetAt(gOrder[row], &gScanPgm);          /* the balance scan reuses the scratch buffers */
         PgmValueText(val, &gScanPgm, bal);
-        WinDrawChars(val, StrLen(val), 156 - FntCharsWidth(val, StrLen(val)), y);
+        WinDrawChars(val, StrLen(val), 150 - FntCharsWidth(val, StrLen(val)), y);
         FntSetFont(stdFont);
         RuleText(buf, &gScanPgm);
         if (!PgmIsMoney(&gScanPgm) && gScanPgm.valuePerPoint && bal > 0) {
@@ -226,6 +226,11 @@ static void DrawProgrammes(void)
             TextFixed(buf + StrLen(buf), (Int32)cents, 2, gPoint, gThousands);
         }
         WinDrawChars(buf, StrLen(buf), 10, y + 10);
+    }
+    {
+        UInt16 visible = (UInt16)(gPgmRows.extent.y / kPgmRowH);
+        AppListScrollBar(FrmGetActiveForm(), PgmsScrollBar, (Int16)gPgmFirst, (Int16)((Int16)gOrderCount - (Int16)visible), (Int16)visible,
+                         gPgmRows.topLeft.y, (Coord)(gPgmRows.topLeft.y + gPgmRows.extent.y));
     }
 }
 
@@ -258,6 +263,11 @@ Boolean ProgrammesFormHandleEvent(EventType *event)
             if (row < gOrderCount) { gEditProgrammeIndex = gOrder[row]; FrmGotoForm(EditProgrammeForm); return true; }
         }
         break;
+    case sclRepeatEvent: case sclExitEvent: {
+        Int16 v;
+        if (AppListScrollEvent(event, &v)) { gPgmFirst = (UInt16)(v < 0 ? 0 : v); DrawProgrammes(); return true; }
+        break;
+    }
     case keyDownEvent: {
         /* Page keys move through a long list by a screenful. */
         UInt16 visible = (UInt16)(gPgmRows.extent.y / kPgmRowH);
@@ -488,20 +498,24 @@ Boolean EditProgrammeFormHandleEvent(EventType *event)
 {
     FormType *form = FrmGetActiveForm();
     static UInt16 bottom[] = { PgmDoneButton, PgmCancelButton, PgmArchiveButton };
+    static UInt16 pinned[] = { PgmDoneButton, PgmCancelButton, PgmArchiveButton, PgmScrollBar };
     switch (event->eType) {
     case frmOpenEvent:
         AppScrollReset();
         AppFitForm(form, bottom, 3);
         LoadProgramme(form);
         ClampRows(form);
+        AppScrollBarUpdate(form, PgmScrollBar, pinned, 4);
         FrmDrawForm(form);
         return true;
     case frmUpdateEvent: FrmDrawForm(form); return true;
-    case fldEnterEvent: AppScrollToField(form, event->data.fldEnter.fieldID, bottom, 3); ClampRows(form); break;
-    case keyDownEvent: if (AppScrollKey(form, event, bottom, 3)) { ClampRows(form); FrmDrawForm(form); return true; } break;
+    case fldEnterEvent: AppScrollToField(form, event->data.fldEnter.fieldID, pinned, 4); ClampRows(form); AppScrollBarUpdate(form, PgmScrollBar, pinned, 4); break;
+    case keyDownEvent: case sclRepeatEvent: case sclExitEvent:
+        if (AppScrollEvent(form, event, pinned, 4, PgmScrollBar)) { ClampRows(form); FrmDrawForm(form); return true; }
+        break;
     case winDisplayChangedEvent:
-        if (gScrollYPublic()) AppScrollBy(form, gScrollYPublic(), bottom, 3);
-        AppFitForm(form, bottom, 3); ClampRows(form); WinEraseWindow(); FrmDrawForm(form); return true;
+        if (gScrollYPublic()) AppScrollBy(form, gScrollYPublic(), pinned, 4);
+        AppFitForm(form, bottom, 3); ClampRows(form); AppScrollBarUpdate(form, PgmScrollBar, pinned, 4); WinEraseWindow(); FrmDrawForm(form); return true;
     case popSelectEvent:
         if (event->data.popSelect.listID == PgmRedeemList) { ShowRedeemRows(form, (UInt8)event->data.popSelect.selection); ClampRows(form); }
         if (event->data.popSelect.listID == PgmExpiryList) { ShowExpiryRows(form, (UInt8)event->data.popSelect.selection); ClampRows(form); }

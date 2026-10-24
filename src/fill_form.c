@@ -292,38 +292,9 @@ static void PointsDialog(FormType *form)
 
 /* ---- note ---- */
 
-static void NoteCount(FormType *dlg)
-{
-    char b[20];
-    FieldType *fld = FrmGetObjectPtr(dlg, FrmGetObjectIndex(dlg, FillNoteField));
-    StrIToA(b, FldGetTextLength(fld));
-    StrCat(b, " of 255 bytes");
-    AppSetLabel(dlg, NoteCountLabel, b);
-}
-
-static Boolean NoteDialogHandleEvent(EventType *e)
-{
-    FormType *dlg = FrmGetActiveForm();
-    if (e->eType == keyDownEvent) {
-        FrmHandleEvent(dlg, e);
-        NoteCount(dlg);
-        return true;
-    }
-    return false;
-}
-
 static void NoteDialog(FormType *form)
 {
-    FormType *dlg = FrmInitForm(NoteForm);
-    UInt16 hit;
-    FrmSetEventHandler(dlg, NoteDialogHandleEvent);
-    AppSetFieldText(dlg, FillNoteField, gFill.notes);
-    NoteCount(dlg);
-    FrmSetFocus(dlg, FrmGetObjectIndex(dlg, FillNoteField));
-    hit = FrmDoDialog(dlg);
-    if (hit == NoteOkButton) { StrNCopy(gFill.notes, AppGetFieldText(dlg, FillNoteField), fillMaxNotes - 1); gFill.notes[fillMaxNotes - 1] = 0; }
-    else if (hit == NoteClearButton) gFill.notes[0] = 0;
-    FrmDeleteForm(dlg);
+    AppNoteDialog(gFill.notes);
     CtlSetLabel(FrmGetObjectPtr(form, FrmGetObjectIndex(form, FillNoteButton)), gFill.notes[0] ? "Note*" : "Note");
 }
 
@@ -722,7 +693,7 @@ Boolean FillFormHandleEvent(EventType *event)
 {
     FormType *form = FrmGetActiveForm();
     static const UInt16 bottom[] = { FillDoneButton, FillCancelButton, FillNoteButton, FillDeleteButton };
-    static const UInt16 pinned[] = { FillDoneButton, FillCancelButton, FillNoteButton, FillDeleteButton, FillVehicleTrigger, FillVehicleList };
+    static const UInt16 pinned[] = { FillDoneButton, FillCancelButton, FillNoteButton, FillDeleteButton, FillVehicleTrigger, FillVehicleList, FillScrollBar };
     static const UInt16 clamp[] = { FillMissedCheckbox, FillPointsLabel, FillPointsTrigger };   /* rows that can sit under the buttons */
 
     switch (event->eType) {
@@ -731,19 +702,27 @@ Boolean FillFormHandleEvent(EventType *event)
         AppFitForm(form, bottom, 4);
         Load(form);
         AppShowByPosition(form, clamp, 3);
+        AppScrollBarUpdate(form, FillScrollBar, pinned, 7);
         FrmDrawForm(form);
         return true;
     case fldEnterEvent:
-        AppScrollToField(form, event->data.fldEnter.fieldID, pinned, 6);
+        AppScrollToField(form, event->data.fldEnter.fieldID, pinned, 7);
         AppShowByPosition(form, clamp, 3);
+        AppScrollBarUpdate(form, FillScrollBar, pinned, 7);
         break;
+    case sclRepeatEvent: case sclExitEvent:
+        AppScrollEvent(form, event, pinned, 7, FillScrollBar);
+        AppShowByPosition(form, clamp, 3);
+        FrmDrawForm(form);
+        return true;
     case frmUpdateEvent:
         FrmDrawForm(form);
         return true;
     case winDisplayChangedEvent:
-        if (gScrollYPublic()) AppScrollBy(form, gScrollYPublic(), pinned, 6);   /* back to the top before refitting */
+        if (gScrollYPublic()) AppScrollBy(form, gScrollYPublic(), pinned, 7);   /* back to the top before refitting */
         AppFitForm(form, bottom, 4);
         AppShowByPosition(form, clamp, 3);
+        AppScrollBarUpdate(form, FillScrollBar, pinned, 7);
         WinEraseWindow();
         FrmDrawForm(form);
         return true;
@@ -755,7 +734,7 @@ Boolean FillFormHandleEvent(EventType *event)
         /* Let the field take the character first, then recompute from what
          * it now holds. This does not rely on fldChangedEvent arriving. */
         UInt16 focus;
-        if (AppScrollKey(form, event, pinned, 6)) { AppShowByPosition(form, clamp, 3); FrmDrawForm(form); return true; }
+        if (AppScrollEvent(form, event, pinned, 7, FillScrollBar)) { AppShowByPosition(form, clamp, 3); FrmDrawForm(form); return true; }
         focus = FrmGetFocus(form);
         if (focus != noFocus) {
             UInt16 id = FrmGetObjectId(form, focus);

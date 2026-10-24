@@ -1,0 +1,792 @@
+#include "service_form.h"
+#include "app.h"
+#include "db.h"
+#include "calc.h"
+#include "units.h"
+#include "currency.h"
+#include "text.h"
+#include "datecalc.h"
+#include "vehicles.h"
+#include "resources.h"
+#include "device.h"
+
+static ServiceTypeRecord gSvt, gScanSvt;
+static ServiceVisitRecord gSvl, gScanSvl;      /* 400 bytes each: static, off the stack */
+static FillRecord gScanFillS;
+static VehicleRecord gSvcVeh;
+static UInt8 gSvcPacked[svlFixedSize + fillMaxNotes + 8];
+static UInt16 gEditSvtIndex = dmMaxRecordIndex;
+static UInt8 gSvcVehicle;                      /* the vehicle the service screens work on */
+static char gSVNames[vehMaxVehicles + 1][vehNameLen];
+static char *gSVPtrs[vehMaxVehicles + 1];
+static UInt8 gSVIds[vehMaxVehicles + 1];
+
+static void DueDateText(char *b, UInt16 days) SVC_SEC;
+
+/* ---- lookups ---- */
+
+/* Section placement: see sections.h. */
+static Err SvtGetAt(UInt16 i, ServiceTypeRecord *t) SVC_SEC;
+static Err SvlGetAt(UInt16 i, ServiceVisitRecord *v) SVC_SEC;
+static UInt8 SvcVehicleNow(void) SVC_SEC;
+static Boolean LastVisit(UInt8 vehicle, UInt8 typeId, UInt16 *date, UInt32 *odo) SVC_SEC;
+static UInt32 Pace(UInt8 vehicle) SVC_SEC;
+static void InstallPresets(UInt8 vehicle) SVC_SEC;
+static UInt8 NextTypeId(UInt8 vehicle) SVC_SEC;
+static UInt16 VisitsCovering(UInt8 vehicle, UInt8 typeId) SVC_SEC;
+static void DueFor(const ServiceTypeRecord *t, UInt32 odoNow, UInt32 pace, SvcDue *d) SVC_SEC;
+static void DistText(char *b, UInt32 dkm, char thousands) SVC_SEC;
+static void BannerText(const ServiceTypeRecord *t, const SvcDue *d, char *buf) SVC_SEC;
+static void Collect(void) SVC_SEC;
+static void DrawRightAt(const char *s, Coord right, Coord y) SVC_SEC;
+static void DrawService(void) SVC_SEC;
+static void LayoutService(FormType *form) SVC_SEC;
+static void BuildServicePopup(FormType *form) SVC_SEC;
+static void Summary(FormType *form) SVC_SEC;
+static void LoadSvt(FormType *form) SVC_SEC;
+static Boolean SaveSvt(FormType *form) SVC_SEC;
+static void PlaceSvl(FormType *form) SVC_SEC;
+static void NextLine(FormType *form) SVC_SEC;
+static void LoadSvl(FormType *form) SVC_SEC;
+static Boolean SaveSvl(FormType *form) SVC_SEC;
+
+static Err SvtGetAt(UInt16 i, ServiceTypeRecord *t)
+{
+    UInt32 len;
+    Err err = DbGet(dbServiceTypes, i, gSvcPacked, sizeof gSvcPacked, &len);
+    if (err) return err;
+    return ServiceTypeUnpack(gSvcPacked, len, t) == 0 ? errNone : dbErrCorrupt;
+}
+
+static Err SvlGetAt(UInt16 i, ServiceVisitRecord *v)
+{
+    UInt32 len;
+    Err err = DbGet(dbServiceVisits, i, gSvcPacked, sizeof gSvcPacked, &len);
+    if (err) return err;
+    return ServiceVisitUnpack(gSvcPacked, len, v) == 0 ? errNone : dbErrCorrupt;
+}
+
+static UInt8 SvcVehicleNow(void)
+{
+    return gPrefs.currentVehicle != 255 ? gPrefs.currentVehicle : VehDefaultForNewFill();
+}
+
+/* Visits are sorted by date, so the latest covering a service is found from the end. */
+static Boolean LastVisit(UInt8 vehicle, UInt8 typeId, UInt16 *date, UInt32 *odo)
+{
+    UInt16 n = DbCount(dbServiceVisits);
+    while (n--) {
+        if (SvlGetAt(n, &gScanSvl) != errNone || gScanSvl.vehicle != vehicle) continue;
+        if (typeId != 255 && !(gScanSvl.services & (1UL << typeId))) continue;
+        *date = gScanSvl.date; *odo = gScanSvl.odometer;
+        return true;
+    }
+    return false;
+}
+
+/* km x 10 per day over the last 90 days of fills (at least 3), else over all fills. */
+static UInt32 Pace(UInt8 vehicle)
+{
+    UInt16 n = DbCount(dbFills), i, count = 0, allCount = 0;
+    UInt16 today = AppToday(), firstDate = 0, lastDate = 0, allFirstDate = 0, allLastDate = 0;
+    UInt32 firstOdo = 0, lastOdo = 0, allFirstOdo = 0, allLastOdo = 0;
+    for (i = 0; i < n; i++) {
+        if (DbGetFill(i, &gScanFillS) != errNone || gScanFillS.vehicle != vehicle || gScanFillS.odometer == 0) continue;
+        if (allCount++ == 0) { allFirstDate = gScanFillS.date; allFirstOdo = gScanFillS.odometer; }
+        allLastDate = gScanFillS.date; allLastOdo = gScanFillS.odometer;
+        if (gScanFillS.date + 90 < today) continue;
+        if (count++ == 0) { firstDate = gScanFillS.date; firstOdo = gScanFillS.odometer; }
+        lastDate = gScanFillS.date; lastOdo = gScanFillS.odometer;
+    }
+    if (count >= 3) return SvcPaceX10(firstOdo, lastOdo, firstDate, lastDate);
+    if (allCount >= 2) return SvcPaceX10(allFirstOdo, allLastOdo, allFirstDate, allLastDate);
+    return 0;
+}
+
+static void InstallPresets(UInt8 vehicle)
+{
+    UInt16 n = DbCount(dbServiceTypes), i;
+    UInt8 k, count;
+    for (i = 0; i < n; i++) if (SvtGetAt(i, &gScanSvt) == errNone && gScanSvt.vehicle == vehicle) return;
+    VehGet(vehicle, &gSvcVeh);
+    count = SvcPresetCount(gSvcVeh.powertrain);
+    for (k = 0; k < count; k++) {
+        SvcPreset(gSvcVeh.powertrain, k, &gScanSvt);
+        gScanSvt.vehicle = vehicle;
+        DbAdd(dbServiceTypes, gSvcPacked, ServiceTypePack(&gScanSvt, gSvcPacked), NULL);
+    }
+}
+
+static UInt8 NextTypeId(UInt8 vehicle)
+{
+    UInt32 used = 0;
+    UInt16 n = DbCount(dbServiceTypes), i;
+    UInt8 id;
+    for (i = 0; i < n; i++) if (SvtGetAt(i, &gScanSvt) == errNone && gScanSvt.vehicle == vehicle && gScanSvt.id < 31) used |= 1UL << gScanSvt.id;
+    for (id = 0; id < 31; id++) if (!(used & (1UL << id))) return id;
+    return 255;
+}
+
+static UInt16 VisitsCovering(UInt8 vehicle, UInt8 typeId)
+{
+    UInt16 n = DbCount(dbServiceVisits), i, count = 0;
+    for (i = 0; i < n; i++)
+        if (SvlGetAt(i, &gScanSvl) == errNone && gScanSvl.vehicle == vehicle && (gScanSvl.services & (1UL << typeId))) count++;
+    return count;
+}
+
+static void DueFor(const ServiceTypeRecord *t, UInt32 odoNow, UInt32 pace, SvcDue *d)
+{
+    UInt16 date = 0;
+    UInt32 odo = 0;
+    Boolean have = LastVisit(t->vehicle, t->id, &date, &odo);
+    SvcCompute(t, have ? 1 : 0, date, odo, odoNow, AppToday(), pace, d);
+}
+
+static void DistText(char *b, UInt32 dkm, char thousands)
+{
+    TextFixed(b, (Int32)(UnitDistToDisplay(dkm, gPrefs.distanceUnit) / 10), 0, gPoint, thousands);
+}
+
+/* "Oil and filter due in 640 km" / "Wiper blades overdue" / "Oil and filter due Nov 6". */
+static void BannerText(const ServiceTypeRecord *t, const SvcDue *d, char *buf)
+{
+    char n[16];
+    StrNCopy(buf, t->name, 20); buf[20] = 0;
+    if (d->status == svcStatusOverdue) { StrCat(buf, " overdue"); return; }
+    if (d->hasDist && d->kmLeftX10 >= 0 && (!d->hasTime || d->distDue == 0 || d->distDue <= d->timeDue)) {
+        DistText(n, (UInt32)d->kmLeftX10, gThousands);
+        StrCat(buf, " due in "); StrCat(buf, n); StrCat(buf, " "); StrCat(buf, UnitDistLabel(gPrefs.distanceUnit));
+    } else {
+        StrCat(buf, " due "); DueDateText(buf + StrLen(buf), d->due);
+    }
+}
+
+UInt8 SvcBanner(UInt8 vehicle, char *buf)
+{
+    UInt16 n = DbCount(dbServiceTypes), i;
+    UInt8 worst = svcStatusOK;
+    Int32 worstKey = 0x7FFFFFFF;
+    UInt8 lastVehicle = 255;
+    UInt32 odoNow = 0, pace = 0;
+    buf[0] = 0;
+    for (i = 0; i < n; i++) {
+        SvcDue d;
+        Int32 key;
+        if (SvtGetAt(i, &gSvt) != errNone || gSvt.archived) continue;
+        if (vehicle != 255 && gSvt.vehicle != vehicle) continue;
+        if (gSvt.vehicle != lastVehicle) {
+            if (!VehGet(gSvt.vehicle, &gSvcVeh) || gSvcVeh.archived) continue;
+            lastVehicle = gSvt.vehicle; odoNow = VehLastOdometer(gSvt.vehicle); pace = Pace(gSvt.vehicle);
+        }
+        DueFor(&gSvt, odoNow, pace, &d);
+        if (d.status != svcStatusSoon && d.status != svcStatusOverdue) continue;
+        key = (d.status == svcStatusOverdue ? -1000000L : 0) + (d.due ? (Int32)d.due : 0);
+        if (key < worstKey) { worstKey = key; worst = d.status; BannerText(&gSvt, &d, buf); }
+    }
+    return worst;
+}
+
+/* ---- Service list ---- */
+
+#define kSvcRowH 20
+#define kSvcTop 27
+static UInt16 gSvcRows[svtMaxPerVehicle];
+static UInt8 gSvcStatus[svtMaxPerVehicle];
+static UInt8 gSvcRowCount, gSvcFirst;
+static RectangleType gSvcArea;
+static UInt32 gSvcOdoNow, gSvcPace;
+
+static void Collect(void)
+{
+    UInt16 n = DbCount(dbServiceTypes), i;
+    static Int32 key[svtMaxPerVehicle];
+    gSvcRowCount = 0;
+    gSvcOdoNow = VehLastOdometer(gSvcVehicle);
+    gSvcPace = Pace(gSvcVehicle);
+    for (i = 0; i < n && gSvcRowCount < svtMaxPerVehicle; i++) {
+        SvcDue d;
+        Int32 k;
+        UInt8 j;
+        if (SvtGetAt(i, &gSvt) != errNone || gSvt.vehicle != gSvcVehicle || gSvt.archived) continue;
+        DueFor(&gSvt, gSvcOdoNow, gSvcPace, &d);
+        /* Urgency order: overdue, soon, OK by date, no visit, no interval. */
+        switch (d.status) {
+        case svcStatusOverdue: k = 0 + (Int32)d.due; break;
+        case svcStatusSoon:    k = 100000L + (Int32)d.due; break;
+        case svcStatusOK:      k = 200000L + (Int32)(d.due ? d.due : 65535); break;
+        case svcStatusNoVisit: k = 400000L; break;
+        default:               k = 500000L; break;
+        }
+        for (j = gSvcRowCount; j > 0 && key[j - 1] > k; j--) { key[j] = key[j - 1]; gSvcRows[j] = gSvcRows[j - 1]; gSvcStatus[j] = gSvcStatus[j - 1]; }
+        key[j] = k; gSvcRows[j] = i; gSvcStatus[j] = d.status;
+        gSvcRowCount++;
+    }
+}
+
+static void DrawRightAt(const char *s, Coord right, Coord y) { WinDrawChars(s, StrLen(s), right - FntCharsWidth(s, StrLen(s)), y); }
+
+/* A date with its year when it is not this year's: "Oct 23 2027". */
+/* Section placement: see sections.h. */
+static void DueDateText(char *b, UInt16 days) SVC_SEC;
+static void SetRGB(UInt8 r, UInt8 g, UInt8 b) SVC_SEC;
+static void DrawStatusBadge(UInt8 status, Coord x, Coord y) SVC_SEC;
+
+static void DueDateText(char *b, UInt16 days)
+{
+    UInt16 y, ty; UInt8 m, d;
+    DateDaysToYmd(days, &y, &m, &d);
+    DateDaysToYmd(AppToday(), &ty, &m, &d);
+    DateShortText(b, days);
+    if (y != ty) { StrCat(b, " "); StrIToA(b + StrLen(b), y); }
+}
+
+/* Status as a 10-pixel badge, drawn at double density where the screen
+ * allows: a green disc with a white tick, a yellow disc with a black
+ * exclamation mark, a red disc with a white bar. x, y are standard
+ * coordinates of the badge's top-left corner. */
+static void SetRGB(UInt8 r, UInt8 g, UInt8 b)
+{
+    RGBColorType c;
+    c.index = 0; c.r = r; c.g = g; c.b = b;
+    WinSetForeColor(WinRGBToIndex(&c));
+}
+
+/* A filled disc from scanlines: the rounded-rectangle call clamps its corners. */
+/* Section placement: see sections.h. */
+static void PaintDisc(Coord cx, Coord cy, Coord radius) SVC_SEC;
+
+static void PaintDisc(Coord cx, Coord cy, Coord radius)
+{
+    Coord dy;
+    for (dy = (Coord)-radius; dy <= radius; dy++) {
+        Int32 rem = (Int32)radius * radius - (Int32)dy * dy;
+        Coord dx = 0;
+        while ((Int32)(dx + 1) * (dx + 1) <= rem) dx++;
+        WinPaintLine((Coord)(cx - dx), (Coord)(cy + dy), (Coord)(cx + dx), (Coord)(cy + dy));
+    }
+}
+
+static void DrawStatusBadge(UInt8 status, Coord x, Coord y)
+{
+    RectangleType r;
+    Coord s = DeviceHasHiRes() ? 2 : 1;
+    UInt16 oldSys = 0;
+    WinPushDrawState();
+    if (s == 2) oldSys = WinSetCoordinateSystem(kCoordinatesDouble);
+    if (status == svcStatusOK) SetRGB(0x00, 0x99, 0x33);
+    else if (status == svcStatusSoon) SetRGB(0xFF, 0xCC, 0x00);
+    else SetRGB(0xDD, 0x22, 0x22);
+    PaintDisc((Coord)((x + 5) * s), (Coord)((y + 5) * s), (Coord)(5 * s - 1));
+    if (status == svcStatusOK) {
+        SetRGB(0xFF, 0xFF, 0xFF);
+        WinPaintLine((Coord)((x + 2) * s), (Coord)((y + 5) * s), (Coord)((x + 4) * s), (Coord)((y + 7) * s));
+        WinPaintLine((Coord)((x + 4) * s), (Coord)((y + 7) * s), (Coord)((x + 8) * s), (Coord)((y + 3) * s));
+        if (s == 2) {
+            WinPaintLine((Coord)((x + 2) * s), (Coord)((y + 5) * s + 1), (Coord)((x + 4) * s), (Coord)((y + 7) * s + 1));
+            WinPaintLine((Coord)((x + 4) * s), (Coord)((y + 7) * s + 1), (Coord)((x + 8) * s), (Coord)((y + 3) * s + 1));
+        }
+    } else if (status == svcStatusSoon) {
+        SetRGB(0x00, 0x00, 0x00);
+        r.topLeft.x = (Coord)((x + 4) * s + (s == 2 ? 1 : 0)); r.topLeft.y = (Coord)((y + 2) * s); r.extent.x = (Coord)(s); r.extent.y = (Coord)(4 * s);
+        WinPaintRectangle(&r, 0);
+        r.topLeft.y = (Coord)((y + 7) * s); r.extent.y = (Coord)(s);
+        WinPaintRectangle(&r, 0);
+    } else {
+        SetRGB(0xFF, 0xFF, 0xFF);
+        r.topLeft.x = (Coord)((x + 2) * s); r.topLeft.y = (Coord)((y + 4) * s); r.extent.x = (Coord)(6 * s); r.extent.y = (Coord)(2 * s);
+        WinPaintRectangle(&r, 0);
+    }
+    if (s == 2) WinSetCoordinateSystem(oldSys);
+    WinPopDrawState();
+}
+
+static void DrawService(void)
+{
+    char b[48], n[20];
+    Coord y = kSvcTop;
+    UInt8 row;
+    UInt16 date;
+    UInt32 odo;
+    RectangleType r;
+
+    /* Header line and the area between it and the footer. */
+    r.topLeft.x = 0; r.topLeft.y = 15; r.extent.x = 160; r.extent.y = (Coord)(gSvcArea.topLeft.y + gSvcArea.extent.y + 12 - 15);
+    WinEraseRectangle(&r, 0);
+    FntSetFont(stdFont);
+    StrCopy(b, "Odometer "); DistText(n, gSvcOdoNow, gThousands); StrCat(b, n); StrCat(b, " "); StrCat(b, UnitDistLabel(gPrefs.distanceUnit));
+    if (gSvcPace) { StrCat(b, ", pace "); DistText(n, gSvcPace, 0); StrCat(b, n); StrCat(b, " "); StrCat(b, UnitDistLabel(gPrefs.distanceUnit)); StrCat(b, "/day"); }
+    WinDrawChars(b, StrLen(b), 4, 15);
+    if (gSvcRowCount == 0) {
+        WinDrawChars("No services for this vehicle.", 29, 6, y + 20);
+    }
+    if (gSvcFirst >= gSvcRowCount) gSvcFirst = 0;
+    for (row = gSvcFirst; row < gSvcRowCount && y + kSvcRowH <= gSvcArea.topLeft.y + gSvcArea.extent.y; row++, y += kSvcRowH) {
+        SvcDue d;
+        const char *status;
+        if (SvtGetAt(gSvcRows[row], &gSvt) != errNone) continue;
+        DueFor(&gSvt, gSvcOdoNow, gSvcPace, &d);
+        FntSetFont(boldFont);
+        WinDrawChars(gSvt.name, StrLen(gSvt.name), 4, y);
+        if (d.status == svcStatusOK || d.status == svcStatusSoon || d.status == svcStatusOverdue) {
+            DrawStatusBadge(d.status, 140, y);
+            FntSetFont(stdFont);
+        } else {
+            status = d.status == svcStatusNoVisit ? "no visit" : "set up";
+            FntSetFont(stdFont);
+            DrawRightAt(status, 150, y);
+        }
+        if (d.due) {
+            if (d.distDue && (!d.hasTime || d.distDue <= d.timeDue)) { StrCopy(b, "about "); DueDateText(b + 6, d.due); }
+            else DueDateText(b, d.due);
+            DrawRightAt(b, 136, y);
+        }
+        /* The second line says why. */
+        b[0] = 0;
+        if (d.status == svcStatusNoInterval) StrCopy(b, "tap to set the interval");
+        else if (d.status == svcStatusNoVisit) StrCopy(b, "no visit logged yet");
+        else if (d.hasDist) {
+            if (d.kmLeftX10 >= 0) { DistText(n, (UInt32)d.kmLeftX10, gThousands); StrCopy(b, n); StrCat(b, " "); StrCat(b, UnitDistLabel(gPrefs.distanceUnit)); StrCat(b, " left of "); }
+            else { DistText(n, (UInt32)(-d.kmLeftX10), gThousands); StrCopy(b, n); StrCat(b, " "); StrCat(b, UnitDistLabel(gPrefs.distanceUnit)); StrCat(b, " over "); }
+            DistText(n, gSvt.intervalDist, gThousands); StrCat(b, n);
+            if (d.hasTime) { StrCat(b, " or "); StrIToA(n, gSvt.intervalMonths); StrCat(b, n); StrCat(b, " mo"); }
+        } else {
+            StrCopy(b, "every "); StrIToA(n, gSvt.intervalMonths); StrCat(b, n); StrCat(b, " months, last ");
+            if (LastVisit(gSvt.vehicle, gSvt.id, &date, &odo)) DateShortText(b + StrLen(b), date);
+        }
+        WinDrawChars(b, StrLen(b), 10, y + 10);
+    }
+    /* Footer: the latest visit of any kind. */
+    FntSetFont(stdFont);
+    y = (Coord)(gSvcArea.topLeft.y + gSvcArea.extent.y + 1);
+    if (LastVisit(gSvcVehicle, 255, &date, &odo)) {
+        StrCopy(b, "Last visit "); DateShortText(b + StrLen(b), date); StrCat(b, " at ");
+        DistText(n, odo, gThousands); StrCat(b, n); StrCat(b, " "); StrCat(b, UnitDistLabel(gPrefs.distanceUnit));
+    } else StrCopy(b, "No visits logged yet");
+    WinDrawChars(b, StrLen(b), 4, y);
+    {
+        UInt16 visible = (UInt16)(gSvcArea.extent.y / kSvcRowH);
+        AppListScrollBar(FrmGetActiveForm(), ServiceScrollBar, (Int16)gSvcFirst, (Int16)((Int16)gSvcRowCount - (Int16)visible), (Int16)visible,
+                         gSvcArea.topLeft.y, (Coord)(gSvcArea.topLeft.y + gSvcArea.extent.y));
+    }
+}
+
+static void LayoutService(FormType *form)
+{
+    static UInt16 bottom[] = { ServiceLogButton, ServiceNewButton, ServiceDoneButton };
+    Coord w, h;
+    AppFitForm(form, bottom, 3);
+    WinGetDisplayExtent(&w, &h); h = AppFormHeight(form);
+    gSvcArea.topLeft.x = 0; gSvcArea.topLeft.y = kSvcTop; gSvcArea.extent.x = w;
+    gSvcArea.extent.y = (Coord)(((h - 17 - 12 - kSvcTop) / kSvcRowH) * kSvcRowH);
+}
+
+static void BuildServicePopup(FormType *form)
+{
+    ListType *lst = FrmGetObjectPtr(form, FrmGetObjectIndex(form, ServiceVehicleList));
+    Int16 sel;
+    VehBuildChoices(lst, gSVNames, gSVPtrs, gSVIds, false, gSvcVehicle, gSvcVehicle, &sel);
+    CtlSetLabel(FrmGetObjectPtr(form, FrmGetObjectIndex(form, ServiceVehicleTrigger)), gSVNames[sel]);
+}
+
+Boolean ServiceFormHandleEvent(EventType *event)
+{
+    FormType *form = FrmGetActiveForm();
+    switch (event->eType) {
+    case frmOpenEvent:
+        gSvcVehicle = SvcVehicleNow();
+        InstallPresets(gSvcVehicle);
+        gSvcFirst = 0;
+        LayoutService(form);
+        BuildServicePopup(form);
+        Collect();
+        FrmDrawForm(form);
+        DrawService();
+        return true;
+    case frmUpdateEvent: FrmDrawForm(form); DrawService(); return true;
+    case winDisplayChangedEvent: LayoutService(form); WinEraseWindow(); FrmDrawForm(form); DrawService(); return true;
+    case penDownEvent:
+        if (RctPtInRectangle(event->screenX, event->screenY, &gSvcArea)) {
+            UInt16 row = (UInt16)((event->screenY - gSvcArea.topLeft.y) / kSvcRowH + gSvcFirst);
+            if (row < gSvcRowCount) { gEditSvtIndex = gSvcRows[row]; FrmGotoForm(EditServiceForm); return true; }
+        }
+        break;
+    case sclRepeatEvent: case sclExitEvent: {
+        Int16 v;
+        if (AppListScrollEvent(event, &v)) { gSvcFirst = (UInt8)(v < 0 ? 0 : v); DrawService(); return true; }
+        break;
+    }
+    case keyDownEvent: {
+        UInt16 visible = (UInt16)(gSvcArea.extent.y / kSvcRowH);
+        WChar c = event->data.keyDown.chr;
+        if (c == vchrPageDown && gSvcFirst + visible < gSvcRowCount) { gSvcFirst += visible; DrawService(); return true; }
+        if (c == vchrPageUp && gSvcFirst > 0) { gSvcFirst = gSvcFirst > visible ? gSvcFirst - visible : 0; DrawService(); return true; }
+        break;
+    }
+    case popSelectEvent:
+        if (event->data.popSelect.listID == ServiceVehicleList) {
+            gSvcVehicle = gSVIds[event->data.popSelect.selection];
+            gPrefs.currentVehicle = gSvcVehicle;
+            CtlSetLabel(FrmGetObjectPtr(form, FrmGetObjectIndex(form, ServiceVehicleTrigger)), gSVNames[event->data.popSelect.selection]);
+            InstallPresets(gSvcVehicle);
+            gSvcFirst = 0; Collect(); DrawService();
+            return true;
+        }
+        break;
+    case ctlSelectEvent:
+        switch (event->data.ctlSelect.controlID) {
+        case ServiceLogButton: FrmGotoForm(LogServiceForm); return true;
+        case ServiceNewButton:
+            if (NextTypeId(gSvcVehicle) == 255) { FrmAlert(TooManyServicesAlert); return true; }
+            gEditSvtIndex = dmMaxRecordIndex; FrmGotoForm(EditServiceForm); return true;
+        case ServiceDoneButton: FrmGotoForm(FillListForm); return true;
+        default: break;
+        }
+        break;
+    default: break;
+    }
+    return false;
+}
+
+/* ---- Service type ---- */
+
+static void Summary(FormType *form)
+{
+    char b[44], n[20];
+    SvcDue d;
+    UInt32 odoNow = VehLastOdometer(gSvcVehicle), pace = Pace(gSvcVehicle);
+    UInt16 date = 0; UInt32 odo = 0;
+    Boolean have = LastVisit(gSvcVehicle, gSvt.id, &date, &odo);
+    if (gEditSvtIndex == dmMaxRecordIndex || (gSvt.intervalDist == 0 && gSvt.intervalMonths == 0)) {
+        AppSetLabel(form, SvtSummary1, "Set a distance, a time, or both;");
+        AppSetLabel(form, SvtSummary2, "whichever comes first is due.");
+        AppSetLabel(form, SvtSummary3, "Blank means no limit of that kind.");
+        return;
+    }
+    if (!have) {
+        AppSetLabel(form, SvtSummary1, "No visit logged yet: tap Log on");
+        AppSetLabel(form, SvtSummary2, "the Service screen with the last");
+        AppSetLabel(form, SvtSummary3, "date and odometer to start.");
+        return;
+    }
+    SvcCompute(&gSvt, 1, date, odo, odoNow, AppToday(), pace, &d);
+    StrCopy(b, "Due");
+    if (d.hasDist) { StrCat(b, " at "); DistText(n, odo + gSvt.intervalDist, gThousands); StrCat(b, n); StrCat(b, " "); StrCat(b, UnitDistLabel(gPrefs.distanceUnit)); }
+    if (d.hasTime) { StrCat(b, d.hasDist ? " or " : " "); DateShortText(b + StrLen(b), d.timeDue); }
+    AppSetLabel(form, SvtSummary1, b);
+    if (d.hasDist && pace) {
+        StrCopy(b, "At "); DistText(n, pace, 0); StrCat(b, n); StrCat(b, " "); StrCat(b, UnitDistLabel(gPrefs.distanceUnit)); StrCat(b, "/day that is about ");
+        DateShortText(b + StrLen(b), d.distDue);
+    } else if (d.hasDist) StrCopy(b, "No pace yet: log a few fills.");
+    else b[0] = 0;
+    AppSetLabel(form, SvtSummary2, b);
+    if (d.hasDist) {
+        StrCopy(b, "Warning starts at "); DistText(n, odo + gSvt.intervalDist - gSvt.warnDist, gThousands); StrCat(b, n); StrCat(b, " "); StrCat(b, UnitDistLabel(gPrefs.distanceUnit));
+    } else { StrCopy(b, "Warning starts "); StrIToA(n, gSvt.warnDays); StrCat(b, n); StrCat(b, " days ahead"); }
+    AppSetLabel(form, SvtSummary3, b);
+}
+
+static void LoadSvt(FormType *form)
+{
+    char b[20];
+    Boolean isNew = gEditSvtIndex == dmMaxRecordIndex;
+    if (isNew || SvtGetAt(gEditSvtIndex, &gSvt) != errNone) {
+        gEditSvtIndex = dmMaxRecordIndex; isNew = true;
+        MemSet(&gSvt, sizeof gSvt, 0);
+        gSvt.vehicle = gSvcVehicle; gSvt.id = NextTypeId(gSvcVehicle); gSvt.warnDays = 14;
+    }
+    FrmSetTitle(form, isNew ? "New Service" : "Service Type");
+    AppSetFieldText(form, SvtNameField, gSvt.name);
+    if (gSvt.intervalDist) { DistText(b, gSvt.intervalDist, 0); AppSetFieldText(form, SvtDistField, b); } else AppSetFieldText(form, SvtDistField, "");
+    AppSetLabel(form, SvtDistUnitLabel, UnitDistLabel(gPrefs.distanceUnit));
+    if (gSvt.intervalMonths) { StrIToA(b, gSvt.intervalMonths); AppSetFieldText(form, SvtMonthsField, b); } else AppSetFieldText(form, SvtMonthsField, "");
+    if (gSvt.warnDist) { DistText(b, gSvt.warnDist, 0); AppSetFieldText(form, SvtWarnDistField, b); } else AppSetFieldText(form, SvtWarnDistField, "");
+    StrCopy(b, UnitDistLabel(gPrefs.distanceUnit)); StrCat(b, " before"); AppSetLabel(form, SvtWarnUnitLabel, b);
+    StrIToA(b, gSvt.warnDays); AppSetFieldText(form, SvtWarnDaysField, b);
+    CtlSetValue(FrmGetObjectPtr(form, FrmGetObjectIndex(form, SvtAlarmCheckbox)), gSvt.alarm);
+    AppSetFieldText(form, SvtDetailField, gSvt.defaultDetail);
+    Summary(form);
+    if (isNew) FrmHideObject(form, FrmGetObjectIndex(form, SvtArchiveButton));
+    else {
+        CtlSetLabel(FrmGetObjectPtr(form, FrmGetObjectIndex(form, SvtArchiveButton)),
+                    gSvt.archived ? "Restore" : (VisitsCovering(gSvt.vehicle, gSvt.id) ? "Archive" : "Delete"));
+        FrmShowObject(form, FrmGetObjectIndex(form, SvtArchiveButton));
+    }
+    FrmSetFocus(form, FrmGetObjectIndex(form, SvtNameField));
+}
+
+static Boolean SaveSvt(FormType *form)
+{
+    UInt32 v;
+    Int32 r;
+    Err err;
+    const char *name = AppGetFieldText(form, SvtNameField);
+    if (!name[0]) { FrmAlert(NeedServiceNameAlert); return false; }
+    StrNCopy(gSvt.name, name, svtNameLen - 1); gSvt.name[svtNameLen - 1] = 0;
+    r = TextParseFixed(AppGetFieldText(form, SvtDistField), 1, gPoint, gThousands, &v);
+    if (r < 0) { FrmAlert(BadNumberAlert); return false; }
+    gSvt.intervalDist = r == 1 ? UnitDistFromDisplay(v, gPrefs.distanceUnit) : 0;
+    r = TextParseFixed(AppGetFieldText(form, SvtMonthsField), 0, gPoint, gThousands, &v);
+    if (r < 0) { FrmAlert(BadNumberAlert); return false; }
+    gSvt.intervalMonths = (UInt8)(r == 1 ? v : 0);
+    r = TextParseFixed(AppGetFieldText(form, SvtWarnDistField), 1, gPoint, gThousands, &v);
+    if (r < 0) { FrmAlert(BadNumberAlert); return false; }
+    gSvt.warnDist = r == 1 ? UnitDistFromDisplay(v, gPrefs.distanceUnit) : SvcDefaultWarnDist(gSvt.intervalDist);
+    r = TextParseFixed(AppGetFieldText(form, SvtWarnDaysField), 0, gPoint, gThousands, &v);
+    if (r < 0) { FrmAlert(BadNumberAlert); return false; }
+    gSvt.warnDays = (UInt16)(r == 1 ? v : 14);
+    gSvt.alarm = (UInt8)CtlGetValue(FrmGetObjectPtr(form, FrmGetObjectIndex(form, SvtAlarmCheckbox)));
+    StrNCopy(gSvt.defaultDetail, AppGetFieldText(form, SvtDetailField), svtDetailLen - 1); gSvt.defaultDetail[svtDetailLen - 1] = 0;
+    if (gEditSvtIndex == dmMaxRecordIndex) err = DbAdd(dbServiceTypes, gSvcPacked, ServiceTypePack(&gSvt, gSvcPacked), NULL);
+    else err = DbReplace(dbServiceTypes, gEditSvtIndex, gSvcPacked, ServiceTypePack(&gSvt, gSvcPacked));
+    if (err) { FrmAlert(SaveFailedAlert); return false; }
+    return true;
+}
+
+Boolean EditServiceFormHandleEvent(EventType *event)
+{
+    FormType *form = FrmGetActiveForm();
+    static UInt16 bottom[] = { SvtDoneButton, SvtCancelButton, SvtArchiveButton };
+    static UInt16 pinned[] = { SvtDoneButton, SvtCancelButton, SvtArchiveButton, SvtScrollBar };
+    switch (event->eType) {
+    case frmOpenEvent:
+        AppScrollReset();
+        AppFitForm(form, bottom, 3);
+        LoadSvt(form);
+        AppScrollBarUpdate(form, SvtScrollBar, pinned, 4);
+        FrmDrawForm(form);
+        return true;
+    case frmUpdateEvent: FrmDrawForm(form); return true;
+    case fldEnterEvent: AppScrollToField(form, event->data.fldEnter.fieldID, pinned, 4); AppScrollBarUpdate(form, SvtScrollBar, pinned, 4); break;
+    case keyDownEvent: case sclRepeatEvent: case sclExitEvent:
+        if (AppScrollEvent(form, event, pinned, 4, SvtScrollBar)) return true;
+        break;
+    case winDisplayChangedEvent:
+        if (gScrollYPublic()) AppScrollBy(form, gScrollYPublic(), pinned, 4);
+        AppFitForm(form, bottom, 3); AppScrollBarUpdate(form, SvtScrollBar, pinned, 4); WinEraseWindow(); FrmDrawForm(form); return true;
+    case ctlSelectEvent:
+        switch (event->data.ctlSelect.controlID) {
+        case SvtDoneButton: if (SaveSvt(form)) FrmGotoForm(ServiceForm); return true;
+        case SvtCancelButton: FrmGotoForm(ServiceForm); return true;
+        case SvtArchiveButton:
+            if (gEditSvtIndex == dmMaxRecordIndex) return true;
+            if (gSvt.archived) gSvt.archived = 0;
+            else if (VisitsCovering(gSvt.vehicle, gSvt.id)) gSvt.archived = 1;
+            else {
+                if (FrmAlert(DeleteServiceAlert) != 0) return true;
+                DbRemove(dbServiceTypes, gEditSvtIndex);
+                FrmGotoForm(ServiceForm);
+                return true;
+            }
+            if (DbReplace(dbServiceTypes, gEditSvtIndex, gSvcPacked, ServiceTypePack(&gSvt, gSvcPacked))) FrmAlert(SaveFailedAlert);
+            FrmGotoForm(ServiceForm);
+            return true;
+        default: break;
+        }
+        break;
+    default: break;
+    }
+    return false;
+}
+
+/* ---- Log service ---- */
+
+#define kSvlChecks 12
+static UInt16 gSvlTypeIndex[kSvlChecks];   /* database index behind each checkbox */
+static UInt8 gSvlTypeId[kSvlChecks];
+static char gSvlNames[kSvlChecks][svtNameLen];
+static UInt8 gSvlCount;
+static UInt16 gSvlDate;
+static char gSvlDateText[12];
+static UInt16 gSvlClamp[24];
+static UInt16 gSvlClampCount;
+
+static void PlaceSvl(FormType *form)
+{
+    static UInt16 bottom[] = { SvlDoneButton, SvlCancelButton, SvlNoteButton };
+    Coord y = 56;
+    UInt8 i;
+    Coord x;
+    AppFitForm(form, bottom, 3);
+    gSvlClampCount = 0;
+    for (i = 0; i < kSvlChecks; i++) {
+        UInt16 idx = FrmGetObjectIndex(form, SvlCheck0 + i);
+        if (i < gSvlCount) { FrmGetObjectPosition(form, idx, &x, &y); FrmSetObjectPosition(form, idx, x, (Coord)(56 + i * 12)); FrmShowObject(form, idx); gSvlClamp[gSvlClampCount++] = SvlCheck0 + i; }
+        else FrmHideObject(form, idx);
+    }
+    y = (Coord)(56 + gSvlCount * 12);
+    {
+        static UInt16 rows[][3] = {
+            { SvlOtherCheckbox, SvlOtherField, 0 }, { SvlCostLabel, SvlCostField, SvlCurrencyTrigger },
+            { SvlPaidLabel, SvlCashButton, SvlCardButton }, { SvlShopLabel, SvlShopField, 0 },
+            { SvlDetailLabel, SvlDetailField, 0 }, { SvlNextLabel, 0, 0 } };
+        UInt8 r, k;
+        for (r = 0; r < 6; r++, y += 13) {
+            for (k = 0; k < 3; k++) {
+                UInt16 idx;
+                Coord ox, oy;
+                if (!rows[r][k]) continue;
+                idx = FrmGetObjectIndex(form, rows[r][k]);
+                FrmGetObjectPosition(form, idx, &ox, &oy);
+                FrmSetObjectPosition(form, idx, ox, (Coord)(y + (rows[r][k] == SvlCurrencyTrigger ? 0 : 0)));
+                gSvlClamp[gSvlClampCount++] = rows[r][k];
+            }
+            if (r == 1) { UInt16 li = FrmGetObjectIndex(form, SvlCurrencyList); FrmGetObjectPosition(form, li, &x, &y); FrmSetObjectPosition(form, li, x, (Coord)(y)); }
+        }
+    }
+    AppShowByPosition(form, gSvlClamp, gSvlClampCount);
+    {
+        static UInt16 pinned[] = { SvlDoneButton, SvlCancelButton, SvlNoteButton, SvlScrollBar };
+        AppScrollBarUpdate(form, SvlScrollBar, pinned, 4);
+    }
+}
+
+static void NextLine(FormType *form)
+{
+    char b[44], n[20];
+    UInt8 i;
+    UInt32 odo = 0;
+    b[0] = 0;
+    if (TextParseFixed(AppGetFieldText(form, SvlOdoField), 1, gPoint, gThousands, &odo) == 1) odo = UnitDistFromDisplay(odo, gSvcVeh.odoUnit);
+    for (i = 0; i < gSvlCount; i++) {
+        if (!CtlGetValue(FrmGetObjectPtr(form, FrmGetObjectIndex(form, SvlCheck0 + i)))) continue;
+        if (SvtGetAt(gSvlTypeIndex[i], &gScanSvt) != errNone || (gScanSvt.intervalDist == 0 && gScanSvt.intervalMonths == 0)) continue;
+        StrCopy(b, "Next "); StrNCopy(n, gScanSvt.name, 12); n[12] = 0; StrCat(b, n); StrCat(b, ":");
+        if (gScanSvt.intervalDist && odo) { StrCat(b, " "); DistText(n, odo + gScanSvt.intervalDist, gThousands); StrCat(b, n); StrCat(b, " "); StrCat(b, UnitDistLabel(gPrefs.distanceUnit)); }
+        if (gScanSvt.intervalMonths) { StrCat(b, gScanSvt.intervalDist && odo ? " or " : " "); DateShortText(b + StrLen(b), DateAddMonths(gSvlDate, gScanSvt.intervalMonths)); }
+        break;
+    }
+    AppSetLabel(form, SvlNextLabel, b);
+}
+
+static void LoadSvl(FormType *form)
+{
+    char b[20];
+    UInt16 n = DbCount(dbServiceTypes), i;
+    UInt32 odo;
+    gSvcVehicle = SvcVehicleNow();
+    VehGet(gSvcVehicle, &gSvcVeh);
+    MemSet(&gSvl, sizeof gSvl, 0);
+    gSvl.vehicle = gSvcVehicle;
+    gSvl.currency = CurrencyForNewEntry(gSvcVeh.defaultCurrency, gPrefs.defaultCurrency, gPrefs.lastCurrency);
+    gSvl.fxRate = CurrencyDefaultRate(gSvl.currency, gPrefs.homeCurrency, gPrefs.fxRate);
+    gSvl.payment = gPrefs.lastPayment;
+    gSvlDate = AppToday();
+    DateShortText(gSvlDateText, gSvlDate);
+    CtlSetLabel(FrmGetObjectPtr(form, FrmGetObjectIndex(form, SvlDateTrigger)), gSvlDateText);
+    odo = VehLastOdometer(gSvcVehicle);
+    if (odo) { DistText(b, odo, 0); AppSetFieldText(form, SvlOdoField, b); } else AppSetFieldText(form, SvlOdoField, "");
+    AppSetLabel(form, SvlOdoHint, odo ? "from last fill" : "");
+    gSvlCount = 0;
+    for (i = 0; i < n && gSvlCount < kSvlChecks; i++) {
+        ControlType *c;
+        if (SvtGetAt(i, &gScanSvt) != errNone || gScanSvt.vehicle != gSvcVehicle || gScanSvt.archived) continue;
+        gSvlTypeIndex[gSvlCount] = i; gSvlTypeId[gSvlCount] = gScanSvt.id;
+        StrCopy(gSvlNames[gSvlCount], gScanSvt.name);
+        c = FrmGetObjectPtr(form, FrmGetObjectIndex(form, SvlCheck0 + gSvlCount));
+        CtlSetLabel(c, gSvlNames[gSvlCount]);
+        CtlSetValue(c, 0);
+        gSvlCount++;
+    }
+    CtlSetValue(FrmGetObjectPtr(form, FrmGetObjectIndex(form, SvlOtherCheckbox)), 0);
+    AppSetFieldText(form, SvlOtherField, "");
+    AppSetFieldText(form, SvlCostField, "");
+    {
+        ListType *lst = FrmGetObjectPtr(form, FrmGetObjectIndex(form, SvlCurrencyList));
+        LstSetSelection(lst, gSvl.currency);
+        CtlSetLabel(FrmGetObjectPtr(form, FrmGetObjectIndex(form, SvlCurrencyTrigger)), CurrencyCode(gSvl.currency));
+    }
+    FrmSetControlGroupSelection(form, 1, gSvl.payment == fillPaymentCard ? SvlCardButton : SvlCashButton);
+    AppSetFieldText(form, SvlShopField, "");
+    AppSetFieldText(form, SvlDetailField, "");
+    AppSetLabel(form, SvlNextLabel, "");
+    PlaceSvl(form);
+}
+
+static Boolean SaveSvl(FormType *form)
+{
+    UInt32 odo = 0, cents = 0;
+    Int32 r;
+    UInt8 i;
+    Boolean other = CtlGetValue(FrmGetObjectPtr(form, FrmGetObjectIndex(form, SvlOtherCheckbox))) != 0;
+    r = TextParseFixed(AppGetFieldText(form, SvlOdoField), 1, gPoint, gThousands, &odo);
+    if (r < 0) { FrmAlert(BadNumberAlert); return false; }
+    gSvl.odometer = r == 1 ? UnitDistFromDisplay(odo, gSvcVeh.odoUnit) : 0;
+    gSvl.services = 0;
+    for (i = 0; i < gSvlCount; i++)
+        if (CtlGetValue(FrmGetObjectPtr(form, FrmGetObjectIndex(form, SvlCheck0 + i)))) gSvl.services |= 1UL << gSvlTypeId[i];
+    StrNCopy(gSvl.other, AppGetFieldText(form, SvlOtherField), svlOtherLen - 1); gSvl.other[svlOtherLen - 1] = 0;
+    if (other && gSvl.other[0]) gSvl.services |= svlOtherBit; else gSvl.other[0] = 0;
+    if (gSvl.services == 0) { FrmAlert(NothingDoneAlert); return false; }
+    r = TextParseFixed(AppGetFieldText(form, SvlCostField), 2, gPoint, gThousands, &cents);
+    if (r < 0) { FrmAlert(BadNumberAlert); return false; }
+    gSvl.cost = r == 1 ? cents : 0;
+    gSvl.date = gSvlDate;
+    gSvl.currency = (UInt8)LstGetSelection(FrmGetObjectPtr(form, FrmGetObjectIndex(form, SvlCurrencyList)));
+    gSvl.fxRate = CurrencyDefaultRate(gSvl.currency, gPrefs.homeCurrency, gPrefs.fxRate);
+    gSvl.payment = AppGroupSelection(form, 1) == SvlCardButton ? fillPaymentCard : fillPaymentCash;
+    StrNCopy(gSvl.shop, AppGetFieldText(form, SvlShopField), svlShopLen - 1); gSvl.shop[svlShopLen - 1] = 0;
+    StrNCopy(gSvl.detail, AppGetFieldText(form, SvlDetailField), svlDetailLen - 1); gSvl.detail[svlDetailLen - 1] = 0;
+    if (DbAdd(dbServiceVisits, gSvcPacked, ServiceVisitPack(&gSvl, gSvcPacked), NULL)) { FrmAlert(SaveFailedAlert); return false; }
+    gPrefs.lastPayment = gSvl.payment;
+    PrefsSave(&gPrefs);
+    return true;
+}
+
+Boolean LogServiceFormHandleEvent(EventType *event)
+{
+    FormType *form = FrmGetActiveForm();
+    static UInt16 pinned[] = { SvlDoneButton, SvlCancelButton, SvlNoteButton, SvlScrollBar };
+    switch (event->eType) {
+    case frmOpenEvent:
+        AppScrollReset();
+        LoadSvl(form);
+        FrmDrawForm(form);
+        return true;
+    case frmUpdateEvent: FrmDrawForm(form); return true;
+    case fldEnterEvent:
+        AppScrollToField(form, event->data.fldEnter.fieldID, pinned, 4);
+        AppShowByPosition(form, gSvlClamp, gSvlClampCount);
+        AppScrollBarUpdate(form, SvlScrollBar, pinned, 4);
+        break;
+    case keyDownEvent: case sclRepeatEvent: case sclExitEvent:
+        if (AppScrollEvent(form, event, pinned, 4, SvlScrollBar)) { AppShowByPosition(form, gSvlClamp, gSvlClampCount); FrmDrawForm(form); return true; }
+        break;
+    case winDisplayChangedEvent:
+        if (gScrollYPublic()) AppScrollBy(form, gScrollYPublic(), pinned, 4);
+        PlaceSvl(form); WinEraseWindow(); FrmDrawForm(form); return true;
+    case popSelectEvent:
+        if (event->data.popSelect.listID == SvlCurrencyList) {
+            gSvl.currency = (UInt8)event->data.popSelect.selection;
+        }
+        break;
+    case ctlSelectEvent: {
+        UInt16 id = event->data.ctlSelect.controlID;
+        if (id >= SvlCheck0 && id < SvlCheck0 + kSvlChecks) { NextLine(form); break; }
+        switch (id) {
+        case SvlDateTrigger: {
+            UInt16 y; UInt8 m, d; Int16 yy, mm, dd;
+            DateDaysToYmd(gSvlDate, &y, &m, &d);
+            yy = (Int16)y; mm = m; dd = d;
+            if (SelectDay(selectDayByDay, &mm, &dd, &yy, "Service date")) {
+                gSvlDate = DateYmdToDays((UInt16)yy, (UInt8)mm, (UInt8)dd);
+                DateShortText(gSvlDateText, gSvlDate);
+                CtlSetLabel(FrmGetObjectPtr(form, FrmGetObjectIndex(form, SvlDateTrigger)), gSvlDateText);
+                NextLine(form);
+            }
+            return true;
+        }
+        case SvlDoneButton: if (SaveSvl(form)) FrmGotoForm(ServiceForm); return true;
+        case SvlCancelButton: FrmGotoForm(ServiceForm); return true;
+        case SvlNoteButton:
+            AppNoteDialog(gSvl.notes);
+            CtlSetLabel(FrmGetObjectPtr(form, FrmGetObjectIndex(form, SvlNoteButton)), gSvl.notes[0] ? "Note*" : "Note");
+            return true;
+        default: break;
+        }
+        break;
+    }
+    default: break;
+    }
+    return false;
+}

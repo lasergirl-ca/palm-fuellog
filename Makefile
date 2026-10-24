@@ -18,7 +18,7 @@ BUILD    := build
 SRCS := src/main.c src/hello2.c src/calc.c src/device.c src/graph.c src/vfstest.c src/sp6test.c \
         src/m1test.c src/db.c src/prefs.c src/records.c src/units.c src/currency.c \
         src/app.c src/fill_list.c src/fill_form.c src/text.c src/datecalc.c \
-        src/vehicles.c src/prefs_form.c src/programmes.c src/presets.c src/setup.c src/stats.c src/stats_form.c \
+        src/vehicles.c src/prefs_form.c src/programmes.c src/presets.c src/setup.c src/stats.c src/stats_form.c src/service.c src/service_form.c \
         src/outstream.c src/xlsx.c src/pdf.c src/crc32.c src/inflate.c src/zipread.c
 OBJS := $(patsubst src/%.c,$(BUILD)/%.o,$(SRCS))
 SECT := $(BUILD)/fuellog-sections
@@ -74,6 +74,8 @@ test: $(BUILD)
 	$(BUILD)/test_date
 	$(HOSTCC) -Wall -Wextra -o $(BUILD)/test_stats tests/test_stats.c src/stats.c src/calc.c src/datecalc.c
 	$(BUILD)/test_stats
+	$(HOSTCC) -Wall -Wextra -o $(BUILD)/test_service tests/test_service.c src/service.c src/calc.c src/datecalc.c
+	$(BUILD)/test_service
 	mkdir -p $(BUILD)/out
 	$(HOSTCC) -Wall -Wextra -o $(BUILD)/test_export tests/test_export.c $(EXPORT_SRCS)
 	$(BUILD)/test_export
@@ -82,7 +84,7 @@ test: $(BUILD)
 	python3 -I tools/check_inflate.py $(BUILD)/test_inflate $(BUILD)/inflate $(INFLATE_EXTRA)
 
 check: $(APP).prc
-	python3 -I tools/prcinfo.py $(APP).prc --expect-code 5
+	python3 -I tools/prcinfo.py $(APP).prc --expect-code 6
 
 docker:
 	docker run --rm --platform linux/amd64 -v "$(CURDIR)":/src fuellog-toolchain make

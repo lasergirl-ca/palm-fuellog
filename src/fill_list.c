@@ -9,9 +9,13 @@
 #include "datecalc.h"
 #include "resources.h"
 #include "vehicles.h"
+#include "service_form.h"
 
 #define kRowH 11
-#define kTop 26          /* first row, below the title and header */
+#define kTop gTop        /* first row, below the title, the header and any due banner */
+static Coord gTop = 26;
+static char gBanner[44];      /* "Oil and filter due in 640 km", or empty */
+static UInt8 gBannerStatus;
 static UInt16 gFirstRow;  /* index into the newest-first order */
 static FillRecord gRowFill, gScanFill;   /* static: keeps the big records off the stack */
 static char gVehNames[vehMaxVehicles + 1][vehNameLen];
@@ -23,7 +27,7 @@ static UInt16 gVisibleCount;
 static RectangleType gRows;
 
 /* Column right edges in standard coordinates. */
-static const Coord kColDate = 4, kColOdo = 68, kColVol = 94, kColTotal = 130, kColEco = 156;
+static const Coord kColDate = 4, kColOdo = 68, kColVol = 94, kColTotal = 126, kColEco = 150;   /* the scrollbar takes the last 8 px */
 static VehicleRecord gCurVeh;   /* the selected vehicle, for the headers */
 
 static void DrawRight(const char *s, Coord right, Coord y)
@@ -111,6 +115,13 @@ static void DrawRows(void)
     Collect();
     count = gVisibleCount;
     WinEraseRectangle(&gRows, 0);
+    if (gTop == 37) {
+        RectangleType br;
+        br.topLeft.x = 0; br.topLeft.y = 15; br.extent.x = 160; br.extent.y = 11;
+        WinEraseRectangle(&br, 0);
+        FntSetFont(stdFont);
+        WinDrawChars(gBanner, StrLen(gBanner), 4, 15);
+    }
     FntSetFont(boldFont);
     WinDrawChars("Date", 4, kColDate, kTop - 11);
     {
@@ -127,6 +138,7 @@ static void DrawRows(void)
     if (count == 0) {
         FntSetFont(stdFont);
         WinDrawChars("No fills yet. Tap New to log one.", 33, 8, y + 20);
+        AppListScrollBar(FrmGetActiveForm(), FillListScrollBar, 0, 0, 1, gRows.topLeft.y, (Coord)(gRows.topLeft.y + gRows.extent.y));
         return;
     }
     for (i = 0; i < rows && gFirstRow + i < count; i++, y += kRowH) {
@@ -167,7 +179,10 @@ static void DrawRows(void)
             DrawRight((fp->flags & fillFlagFullTank) ? "" : "partial", kColEco, y);
         }
     }
+    AppListScrollBar(FrmGetActiveForm(), FillListScrollBar, (Int16)gFirstRow, (Int16)((Int16)count - (Int16)rows), (Int16)rows,
+                     gRows.topLeft.y, (Coord)(gRows.topLeft.y + gRows.extent.y));
 }
+
 
 static void DrawFooter(void)
 {
@@ -212,13 +227,17 @@ static void DrawFooter(void)
     StrCat(buf, " $");
     TextFixed(num, (Int32)monthCents, 2, gPoint, gThousands);
     StrCat(buf, num);
-    DrawRight(buf, 156, fy);
+    DrawRight(buf, 150, fy);
 }
 
 static void Layout(FormType *form)
 {
     static const UInt16 bottom[] = { FillListNewButton, FillListStatsButton, FillListServiceButton };
     Coord w, h;
+    /* The most urgent service for the vehicle shown; Soon or Overdue earns a banner line. */
+    gBannerStatus = SvcBanner(gPrefs.currentVehicle, gBanner);
+    gTop = (gBannerStatus == svcStatusSoon || gBannerStatus == svcStatusOverdue) ? 37 : 26;
+    CtlSetLabel(FrmGetObjectPtr(form, FrmGetObjectIndex(form, FillListServiceButton)), gTop == 37 ? "Service!" : "Service");
     AppFitForm(form, bottom, 3);
     WinGetDisplayExtent(&w, &h); h = AppFormHeight(form);
     gRows.topLeft.x = 0; gRows.topLeft.y = kTop;
@@ -260,6 +279,11 @@ Boolean FillListHandleEvent(EventType *event)
             }
         }
         break;
+    case sclRepeatEvent: case sclExitEvent: {
+        Int16 v;
+        if (AppListScrollEvent(event, &v)) { gFirstRow = (UInt16)(v < 0 ? 0 : v); DrawRows(); return true; }
+        break;
+    }
     case keyDownEvent: {
         UInt16 rows = (UInt16)(gRows.extent.y / kRowH), count = gVisibleCount;
         if (event->data.keyDown.chr == vchrPageDown) {
@@ -283,7 +307,7 @@ Boolean FillListHandleEvent(EventType *event)
             FrmGotoForm(StatsForm);
             return true;
         case FillListServiceButton:
-            FrmAlert(NotYetAlert);
+            FrmGotoForm(ServiceForm);
             return true;
         default: break;
         }

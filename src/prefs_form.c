@@ -51,15 +51,23 @@ Boolean PrefsFormHandleEvent(EventType *event)
 {
     FormType *form = FrmGetActiveForm();
     static const UInt16 bottom[] = { PrefsDoneButton, PrefsCancelButton, PrefsRatesButton };
+    static const UInt16 pinned[] = { PrefsDoneButton, PrefsCancelButton, PrefsRatesButton, PrefsScrollBar };
     switch (event->eType) {
     case frmOpenEvent:
+        AppScrollReset();
         AppFitForm(form, bottom, 3);
         if (gSetupStep == 2) FrmSetTitle(form, "Setup 2 of 3: units");
         LoadPrefs(form);
+        AppScrollBarUpdate(form, PrefsScrollBar, pinned, 4);
         FrmDrawForm(form);
         return true;
     case frmUpdateEvent: FrmDrawForm(form); return true;
-    case winDisplayChangedEvent: AppFitForm(form, bottom, 3); WinEraseWindow(); FrmDrawForm(form); return true;
+    case keyDownEvent: case sclRepeatEvent: case sclExitEvent:
+        if (AppScrollEvent(form, event, pinned, 4, PrefsScrollBar)) return true;
+        break;
+    case winDisplayChangedEvent:
+        if (gScrollYPublic()) AppScrollBy(form, gScrollYPublic(), pinned, 4);
+        AppFitForm(form, bottom, 3); AppScrollBarUpdate(form, PrefsScrollBar, pinned, 4); WinEraseWindow(); FrmDrawForm(form); return true;
     case ctlSelectEvent:
         if (event->data.ctlSelect.controlID == PrefsDoneButton) {
             SavePrefs(form);

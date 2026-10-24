@@ -36,6 +36,7 @@ BEGIN
     BUTTON "New" ID FillListNewButton AT (4 146 32 12)
     BUTTON "Stats" ID FillListStatsButton AT (42 146 34 12)
     BUTTON "Service" ID FillListServiceButton AT (82 146 42 12)
+    SCROLLBAR ID FillListScrollBar AT (152 15 7 130) VALUE 0 MIN 0 MAX 0 PAGESIZE 100
 END
 
 FORM ID FillForm AT (0 0 160 160)
@@ -86,6 +87,7 @@ BEGIN
     BUTTON "Cancel" ID FillCancelButton AT (40 172 38 12)
     BUTTON "Note" ID FillNoteButton AT (82 172 32 12)
     BUTTON "Delete" ID FillDeleteButton AT (118 172 38 12)
+    SCROLLBAR ID FillScrollBar AT (153 15 7 130) VALUE 0 MIN 0 MAX 0 PAGESIZE 100
 END
 
 MENU ID MainMenuBar
@@ -191,6 +193,7 @@ BEGIN
     BUTTON "Done" ID PrefsDoneButton AT (4 146 36 12)
     BUTTON "Cancel" ID PrefsCancelButton AT (46 146 40 12)
     BUTTON "Rates..." ID PrefsRatesButton AT (92 146 44 12)
+    SCROLLBAR ID PrefsScrollBar AT (153 15 7 130) VALUE 0 MIN 0 MAX 0 PAGESIZE 100
 END
 
 FORM ID VehiclesForm AT (0 0 160 160)
@@ -201,6 +204,7 @@ BEGIN
     CHECKBOX "Show archived" ID VehiclesArchivedCheckbox AT (4 131 80 12)
     BUTTON "New" ID VehiclesNewButton AT (4 146 32 12)
     BUTTON "Done" ID VehiclesDoneButton AT (42 146 36 12)
+    SCROLLBAR ID VehiclesScrollBar AT (152 15 7 130) VALUE 0 MIN 0 MAX 0 PAGESIZE 100
 END
 
 FORM ID EditVehicleForm AT (0 0 160 160)
@@ -241,6 +245,7 @@ BEGIN
     BUTTON "Cancel" ID VehCancelButton AT (46 146 40 12)
     BUTTON "Delete" ID VehDeleteButton AT (110 146 40 12)
     GRAFFITISTATEINDICATOR AT (152 150)
+    SCROLLBAR ID VehScrollBar AT (153 15 7 130) VALUE 0 MIN 0 MAX 0 PAGESIZE 100
 END
 
 ALERT ID NeedNameAlert
@@ -275,6 +280,7 @@ BEGIN
     TITLE "Programmes"
     BUTTON "New" ID PgmsNewButton AT (4 146 32 12)
     BUTTON "Done" ID PgmsDoneButton AT (42 146 36 12)
+    SCROLLBAR ID PgmsScrollBar AT (152 15 7 130) VALUE 0 MIN 0 MAX 0 PAGESIZE 100
 END
 
 FORM ID EditProgrammeForm AT (0 0 160 160)
@@ -335,6 +341,7 @@ BEGIN
     BUTTON "Done" ID PgmDoneButton AT (4 212 36 12)
     BUTTON "Cancel" ID PgmCancelButton AT (46 212 40 12)
     BUTTON "Archive" ID PgmArchiveButton AT (108 212 48 12)
+    SCROLLBAR ID PgmScrollBar AT (153 15 7 130) VALUE 0 MIN 0 MAX 0 PAGESIZE 100
 END
 
 FORM ID PointsForm AT (2 2 156 156)
@@ -480,4 +487,127 @@ BEGIN
     BUTTON "Done" ID StatsDoneButton AT (4 146 36 12)
     BUTTON "Reports" ID StatsReportsButton AT (46 146 44 12)
     BUTTON "Graphs" ID StatsGraphsButton AT (96 146 40 12)
+    SCROLLBAR ID StatsScrollBar AT (152 15 7 130) VALUE 0 MIN 0 MAX 0 PAGESIZE 100
+END
+
+FORM ID ServiceForm AT (0 0 160 160)
+NOFRAME
+USABLE
+BEGIN
+    TITLE "Service"
+    POPUPTRIGGER "All vehicles" ID ServiceVehicleTrigger AT (96 1 62 12) RIGHTANCHOR
+    LIST "All vehicles" ID ServiceVehicleList AT (60 1 98 60) NONUSABLE VISIBLEITEMS 6
+    POPUPLIST ID ServiceVehicleTrigger ServiceVehicleList
+    BUTTON "Log" ID ServiceLogButton AT (4 146 30 12)
+    BUTTON "New" ID ServiceNewButton AT (40 146 30 12)
+    BUTTON "Done" ID ServiceDoneButton AT (76 146 36 12)
+    SCROLLBAR ID ServiceScrollBar AT (152 15 7 130) VALUE 0 MIN 0 MAX 0 PAGESIZE 100
+END
+
+FORM ID EditServiceForm AT (0 0 160 160)
+NOFRAME
+USABLE
+BEGIN
+    TITLE "Service Type"
+    LABEL "Name:" AUTOID AT (28 17) FONT 0
+    FIELD ID SvtNameField AT (58 17 98 12) UNDERLINED MAXCHARS 23
+    LABEL "Every:" AUTOID AT (26 30) FONT 0
+    FIELD ID SvtDistField AT (58 30 40 12) UNDERLINED MAXCHARS 6 NUMERIC
+    LABEL "km   " ID SvtDistUnitLabel AT (101 30) FONT 0
+    LABEL "or every:" AUTOID AT (14 43) FONT 0
+    FIELD ID SvtMonthsField AT (58 43 24 12) UNDERLINED MAXCHARS 3 NUMERIC
+    LABEL "months" AUTOID AT (85 43) FONT 0
+    LABEL "Warn:" AUTOID AT (29 56) FONT 0
+    FIELD ID SvtWarnDistField AT (58 56 34 12) UNDERLINED MAXCHARS 5 NUMERIC
+    LABEL "km before    " ID SvtWarnUnitLabel AT (95 56) FONT 0
+    LABEL "or:" AUTOID AT (42 69) FONT 0
+    FIELD ID SvtWarnDaysField AT (58 69 24 12) UNDERLINED MAXCHARS 3 NUMERIC
+    LABEL "days before" AUTOID AT (85 69) FONT 0
+    CHECKBOX "Alarm when due" ID SvtAlarmCheckbox AT (56 82 90 12)
+    LABEL "Detail:" AUTOID AT (26 95) FONT 0
+    FIELD ID SvtDetailField AT (58 95 98 12) UNDERLINED MAXCHARS 31
+    LABEL "                                        " ID SvtSummary1 AT (4 113) FONT 0
+    LABEL "                                        " ID SvtSummary2 AT (4 124) FONT 0
+    LABEL "                                        " ID SvtSummary3 AT (4 135) FONT 0
+    BUTTON "Done" ID SvtDoneButton AT (4 146 36 12)
+    BUTTON "Cancel" ID SvtCancelButton AT (46 146 40 12)
+    BUTTON "Archive" ID SvtArchiveButton AT (108 146 48 12)
+    SCROLLBAR ID SvtScrollBar AT (153 15 7 130) VALUE 0 MIN 0 MAX 0 PAGESIZE 100
+END
+
+FORM ID LogServiceForm AT (0 0 160 160)
+NOFRAME
+USABLE
+BEGIN
+    TITLE "Log Service"
+    LABEL "Date:" AUTOID AT (32 17) FONT 0
+    SELECTORTRIGGER "Oct 22" ID SvlDateTrigger AT (58 17 44 12)
+    LABEL "Odometer:" AUTOID AT (12 30) FONT 0
+    FIELD ID SvlOdoField AT (58 30 50 12) UNDERLINED MAXCHARS 10 NUMERIC
+    LABEL "from last fill" ID SvlOdoHint AT (111 30) FONT 0
+    LABEL "Done at this visit" ID SvlDoneLabel AT (4 43) FONT 1
+    CHECKBOX "                       " ID 2810 AT (12 56 140 12)
+    CHECKBOX "                       " ID 2811 AT (12 68 140 12)
+    CHECKBOX "                       " ID 2812 AT (12 80 140 12)
+    CHECKBOX "                       " ID 2813 AT (12 92 140 12)
+    CHECKBOX "                       " ID 2814 AT (12 104 140 12)
+    CHECKBOX "                       " ID 2815 AT (12 116 140 12)
+    CHECKBOX "                       " ID 2816 AT (12 128 140 12)
+    CHECKBOX "                       " ID 2817 AT (12 140 140 12)
+    CHECKBOX "                       " ID 2818 AT (12 152 140 12)
+    CHECKBOX "                       " ID 2819 AT (12 164 140 12)
+    CHECKBOX "                       " ID 2820 AT (12 176 140 12)
+    CHECKBOX "                       " ID 2821 AT (12 188 140 12)
+    CHECKBOX "Other:" ID SvlOtherCheckbox AT (12 200 40 12)
+    FIELD ID SvlOtherField AT (54 200 102 12) UNDERLINED MAXCHARS 23
+    LABEL "Cost:" ID SvlCostLabel AT (32 213) FONT 0
+    FIELD ID SvlCostField AT (58 213 44 12) UNDERLINED MAXCHARS 9 NUMERIC
+    POPUPTRIGGER "CAD" ID SvlCurrencyTrigger AT (106 213 44 12) LEFTANCHOR
+    LIST "USD" "CAD" "EUR" "AUD" ID SvlCurrencyList AT (106 213 44 44) NONUSABLE VISIBLEITEMS 4
+    POPUPLIST ID SvlCurrencyTrigger SvlCurrencyList
+    LABEL "Paid:" ID SvlPaidLabel AT (33 226) FONT 0
+    PUSHBUTTON "Cash" ID SvlCashButton AT (58 226 30 12) GROUP 1
+    PUSHBUTTON "Card" ID SvlCardButton AT (PREVRIGHT 226 30 12) GROUP 1
+    LABEL "Shop:" ID SvlShopLabel AT (30 239) FONT 0
+    FIELD ID SvlShopField AT (58 239 98 12) UNDERLINED MAXCHARS 23
+    LABEL "Detail:" ID SvlDetailLabel AT (26 252) FONT 0
+    FIELD ID SvlDetailField AT (58 252 98 12) UNDERLINED MAXCHARS 31
+    LABEL "                                        " ID SvlNextLabel AT (4 265) FONT 0
+    BUTTON "Done" ID SvlDoneButton AT (4 280 36 12)
+    BUTTON "Cancel" ID SvlCancelButton AT (46 280 40 12)
+    BUTTON "Note" ID SvlNoteButton AT (92 280 34 12)
+    SCROLLBAR ID SvlScrollBar AT (153 15 7 130) VALUE 0 MIN 0 MAX 0 PAGESIZE 100
+END
+
+ALERT ID NeedServiceNameAlert
+ERROR
+BEGIN
+    TITLE "Name the service"
+    MESSAGE "Give the service a name, such as Oil and filter."
+    BUTTONS "OK"
+END
+
+ALERT ID DeleteServiceAlert
+CONFIRMATION
+DEFAULTBUTTON 1
+BEGIN
+    TITLE "Delete service?"
+    MESSAGE "No visit covers this service, so nothing else is lost."
+    BUTTONS "Delete" "Cancel"
+END
+
+ALERT ID NothingDoneAlert
+ERROR
+BEGIN
+    TITLE "Nothing ticked"
+    MESSAGE "Tick what was done at this visit, or Other with a few words."
+    BUTTONS "OK"
+END
+
+ALERT ID TooManyServicesAlert
+ERROR
+BEGIN
+    TITLE "Service limit"
+    MESSAGE "A vehicle keeps up to 31 service types. Archive one first."
+    BUTTONS "OK"
 END
