@@ -16,6 +16,13 @@ UInt16 AppNowMinutes(void);                      /* minutes since midnight */
 void   AppTimeText(char *buf, UInt16 minutes);   /* per the Formats panel, buf >= timeStringLength */
 void   AppSetupDIA(FormType *form);              /* custom policy, 160 to 225 rows */
 void   AppFitForm(FormType *form, const UInt16 *bottomIds, UInt16 n);  /* resize and pin controls */
+/* The ID of the selected push button in a group (FrmGetControlGroupSelection
+ * returns the object index, which every form here once compared to an ID). */
+UInt16 AppGroupSelection(FormType *form, UInt8 group);
+/* Show the listed objects that sit inside the scrolling area and hide those
+ * that have scrolled under the title or the pinned buttons. Pass only objects
+ * the form itself wants visible. */
+void   AppShowByPosition(FormType *form, const UInt16 *ids, UInt16 n);
 Coord  AppFormHeight(FormType *form);   /* the window height after AppFitForm: lay rows out to this, not the display */
 extern UInt16 gDisplayChanges;          /* winDisplayChangedEvents seen, for the About diagnostics */
 

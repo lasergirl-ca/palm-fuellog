@@ -57,6 +57,9 @@ BEGIN
     LABEL "              " ID FillTripHint AT (111 43) FONT 0
     LABEL "Volume (L):     " ID FillVolumeLabel AT (2 56) FONT 0
     FIELD ID FillVolumeField AT (58 56 50 12) UNDERLINED MAXCHARS 8 NUMERIC
+    POPUPTRIGGER "L" ID FillVolumeUnitTrigger AT (111 56 46 12) LEFTANCHOR
+    LIST "L" "US gal" "Imp gal" ID FillVolumeUnitList AT (111 56 46 33) NONUSABLE VISIBLEITEMS 3
+    POPUPLIST ID FillVolumeUnitTrigger FillVolumeUnitList
     LABEL "Price (c/L):     " ID FillPriceLabel AT (2 69) FONT 0
     FIELD ID FillPriceField AT (58 69 50 12) UNDERLINED MAXCHARS 8 NUMERIC
     LABEL "Total:" AUTOID AT (30 82) FONT 0
@@ -75,14 +78,14 @@ BEGIN
     POPUPTRIGGER "Regular" ID FillGradeTrigger AT (58 121 60 12) LEFTANCHOR
     LIST "Regular" "Mid" "Premium" "Diesel" "Home AC" "Public AC" "DC fast" ID FillGradeList AT (58 121 60 77) NONUSABLE VISIBLEITEMS 7
     POPUPLIST ID FillGradeTrigger FillGradeList
-    CHECKBOX "Full tank" ID FillFullCheckbox AT (56 133 54 12) CHECKED
-    CHECKBOX "Missed" ID FillMissedCheckbox AT (112 133 46 12)
-    LABEL "Points:" ID FillPointsLabel AT (25 146) FONT 0
-    SELECTORTRIGGER "none" ID FillPointsTrigger AT (58 146 98 12) LEFTANCHOR
-    BUTTON "Done" ID FillDoneButton AT (4 159 32 12)
-    BUTTON "Cancel" ID FillCancelButton AT (40 159 38 12)
-    BUTTON "Note" ID FillNoteButton AT (82 159 32 12)
-    BUTTON "Delete" ID FillDeleteButton AT (118 159 38 12)
+    CHECKBOX "Charged to full" ID FillFullCheckbox AT (56 133 100 12) CHECKED
+    CHECKBOX "Skipped last fill" ID FillMissedCheckbox AT (56 146 100 12)
+    LABEL "Points:" ID FillPointsLabel AT (25 159) FONT 0
+    SELECTORTRIGGER "none" ID FillPointsTrigger AT (58 159 98 12) LEFTANCHOR
+    BUTTON "Done" ID FillDoneButton AT (4 172 32 12)
+    BUTTON "Cancel" ID FillCancelButton AT (40 172 38 12)
+    BUTTON "Note" ID FillNoteButton AT (82 172 32 12)
+    BUTTON "Delete" ID FillDeleteButton AT (118 172 38 12)
 END
 
 MENU ID MainMenuBar
@@ -318,15 +321,15 @@ BEGIN
     LABEL "Cap:" ID PgmCapLabel AT (36 147) FONT 0
     FIELD ID PgmMaxPerUnitField AT (58 147 30 12) UNDERLINED MAXCHARS 6 NUMERIC
     LABEL "c/unit, 0 none" ID PgmCapUnitLabel AT (90 147) FONT 0
-    LABEL "Expires:" AUTOID AT (19 160) FONT 0
+    LABEL "Expires:" ID PgmExpiresLabel AT (19 160) FONT 0
     POPUPTRIGGER "Never" ID PgmExpiryTrigger AT (58 160 70 12) LEFTANCHOR
     LIST "Never" "Month after" "After months" ID PgmExpiryList AT (58 160 70 33) NONUSABLE VISIBLEITEMS 3
     POPUPLIST ID PgmExpiryTrigger PgmExpiryList
     FIELD ID PgmMonthsField AT (132 160 20 12) UNDERLINED MAXCHARS 2 NUMERIC
-    LABEL "Opening:" AUTOID AT (13 173) FONT 0
+    LABEL "Opening:" ID PgmOpeningLabel AT (13 173) FONT 0
     FIELD ID PgmOpeningField AT (58 173 50 12) UNDERLINED MAXCHARS 10
     LABEL "pts" ID PgmOpeningUnitLabel AT (110 173) FONT 0
-    LABEL "Aliases:" AUTOID AT (19 186) FONT 0
+    LABEL "Aliases:" ID PgmAliasesLabel AT (19 186) FONT 0
     FIELD ID PgmAliasField AT (58 186 98 12) UNDERLINED MAXCHARS 63
     LABEL "                                        " ID PgmBalanceLabel AT (4 199) FONT 0
     BUTTON "Done" ID PgmDoneButton AT (4 212 36 12)
@@ -464,4 +467,17 @@ BEGIN
     TITLE "Check the odometer"
     MESSAGE "The trip meter reads ^1, but the odometer moved ^2 since the last fill. Did you mean ^3?"
     BUTTONS "Use it" "Edit" "Save anyway"
+END
+
+FORM ID StatsForm AT (0 0 160 160)
+NOFRAME
+USABLE
+BEGIN
+    TITLE "Stats"
+    POPUPTRIGGER "All vehicles" ID StatsVehicleTrigger AT (96 1 62 12) RIGHTANCHOR
+    LIST "All vehicles" ID StatsVehicleList AT (60 1 98 60) NONUSABLE VISIBLEITEMS 6
+    POPUPLIST ID StatsVehicleTrigger StatsVehicleList
+    BUTTON "Done" ID StatsDoneButton AT (4 146 36 12)
+    BUTTON "Reports" ID StatsReportsButton AT (46 146 44 12)
+    BUTTON "Graphs" ID StatsGraphsButton AT (96 146 40 12)
 END

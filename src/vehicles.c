@@ -304,7 +304,7 @@ static Boolean SaveVehicle(FormType *form)
     if (!name[0]) { FrmAlert(NeedNameAlert); return false; }
     StrNCopy(gVeh.name, name, vehNameLen - 1); gVeh.name[vehNameLen - 1] = 0;
     gVeh.powertrain = (UInt8)GetPopup(form, VehPowerList);
-    gVeh.odoUnit = FrmGetControlGroupSelection(form, 1) == VehMiButton ? vehOdoMiles : vehOdoKm;
+    gVeh.odoUnit = AppGroupSelection(form, 1) == VehMiButton ? vehOdoMiles : vehOdoKm;
     r = TextParseFixed(AppGetFieldText(form, VehStartField), 1, gPoint, gThousands, &v);
     if (r < 0) { FrmAlert(BadNumberAlert); return false; }
     gVeh.startOdo = r == 1 ? UnitDistFromDisplay(v, gVeh.odoUnit) : 0;

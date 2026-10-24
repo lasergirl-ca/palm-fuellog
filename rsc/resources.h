@@ -214,3 +214,16 @@
 #define RatesField0          2420
 #define RatesDoneButton      2402
 #define RatesCancelButton    2403
+
+#define StatsForm            2500
+#define StatsVehicleTrigger  2501
+#define StatsVehicleList     2502
+#define StatsDoneButton      2503
+#define StatsReportsButton   2504
+#define StatsGraphsButton    2505
+
+#define FillVolumeUnitTrigger 1332
+#define FillVolumeUnitList    1333
+#define PgmExpiresLabel      2037
+#define PgmOpeningLabel      2038
+#define PgmAliasesLabel      2039

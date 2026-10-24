@@ -30,6 +30,7 @@ static char *gGradePtrs[7];
 static UInt8 gGradeMap[7];   /* popup row -> grade value */
 static UInt16 gGradeRows;
 static Boolean gCharge;      /* the fill is a charging session */
+static UInt8 gEntryVol;      /* unit the volume and price are typed in: unitVol*, same index as unitPrice* */
 
 /* Points on this fill, edited in the Points dialog. An auto row's earned
  * value follows the volume and price; a typed one stays as typed. */
@@ -355,15 +356,16 @@ static void SetMode(FormType *form, Boolean charge)
         StrCopy(b, gPrefs.priceFormat == unitPriceFormatCents ? "Price c/kWh:" : "Price $/kWh:");
         AppSetLabel(form, FillPriceLabel, b);
         AppSetLabel(form, FillGradeLabel, "Where:");
-        CtlSetLabel(FrmGetObjectPtr(form, FrmGetObjectIndex(form, FillFullCheckbox)), "To full");
+        CtlSetLabel(FrmGetObjectPtr(form, FrmGetObjectIndex(form, FillFullCheckbox)), "Charged to full");
         /* Home charging is paid on the hydro bill; payment 0 means that for a charge. */
         CtlSetLabel(FrmGetObjectPtr(form, FrmGetObjectIndex(form, FillCashButton)), "Bill");
+        FrmHideObject(form, FrmGetObjectIndex(form, FillVolumeUnitTrigger));
     } else {
-        StrCopy(b, "Volume ("); StrCat(b, UnitVolLabel(gPrefs.volumeUnit)); StrCat(b, "):");
-        AppSetLabel(form, FillVolumeLabel, b);
+        AppSetLabel(form, FillVolumeLabel, "Volume:");
         StrCopy(b, gPrefs.priceFormat == unitPriceFormatCents ? "Price (c" : "Price ($");
-        StrCat(b, UnitPriceLabel(gPrefs.priceUnit)); StrCat(b, "):");
+        StrCat(b, UnitPriceLabel(gEntryVol)); StrCat(b, "):");
         AppSetLabel(form, FillPriceLabel, b);
+        FrmShowObject(form, FrmGetObjectIndex(form, FillVolumeUnitTrigger));
         AppSetLabel(form, FillGradeLabel, "Grade:");
         CtlSetLabel(FrmGetObjectPtr(form, FrmGetObjectIndex(form, FillFullCheckbox)), "Full tank");
         CtlSetLabel(FrmGetObjectPtr(form, FrmGetObjectIndex(form, FillCashButton)), "Cash");
@@ -421,8 +423,8 @@ static Int32 ReadVolume(FormType *form, UInt32 *ml)
         if (r == 1) *ml = v * 100;
         return r;
     }
-    r = TextParseFixed(AppGetFieldText(form, FillVolumeField), UnitVolDecimals(gPrefs.volumeUnit), gPoint, gThousands, &v);
-    if (r == 1) *ml = UnitVolFromDisplay(v, gPrefs.volumeUnit);
+    r = TextParseFixed(AppGetFieldText(form, FillVolumeField), UnitVolDecimals(gEntryVol), gPoint, gThousands, &v);
+    if (r == 1) *ml = UnitVolFromDisplay(v, gEntryVol);
     return r;
 }
 
@@ -430,7 +432,7 @@ static Int32 ReadPrice(FormType *form, UInt32 *price)
 {
     UInt32 v;
     Int32 r = TextParsePrice(AppGetFieldText(form, FillPriceField), gPrefs.priceFormat == unitPriceFormatCents, gPoint, gThousands, &v);
-    if (r == 1) *price = gCharge ? v : UnitPriceFromDisplay(v, gPrefs.priceUnit);
+    if (r == 1) *price = gCharge ? v : UnitPriceFromDisplay(v, gEntryVol);
     return r;
 }
 
@@ -443,12 +445,12 @@ static void ShowVolume(FormType *form, UInt32 ml)
 {
     char b[16];
     if (gCharge) TextFixed(b, (Int32)((ml + 50) / 100), 1, gPoint, 0);
-    else TextFixed(b, (Int32)UnitVolToDisplay(ml, gPrefs.volumeUnit), UnitVolDecimals(gPrefs.volumeUnit), gPoint, 0);
+    else TextFixed(b, (Int32)UnitVolToDisplay(ml, gEntryVol), UnitVolDecimals(gEntryVol), gPoint, 0);
     AppSetFieldText(form, FillVolumeField, b);
 }
 static void ShowPrice(FormType *form, UInt32 price)
 {
-    char b[16]; TextPrice(b, gCharge ? price : UnitPriceToDisplay(price, gPrefs.priceUnit), gPrefs.priceFormat == unitPriceFormatCents, gPoint);
+    char b[16]; TextPrice(b, gCharge ? price : UnitPriceToDisplay(price, gEntryVol), gPrefs.priceFormat == unitPriceFormatCents, gPoint);
     AppSetFieldText(form, FillPriceField, b);
 }
 static void ShowTotal(FormType *form, UInt32 cents)
@@ -526,6 +528,29 @@ static void AfterEdit(FormType *form, UInt16 fieldId)
     }
 }
 
+/* The unit to type a fill in: Prefs' unit, except that a USD fill on a
+ * litres setup is typed in US gallons, since that is what the pump says. */
+static UInt8 EntryUnitFor(UInt8 currency)
+{
+    return (currency == curUSD && gPrefs.volumeUnit == unitVolLitres) ? unitVolUSGal : gPrefs.volumeUnit;
+}
+
+/* Switch the typing unit, converting what is already typed. */
+static void SetEntryUnit(FormType *form, UInt8 unit)
+{
+    UInt32 ml = 0, price = 0;
+    Boolean hadVol = !gCharge && ReadVolume(form, &ml) == 1, hadPrice = !gCharge && ReadPrice(form, &price) == 1;
+    ListType *lst = FrmGetObjectPtr(form, FrmGetObjectIndex(form, FillVolumeUnitList));
+    gEntryVol = unit < 3 ? unit : unitVolLitres;
+    LstSetSelection(lst, gEntryVol);
+    CtlSetLabel(FrmGetObjectPtr(form, FrmGetObjectIndex(form, FillVolumeUnitTrigger)), LstGetSelectionText(lst, gEntryVol));
+    if (!gCharge) {
+        if (hadVol) ShowVolume(form, ml);
+        if (hadPrice) ShowPrice(form, price);
+        SetMode(form, false);   /* relabel the price */
+    }
+}
+
 static void Load(FormType *form)
 {
     char b[24];
@@ -562,6 +587,12 @@ static void Load(FormType *form)
         PointsAutoApply();
     }
     VehGet(gFill.vehicle, &gFillVeh);
+    gEntryVol = EntryUnitFor(gFill.currency);
+    {
+        ListType *lst = FrmGetObjectPtr(form, FrmGetObjectIndex(form, FillVolumeUnitList));
+        LstSetSelection(lst, gEntryVol);
+        CtlSetLabel(FrmGetObjectPtr(form, FrmGetObjectIndex(form, FillVolumeUnitTrigger)), LstGetSelectionText(lst, gEntryVol));
+    }
     {
         ListType *lst = FrmGetObjectPtr(form, FrmGetObjectIndex(form, FillVehicleList));
         Int16 sel;
@@ -664,7 +695,7 @@ static Boolean Save(FormType *form)
                  | (CtlGetValue(FrmGetObjectPtr(form, FrmGetObjectIndex(form, FillMissedCheckbox))) ? fillFlagMissedPrev : 0)
                  | (ht == 1 ? fillFlagTripEntered : 0)
                  | (IsChargeGrade(gFill.grade) ? fillFlagCharge : 0));
-    gFill.payment = FrmGetControlGroupSelection(form, 1) == FillCardButton ? fillPaymentCard : fillPaymentCash;
+    gFill.payment = AppGroupSelection(form, 1) == FillCardButton ? fillPaymentCard : fillPaymentCash;
     gFill.currency = (UInt8)LstGetSelection(FrmGetObjectPtr(form, FrmGetObjectIndex(form, FillCurrencyList)));
     gFill.discount = gDiscount;
     gFill.pointCount = 0;
@@ -692,16 +723,19 @@ Boolean FillFormHandleEvent(EventType *event)
     FormType *form = FrmGetActiveForm();
     static const UInt16 bottom[] = { FillDoneButton, FillCancelButton, FillNoteButton, FillDeleteButton };
     static const UInt16 pinned[] = { FillDoneButton, FillCancelButton, FillNoteButton, FillDeleteButton, FillVehicleTrigger, FillVehicleList };
+    static const UInt16 clamp[] = { FillMissedCheckbox, FillPointsLabel, FillPointsTrigger };   /* rows that can sit under the buttons */
 
     switch (event->eType) {
     case frmOpenEvent:
         AppScrollReset();
         AppFitForm(form, bottom, 4);
         Load(form);
+        AppShowByPosition(form, clamp, 3);
         FrmDrawForm(form);
         return true;
     case fldEnterEvent:
         AppScrollToField(form, event->data.fldEnter.fieldID, pinned, 6);
+        AppShowByPosition(form, clamp, 3);
         break;
     case frmUpdateEvent:
         FrmDrawForm(form);
@@ -709,6 +743,7 @@ Boolean FillFormHandleEvent(EventType *event)
     case winDisplayChangedEvent:
         if (gScrollYPublic()) AppScrollBy(form, gScrollYPublic(), pinned, 6);   /* back to the top before refitting */
         AppFitForm(form, bottom, 4);
+        AppShowByPosition(form, clamp, 3);
         WinEraseWindow();
         FrmDrawForm(form);
         return true;
@@ -720,7 +755,7 @@ Boolean FillFormHandleEvent(EventType *event)
         /* Let the field take the character first, then recompute from what
          * it now holds. This does not rely on fldChangedEvent arriving. */
         UInt16 focus;
-        if (AppScrollKey(form, event, pinned, 6)) return true;
+        if (AppScrollKey(form, event, pinned, 6)) { AppShowByPosition(form, clamp, 3); FrmDrawForm(form); return true; }
         focus = FrmGetFocus(form);
         if (focus != noFocus) {
             UInt16 id = FrmGetObjectId(form, focus);
@@ -765,6 +800,12 @@ Boolean FillFormHandleEvent(EventType *event)
             gFill.currency = (UInt8)event->data.popSelect.selection;
             gFill.fxRate = CurrencyDefaultRate(gFill.currency, gPrefs.homeCurrency, gPrefs.fxRate);
             ShowRate(form);
+            if (EntryUnitFor(gFill.currency) != gEntryVol) { SetEntryUnit(form, EntryUnitFor(gFill.currency)); Recompute(form); }
+        }
+        if (event->data.popSelect.listID == FillVolumeUnitList) {
+            SetEntryUnit(form, (UInt8)event->data.popSelect.selection);
+            Recompute(form);
+            return true;
         }
         if (event->data.popSelect.listID == FillGradeList) {
             UInt8 g = gGradeMap[event->data.popSelect.selection];

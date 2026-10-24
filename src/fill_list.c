@@ -280,6 +280,8 @@ Boolean FillListHandleEvent(EventType *event)
             FrmGotoForm(FillForm);
             return true;
         case FillListStatsButton:
+            FrmGotoForm(StatsForm);
+            return true;
         case FillListServiceButton:
             FrmAlert(NotYetAlert);
             return true;

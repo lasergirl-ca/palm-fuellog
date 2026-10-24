@@ -329,6 +329,24 @@ static void ShowExpiryRows(FormType *form, UInt8 rule)
     ShowObj(form, PgmMonthsField, rule == pgmExpiryMonths);
 }
 
+/* The lower rows scroll under the pinned buttons when the input area is
+ * open: show only those inside the scrolling area. */
+/* Section placement: see sections.h. */
+static void ClampRows(FormType *form) FORMS_SEC;
+
+static void ClampRows(FormType *form)
+{
+    static UInt16 ids[12];
+    UInt16 n = 0;
+    UInt8 kind = (UInt8)GetPopup(form, PgmRedeemList), rule = (UInt8)GetPopup(form, PgmExpiryList);
+    if (kind == pgmRedeemPerVolume) { ids[n++] = PgmCapLabel; ids[n++] = PgmMaxPerUnitField; ids[n++] = PgmCapUnitLabel; }
+    ids[n++] = PgmExpiresLabel; ids[n++] = PgmExpiryTrigger;
+    if (rule == pgmExpiryMonths) ids[n++] = PgmMonthsField;
+    ids[n++] = PgmOpeningLabel; ids[n++] = PgmOpeningField; ids[n++] = PgmOpeningUnitLabel;
+    ids[n++] = PgmAliasesLabel; ids[n++] = PgmAliasField; ids[n++] = PgmBalanceLabel;
+    AppShowByPosition(form, ids, n);
+}
+
 /* Parse a whole number with an optional leading minus. 0 empty, 1 ok, -1 bad. */
 static Int32 ParseSigned(const char *t, UInt8 decimals, Int32 *out)
 {
@@ -416,7 +434,7 @@ static void LoadProgramme(FormType *form)
 static Boolean SaveProgramme(FormType *form)
 {
     const char *name = AppGetFieldText(form, PgmNameField);
-    Boolean money = FrmGetControlGroupSelection(form, 1) == PgmMoneyButton;
+    Boolean money = AppGroupSelection(form, 1) == PgmMoneyButton;
     UInt32 v, n;
     Int32 r, s;
     Err err;
@@ -475,17 +493,18 @@ Boolean EditProgrammeFormHandleEvent(EventType *event)
         AppScrollReset();
         AppFitForm(form, bottom, 3);
         LoadProgramme(form);
+        ClampRows(form);
         FrmDrawForm(form);
         return true;
     case frmUpdateEvent: FrmDrawForm(form); return true;
-    case fldEnterEvent: AppScrollToField(form, event->data.fldEnter.fieldID, bottom, 3); break;
-    case keyDownEvent: if (AppScrollKey(form, event, bottom, 3)) return true; break;
+    case fldEnterEvent: AppScrollToField(form, event->data.fldEnter.fieldID, bottom, 3); ClampRows(form); break;
+    case keyDownEvent: if (AppScrollKey(form, event, bottom, 3)) { ClampRows(form); FrmDrawForm(form); return true; } break;
     case winDisplayChangedEvent:
         if (gScrollYPublic()) AppScrollBy(form, gScrollYPublic(), bottom, 3);
-        AppFitForm(form, bottom, 3); WinEraseWindow(); FrmDrawForm(form); return true;
+        AppFitForm(form, bottom, 3); ClampRows(form); WinEraseWindow(); FrmDrawForm(form); return true;
     case popSelectEvent:
-        if (event->data.popSelect.listID == PgmRedeemList) ShowRedeemRows(form, (UInt8)event->data.popSelect.selection);
-        if (event->data.popSelect.listID == PgmExpiryList) ShowExpiryRows(form, (UInt8)event->data.popSelect.selection);
+        if (event->data.popSelect.listID == PgmRedeemList) { ShowRedeemRows(form, (UInt8)event->data.popSelect.selection); ClampRows(form); }
+        if (event->data.popSelect.listID == PgmExpiryList) { ShowExpiryRows(form, (UInt8)event->data.popSelect.selection); ClampRows(form); }
         break;
     case ctlSelectEvent:
         switch (event->data.ctlSelect.controlID) {

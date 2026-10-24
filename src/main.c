@@ -21,6 +21,7 @@
 #include "prefs_form.h"
 #include "programmes.h"
 #include "setup.h"
+#include "stats_form.h"
 
 #define kMinRomVersion sysMakeROMVersion(3, 0, 0, sysROMStageRelease, 0)
 
@@ -246,6 +247,10 @@ static Boolean AppHandleEvent(EventType *event)
             break;
         case RatesForm:
             FrmSetEventHandler(form, RatesFormHandleEvent);
+            AppSetupDIA(form);
+            break;
+        case StatsForm:
+            FrmSetEventHandler(form, StatsFormHandleEvent);
             AppSetupDIA(form);
             break;
         case DiagForm:

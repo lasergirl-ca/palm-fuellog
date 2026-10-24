@@ -168,6 +168,26 @@ void AppFitForm(FormType *form, const UInt16 *bottomIds, UInt16 n)
     }
 }
 
+UInt16 AppGroupSelection(FormType *form, UInt8 group)
+{
+    UInt16 idx = FrmGetControlGroupSelection(form, group);
+    return idx == frmNoSelectedControl ? 0 : FrmGetObjectId(form, idx);
+}
+
+void AppShowByPosition(FormType *form, const UInt16 *ids, UInt16 n)
+{
+    Coord top = 15, bottom = (Coord)(AppFormHeight(form) - 16);
+    UInt16 i;
+    for (i = 0; i < n; i++) {
+        UInt16 idx = FrmGetObjectIndex(form, ids[i]);
+        RectangleType r;
+        if (idx == frmInvalidObjectId) continue;
+        FrmGetObjectBounds(form, idx, &r);
+        if (r.topLeft.y >= top && r.topLeft.y + r.extent.y <= bottom) FrmShowObject(form, idx);
+        else FrmHideObject(form, idx);
+    }
+}
+
 Coord AppFormHeight(FormType *form)
 {
     RectangleType b;

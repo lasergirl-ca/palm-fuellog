@@ -38,7 +38,7 @@ static void SavePrefs(FormType *form)
     gPrefs.volumeUnit = (UInt8)GetPopup(form, PrefsVolList);
     gPrefs.economyUnit = (UInt8)GetPopup(form, PrefsEcoList);
     gPrefs.priceUnit = (UInt8)GetPopup(form, PrefsPriceList);
-    gPrefs.priceFormat = FrmGetControlGroupSelection(form, 1) == PrefsCentsButton ? unitPriceFormatCents : unitPriceFormatDollars;
+    gPrefs.priceFormat = AppGroupSelection(form, 1) == PrefsCentsButton ? unitPriceFormatCents : unitPriceFormatDollars;
     gPrefs.homeCurrency = (UInt8)GetPopup(form, PrefsHomeList);
     sel = GetPopup(form, PrefsNewList);
     gPrefs.defaultCurrency = sel == 0 ? curLastUsed : (UInt8)(sel - 1);

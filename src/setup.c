@@ -100,7 +100,7 @@ static Boolean SaveFirstVehicle(FormType *form)
     if (v.id == 0) { FrmAlert(TooManyVehiclesAlert); return false; }
     StrNCopy(v.name, name, vehNameLen - 1); v.name[vehNameLen - 1] = 0;
     v.powertrain = (UInt8)LstGetSelection(FrmGetObjectPtr(form, FrmGetObjectIndex(form, WelcomePowerList)));
-    v.odoUnit = FrmGetControlGroupSelection(form, 1) == WelcomeMiButton ? vehOdoMiles : vehOdoKm;
+    v.odoUnit = AppGroupSelection(form, 1) == WelcomeMiButton ? vehOdoMiles : vehOdoKm;
     r = TextParseFixed(AppGetFieldText(form, WelcomeOdoField), 1, gPoint, gThousands, &odo);
     if (r < 0) { FrmAlert(BadNumberAlert); return false; }
     v.startOdo = r == 1 ? UnitDistFromDisplay(odo, v.odoUnit) : 0;
