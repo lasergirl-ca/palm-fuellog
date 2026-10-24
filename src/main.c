@@ -361,6 +361,19 @@ static void RestoreAlarmAfterReset(void)
  * globals: a records bundle goes into the inbox database for the next
  * launch (or right away when the app is running); a file envelope is
  * written to the card. */
+/* ExgReceive may return short: read until the count, 0 or an error. */
+static UInt32 ReceiveAll(ExgSocketType *sock, void *buf, UInt32 want, Err *err)
+{
+    UInt32 total = 0;
+    *err = errNone;
+    while (total < want) {
+        UInt32 got = ExgReceive(sock, (UInt8 *)buf + total, want - total, err);
+        if (*err || got == 0) break;
+        total += got;
+    }
+    return total;
+}
+
 static void ReceiveBeam(ExgSocketType *sock, Boolean running)
 {
     UInt8 head[10], chunk[1024];
@@ -368,19 +381,22 @@ static void ReceiveBeam(ExgSocketType *sock, Boolean running)
     Err err;
     UInt16 kind;
     if (ExgAccept(sock) != errNone) return;
-    got = ExgReceive(sock, head, 8, &err);
+    got = ReceiveAll(sock, head, 8, &err);
     if (err || got < 8 || head[0] != 'F' || head[1] != 'U' || head[2] != 'E' || head[3] != 'L') { ExgDisconnect(sock, err ? err : exgErrBadData); return; }
     kind = (UInt16)((head[6] << 8) | head[7]);
     if (kind == beamKindFile) {
         UInt8 nameLen, fmt; char name[48], path[96]; UInt16 vol; FileRef f = 0;
         UInt32 iter = vfsIteratorStart;
-        got = ExgReceive(sock, head, 2, &err);
+        got = ReceiveAll(sock, head, 2, &err);
         if (err || got < 2) { ExgDisconnect(sock, exgErrBadData); return; }
         nameLen = head[0]; fmt = head[1];
         if (nameLen > 40) nameLen = 40;
-        got = ExgReceive(sock, name, nameLen, &err);
+        got = ReceiveAll(sock, name, nameLen, &err);
         name[got] = 0;
         if (VFSVolumeEnumerate(&vol, &iter) != errNone) { ExgDisconnect(sock, vfsErrVolumeBadRef); return; }
+        /* the folders may not exist on a Palm that has never exported (traps only here) */
+        VFSDirCreate(vol, "/PALM"); VFSDirCreate(vol, "/PALM/Programs"); VFSDirCreate(vol, "/PALM/Programs/FuelLog");
+        VFSDirCreate(vol, "/PALM/Programs/FuelLog/Export"); VFSDirCreate(vol, "/PALM/Programs/FuelLog/Import");
         StrCopy(path, fmt == 2 ? "/PALM/Programs/FuelLog/Export/" : "/PALM/Programs/FuelLog/Import/");
         StrCat(path, name);
         VFSFileDelete(vol, path);
@@ -417,14 +433,21 @@ static void ReceiveBeam(ExgSocketType *sock, Boolean running)
             if (!id) { DmCreateDatabase(0, beamInboxName, 'ZFlg', 'Inbx', false); id = DmFindDatabase(0, beamInboxName); }
             inbox = id ? DmOpenDatabase(0, id, dmModeReadWrite) : 0;
             if (inbox) {
-                UInt16 at = dmMaxRecordIndex;
-                MemHandle rec = DmNewRecord(inbox, &at, total);
-                if (rec) {
-                    p = MemHandleLock(h);
-                    DmWrite(MemHandleLock(rec), 0, p, total);
-                    MemHandleUnlock(rec); MemHandleUnlock(h);
+                /* Records are capped near 64 KB: store the bundle as pieces of at most
+                 * 32 KB, in order; the first piece carries the header. */
+                UInt32 done = 0;
+                p = MemHandleLock(h);
+                while (done < total) {
+                    UInt16 at = dmMaxRecordIndex;
+                    UInt32 piece = total - done > 32768UL ? 32768UL : total - done;
+                    MemHandle rec = DmNewRecord(inbox, &at, piece);
+                    if (!rec) break;
+                    DmWrite(MemHandleLock(rec), 0, p + done, piece);
+                    MemHandleUnlock(rec);
                     DmReleaseRecord(inbox, at, true);
+                    done += piece;
                 }
+                MemHandleUnlock(h);
                 DmCloseDatabase(inbox);
             }
         }

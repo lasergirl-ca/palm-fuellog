@@ -128,14 +128,14 @@ UInt16 CardList(UInt16 vol, const char *dir, Boolean folders, char names[][cardN
     FileRef d;
     UInt32 iter = vfsIteratorStart;
     FileInfoType info;
-    char name[cardNameLen];
+    char name[256];
     UInt16 n = 0, i, j;
     if (VFSFileOpen(vol, dir, vfsModeRead, &d) != errNone) return 0;
-    info.nameP = name; info.nameBufLen = cardNameLen;
+    info.nameP = name; info.nameBufLen = sizeof name;
     while (iter != vfsIteratorStop && n < max) {
         if (VFSDirEntryEnumerate(d, &iter, &info) != errNone) break;
         if (((info.attributes & vfsFileAttrDirectory) != 0) != folders) continue;
-        if (name[0] == '.') continue;
+        if (name[0] == '.' || StrLen(name) >= cardNameLen) continue;   /* long names cannot be listed; skip them */
         /* insertion sort, descending, so dated names come newest first */
         for (i = n; i > 0 && StrCompare(names[i - 1], name) < 0; i--) StrCopy(names[i], names[i - 1]);
         StrCopy(names[i], name);
@@ -149,15 +149,16 @@ UInt16 CardList(UInt16 vol, const char *dir, Boolean folders, char names[][cardN
 Err CardDeleteFolder(UInt16 vol, const char *dir)
 {
     static char names[8][cardNameLen];
-    char path[80];
-    UInt16 n, i;
+    char path[128];
+    UInt16 n, i, deleted;
     do {
         n = CardList(vol, dir, false, names, 8);
+        deleted = 0;
         for (i = 0; i < n; i++) {
             StrCopy(path, dir); StrCat(path, "/"); StrCat(path, names[i]);
-            VFSFileDelete(vol, path);
+            if (VFSFileDelete(vol, path) == errNone) deleted++;
         }
-    } while (n == 8);
+    } while (n == 8 && deleted);   /* stop when nothing more can go (a locked card) */
     return VFSFileDelete(vol, dir);
 }
 

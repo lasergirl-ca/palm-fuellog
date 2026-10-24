@@ -857,3 +857,11 @@ BEGIN
     MESSAGE "^1 could not be sent (error ^2)."
     BUTTONS "OK"
 END
+
+ALERT ID ReceivedDoneAlert
+INFORMATION
+BEGIN
+    TITLE "Received"
+    MESSAGE "^1 records added from the other Palm."
+    BUTTONS "OK"
+END

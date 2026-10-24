@@ -373,3 +373,5 @@
 #define ReceivedFileAlert    1530
 #define BeamDoneAlert        1531
 #define BeamFailedAlert      1532
+
+#define ReceivedDoneAlert    1533

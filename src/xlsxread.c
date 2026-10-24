@@ -291,10 +291,11 @@ static void SerialToText(XlsxReader *r, const char *v, UInt8 asTime, char *out, 
 {
     UInt32 whole = 0, frac = 0, scale = 1;
     UInt8 inFrac = 0;
+    const char *start = v;
     for (; *v; v++) {
         if (*v >= '0' && *v <= '9') { if (!inFrac) whole = whole * 10 + (UInt32)(*v - '0'); else if (scale < 100000UL) { frac = frac * 10 + (UInt32)(*v - '0'); scale *= 10; } }
         else if (*v == '.') inFrac = 1;
-        else { Cp(out, v, cap); return; }   /* not a plain number: leave it */
+        else { Cp(out, start, cap); return; }   /* not a plain number: leave it whole */
     }
     if (asTime) {
         UInt32 mins = (frac * 1440UL + scale / 2) / scale;
@@ -338,8 +339,8 @@ Int32 XlsxrNextRow(XlsxReader *r, char *fields[], Int16 maxFields, char *buf, UI
         if (!inRow) continue;
         if (StrEq(name, "c")) {
             if (end) { haveCell = 0; continue; }
-            Attr(attrs, "r", val, sizeof val);
-            col = ColumnIndex(val);
+            if (Attr(attrs, "r", val, sizeof val)) col = ColumnIndex(val);
+            else col = (Int16)(col + 1);                 /* no reference: the next column */
             cellType[0] = 0; Attr(attrs, "t", cellType, sizeof cellType);
             haveCell = !sc; numeric = cellType[0] == 0 || StrEq(cellType, "n");
             text[0] = 0;

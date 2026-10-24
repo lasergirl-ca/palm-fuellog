@@ -33,7 +33,7 @@ static UInt8 gXPgmIds[16];
 static char gXPgmNames[16][pgmNameLen];
 static UInt8 gXPgmCount;
 
-static const char *const kGrade[7] = { "Regular", "Mid", "Premium", "Diesel", "Home AC", "Public AC", "DC fast" };
+static const char *kGrade[7] = {   /* non-const array: a const table in a sectioned file breaks on the device */ "Regular", "Mid", "Premium", "Diesel", "Home AC", "Public AC", "DC fast" };
 
 /* Section placement: see sections.h. */
 static UInt8 CurrencyStyle(UInt8 currency) XP_SEC;
@@ -70,7 +70,7 @@ static void FillsSheet(UInt8 vehicle, UInt16 year)
 {
     UInt16 n = DbCount(dbFills), i;
     UInt8 k, lastVeh = 255;
-    char b[32];
+    char b[40];
     XlsxSheetBegin(&gXw, 1);
     XlsxRowBegin(&gXw);
     XlsxCellText(&gXw, "Date", xlsxStyleBold); XlsxCellText(&gXw, "Time", xlsxStyleBold); XlsxCellText(&gXw, "Vehicle", xlsxStyleBold);
@@ -140,7 +140,8 @@ static void MonthlySheet(UInt8 vehicle, UInt16 year)
         lastY = y;
     }
     gXReport = MemPtrNew(sizeof(Report));
-    for (y = firstY; y && y <= lastY && gXReport; y++) {
+    if (!gXReport) { gXw.out->err = -1; XlsxSheetEnd(&gXw); return; }
+    for (y = firstY; y && y <= lastY; y++) {
         UInt8 r;
         ReportBegin(gXReport, rptMonthly, y);
         for (i = 0; i < n; i++) {
@@ -392,7 +393,7 @@ void ExportPdfTo(OutStream *out, UInt8 vehicle, UInt16 year)
         }
         ty = kPdfTop - 20 - kPdfRowH * (rows + 1) - 12;
         if (gXFill.vehicle != lastVeh) { VehGet(gXFill.vehicle, &gXVeh); lastVeh = gXFill.vehicle; }
-        DateShortText(b, gXFill.date); if (vehicle == 255) { StrCat(b, " "); StrNCat(b, gXVeh.name, 8); }
+        DateShortText(b, gXFill.date); if (vehicle == 255) { UInt16 l = StrLen(b); b[l] = ' '; StrNCopy(b + l + 1, gXVeh.name, 8); b[l + 9] = 0; }
         PdfText(&gPw, pdfFontRegular, 10, cols[0] + 4, ty, b);
         TextFixed(b, (Int32)(UnitDistToDisplay(gXFill.odometer, gPrefs.distanceUnit) / 10), 0, gPoint, gThousands); PdfText(&gPw, pdfFontRegular, 10, cols[1] + 4, ty, b);
         if (gXFill.trip) { TextFixed(b, (Int32)UnitDistToDisplay(gXFill.trip, gPrefs.distanceUnit), 1, gPoint, 0); PdfText(&gPw, pdfFontRegular, 10, cols[2] + 4, ty, b); }

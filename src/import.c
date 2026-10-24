@@ -119,6 +119,8 @@ static char gLastVehName[impMaxNewVeh + 12][24];   /* vehicles seen in the file,
 static UInt32 gLastOdo[impMaxNewVeh + 12];
 static UInt32 gLastLine[impMaxNewVeh + 12];
 static UInt8 gSeenCount;
+static char gSeenNew[12][24];            /* unknown vehicle names beyond the four listed */
+static UInt8 gSeenNewCount;
 
 /* Section placement: see sections.h. */
 static Int16 Getc(void *ctx) IO_SEC;
@@ -173,7 +175,7 @@ static void AddError(UInt32 line, const char *why)
     if (gImport.errors > impMaxErrors) return;
     b = gImport.errorLines[gImport.errors - 1];
     StrCopy(b, "Line "); StrIToA(b + 5, (Int32)line); StrCat(b, ": ");
-    StrNCat(b, why, 43 - StrLen(b));
+    StrNCat(b, why, 43);   /* StrNCat takes the final length */
 }
 
 static Boolean IsDuplicate(const FillRecord *f)
@@ -195,10 +197,16 @@ static UInt8 ResolveVehicle(const char *name, Boolean write)
     if (!name[0]) return VehDefaultForNewFill();
     i = VehIndexByName(name);
     if (i >= 0 && DbGetVehicle((UInt16)i, &gImpVeh) == errNone) return gImpVeh.id;
+    /* count each unknown name once: the first four are listed, the rest remembered in gLastVehName */
     for (k = 0; k < gImport.newVehicles && k < impMaxNewVeh; k++) if (NameEq(gImport.newVehicleNames[k], name)) break;
     if (k == gImport.newVehicles || k >= impMaxNewVeh) {
-        if (gImport.newVehicles < impMaxNewVeh) StrCopy(gImport.newVehicleNames[gImport.newVehicles], name);
-        gImport.newVehicles++;
+        Boolean seen = false;
+        if (k >= impMaxNewVeh) { UInt8 j; for (j = 0; j < gSeenNewCount; j++) if (NameEq(gSeenNew[j], name)) seen = true; }
+        if (!seen) {
+            if (gImport.newVehicles < impMaxNewVeh) StrCopy(gImport.newVehicleNames[gImport.newVehicles], name);
+            else if (gSeenNewCount < 12) StrCopy(gSeenNew[gSeenNewCount++], name);
+            gImport.newVehicles++;
+        }
     }
     if (!write) return 0;
     {
@@ -259,7 +267,7 @@ static Err Pass(UInt16 vol, Boolean write)
     if (!gRecord) return memErrNotEnoughSpace;
     err = SrcOpen(vol, path);
     if (err) { MemPtrFree(gRecord); gRecord = NULL; return err; }
-    gSeenCount = 0;
+    gSeenCount = 0; gSeenNewCount = 0;
     /* header */
     do { len = SrcNext(&line); n = (Int16)len; } while (len == 0);
     if (len < 0) { SrcClose(); MemPtrFree(gRecord); gRecord = NULL; gImport.badHeader = 1; return errNone; }
@@ -409,11 +417,11 @@ static void DrawImport(void)
         if (gImport.errors) { StrIToA(b, (Int32)gImport.errors); StrCat(b, gImport.errors == 1 ? " row has an error (below)" : " rows have errors (below)"); Line(b, &y, false); }
         if (gImport.newVehicles) {
             StrIToA(b, gImport.newVehicles); StrCat(b, gImport.newVehicles == 1 ? " new vehicle: " : " new vehicles: ");
-            for (i = 0; i < gImport.newVehicles && i < impMaxNewVeh; i++) { if (i) StrCat(b, ", "); StrNCat(b, gImport.newVehicleNames[i], 47 - StrLen(b)); }
+            for (i = 0; i < gImport.newVehicles && i < impMaxNewVeh; i++) { if (i) StrCat(b, ", "); StrNCat(b, gImport.newVehicleNames[i], 47); }
             Line(b, &y, false);
         }
         if (gImport.newProgrammes) { StrIToA(b, gImport.newProgrammes); StrCat(b, gImport.newProgrammes == 1 ? " new programme" : " new programmes"); Line(b, &y, false); }
-        if (gImport.kbPoints) { StrCopy(b, "KB Points column to "); StrNCat(b, gImport.kbTarget, 47 - StrLen(b)); Line(b, &y, false); }
+        if (gImport.kbPoints) { StrCopy(b, "KB Points column to "); StrNCat(b, gImport.kbTarget, 47); Line(b, &y, false); }
         if (gImport.errors) {
             y += 4; Line("Errors", &y, true);
             for (i = 0; i < gImport.errors && i < impMaxErrors; i++) Line(gImport.errorLines[i], &y, false);

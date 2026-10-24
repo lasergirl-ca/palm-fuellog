@@ -93,7 +93,20 @@ Err BeamSendLog(UInt8 vehicle)
     gEo.out.write = ExgWrite; gEo.out.ctx = &gEo; gEo.sock = &s;
     Header(&gEo.out, beamKindRecords);
     /* count first so the receiver can size its buffer */
-    for (db = 0; db < dbCount; db++) count += DbCount(db);
+    for (db = 0; db < dbCount; db++) {
+        n = DbCount(db);
+        for (i = 0; i < n; i++) {
+            UInt32 len;
+            if (DbGet(db, i, gBuf, sizeof gBuf, &len) != errNone) continue;
+            if (vehicle != 255) {
+                if (db == dbVehicles && gBuf[0] != vehicle) continue;
+                if (db == dbServiceTypes && gBuf[1] != vehicle) continue;
+                if (db == dbServiceVisits && gBuf[2] != vehicle) continue;
+                if (db == dbFills && gBuf[6] != vehicle) continue;
+            }
+            count++;
+        }
+    }
     { UInt8 c[2]; Put16(c, count); OutWrite(&gEo.out, c, 2); }
     for (db = dbVehicles; db <= dbServiceVisits && !gEo.err; db++) {
         n = DbCount(db);
@@ -254,7 +267,7 @@ static void ApplyRecord(UInt8 db, const UInt8 *packed, UInt32 len, Boolean merge
             UInt32 mask = 0; UInt8 b, v = gVehMap[gBVisit.vehicle & 15];
             if (!v) return;
             gBVisit.vehicle = v;
-            for (b = 0; b < 31; b++) if (gBVisit.services & (1UL << b)) mask |= 1UL << gTypeMap[v][b];
+            for (b = 0; b < 31; b++) if ((gBVisit.services & (1UL << b)) && gTypeMap[v][b] != 0xFF) mask |= 1UL << gTypeMap[v][b];
             gBVisit.services = mask | (gBVisit.services & svlOtherBit);
             if (VisitExists(&gBVisit)) return;
         }
@@ -267,7 +280,15 @@ static void ApplyRecord(UInt8 db, const UInt8 *packed, UInt32 len, Boolean merge
             UInt8 k, v = gVehMap[gBFill.vehicle & 15];
             if (!v) return;
             gBFill.vehicle = v;
-            for (k = 0; k < gBFill.pointCount; k++) gBFill.points[k].programme = gPgmMap[gBFill.points[k].programme & 15];
+            {
+                UInt8 kept = 0;
+                for (k = 0; k < gBFill.pointCount; k++) {
+                    UInt8 id = gPgmMap[gBFill.points[k].programme & 15];
+                    if (!id) continue;                     /* a programme the bundle did not carry */
+                    gBFill.points[kept] = gBFill.points[k]; gBFill.points[kept].programme = id; kept++;
+                }
+                gBFill.pointCount = kept;
+            }
             if (FillExists(&gBFill)) return;
         }
         if (DbAddFill(&gBFill, NULL) == errNone) (*added)++;
@@ -293,25 +314,48 @@ Boolean BeamProcessInbox(void)
     if (!inbox) return false;
     n = DmNumRecords(inbox);
     for (i = 0; i < n; i++) {
-        MemHandle h = DmQueryRecord(inbox, i);
+        /* A bundle is one or more consecutive pieces; join them into one heap block. */
+        MemHandle h;
+        UInt8 *whole;
         const UInt8 *p, *end;
-        UInt16 count, kind, choice;
+        UInt32 size = 0, done = 0;
+        UInt16 count, kind, choice, j, last = i;
         char what[40];
-        if (!h) continue;
-        p = MemHandleLock(h); end = p + MemHandleSize(h);
-        if (end - p < 10 || p[0] != 'F' || p[1] != 'U' || p[2] != 'E' || p[3] != 'L') { MemHandleUnlock(h); continue; }
-        if (Get16(p + 4) > recSchemaVersion) { MemHandleUnlock(h); FrmAlert(NewerBackupAlert); continue; }
+        for (j = i; j < n; j++) {
+            MemHandle piece = DmQueryRecord(inbox, j);
+            const UInt8 *q;
+            if (!piece) break;
+            q = MemHandleLock(piece);
+            if (j > i && MemHandleSize(piece) >= 4 && q[0] == 'F' && q[1] == 'U' && q[2] == 'E' && q[3] == 'L') { MemHandleUnlock(piece); break; }
+            size += MemHandleSize(piece);
+            MemHandleUnlock(piece);
+            last = j;
+        }
+        whole = MemPtrNew(size ? size : 1);
+        if (!whole) break;
+        for (j = i; j <= last; j++) {
+            MemHandle piece = DmQueryRecord(inbox, j);
+            if (!piece) continue;
+            MemMove(whole + done, MemHandleLock(piece), MemHandleSize(piece));
+            done += MemHandleSize(piece);
+            MemHandleUnlock(piece);
+        }
+        i = last;
+        h = NULL;
+        p = whole; end = whole + size;
+        if (end - p < 10 || p[0] != 'F' || p[1] != 'U' || p[2] != 'E' || p[3] != 'L') { MemPtrFree(whole); continue; }
+        if (Get16(p + 4) > recSchemaVersion) { MemPtrFree(whole); FrmAlert(NewerBackupAlert); continue; }
         kind = Get16(p + 6);
-        if (kind != beamKindRecords) { MemHandleUnlock(h); continue; }
+        if (kind != beamKindRecords) { MemPtrFree(whole); continue; }
         count = Get16(p + 8);
         StrIToA(what, count); StrCat(what, count == 1 ? " record" : " records");
         choice = FrmCustomAlert(ReceivedBundleAlert, what, "", "");
-        if (choice == 2) { MemHandleUnlock(h); continue; }
+        if (choice == 2) { MemPtrFree(whole); continue; }
         if (choice == 1) ClearLog();
         {
             Boolean merge = choice == 0;
             UInt8 k;
-            for (k = 0; k < 17; k++) { gVehMap[k] = merge ? 0 : k; gPgmMap[k] = merge ? 0 : k; MemSet(gTypeMap[k], 32, 0); }
+            for (k = 0; k < 17; k++) { gVehMap[k] = merge ? 0 : k; gPgmMap[k] = merge ? 0 : k; MemSet(gTypeMap[k], 32, 0xFF); }
             if (!merge) { UInt8 v, b; for (v = 0; v < 17; v++) for (b = 0; b < 32; b++) gTypeMap[v][b] = b; }
             p += 10;
             while (p + 3 <= end) {
@@ -322,7 +366,8 @@ Boolean BeamProcessInbox(void)
                 p += len;
             }
         }
-        MemHandleUnlock(h);
+        MemPtrFree(whole);
+        (void)h;
         changed = true;
     }
     DmCloseDatabase(inbox);
@@ -330,8 +375,7 @@ Boolean BeamProcessInbox(void)
     if (changed) {
         char a[12];
         StrIToA(a, added);
-        FrmCustomAlert(BeamDoneAlert, a[0] ? "Received data: records added" : "Received data", "", "");
-        (void)a;
+        FrmCustomAlert(ReceivedDoneAlert, a, "", "");
     }
     return changed;
 }
