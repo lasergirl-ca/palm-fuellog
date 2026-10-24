@@ -18,7 +18,7 @@ BUILD    := build
 SRCS := src/main.c src/hello2.c src/calc.c src/device.c src/graph.c src/vfstest.c src/sp6test.c \
         src/m1test.c src/db.c src/prefs.c src/records.c src/units.c src/currency.c \
         src/app.c src/fill_list.c src/fill_form.c src/text.c src/datecalc.c \
-        src/vehicles.c src/prefs_form.c src/programmes.c src/presets.c \
+        src/vehicles.c src/prefs_form.c src/programmes.c src/presets.c src/setup.c \
         src/outstream.c src/xlsx.c src/pdf.c src/crc32.c src/inflate.c src/zipread.c
 OBJS := $(patsubst src/%.c,$(BUILD)/%.o,$(SRCS))
 SECT := $(BUILD)/fuellog-sections

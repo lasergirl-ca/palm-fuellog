@@ -20,6 +20,7 @@
 #include "vehicles.h"
 #include "prefs_form.h"
 #include "programmes.h"
+#include "setup.h"
 
 #define kMinRomVersion sysMakeROMVersion(3, 0, 0, sysROMStageRelease, 0)
 
@@ -61,6 +62,11 @@ static void LayoutDiagForm(FormType *form)
     idx = FrmGetObjectIndex(form, MainM1Button);
     FrmGetObjectBounds(form, idx, &r);
     r.topLeft.y = h - r.extent.y - 3;
+    FrmSetObjectBounds(form, idx, &r);
+
+    idx = FrmGetObjectIndex(form, MainSetupButton);
+    FrmGetObjectBounds(form, idx, &r);
+    r.topLeft.y = h - r.extent.y - 19;
     FrmSetObjectBounds(form, idx, &r);
 
     gPlot.topLeft.x = 2;
@@ -151,6 +157,11 @@ static Boolean DiagFormHandleEvent(EventType *event)
             FrmGotoForm(ResultsForm);
             return true;
         }
+        if (event->data.ctlSelect.controlID == MainSetupButton) {
+            gSetupStep = 1;
+            FrmGotoForm(WelcomeForm);
+            return true;
+        }
         if (event->data.ctlSelect.controlID == MainM1Button) {
             gSp4Count = M1TestRun(gSp4Lines);
             FrmGotoForm(ResultsForm);
@@ -229,6 +240,14 @@ static Boolean AppHandleEvent(EventType *event)
             FrmSetEventHandler(form, EditProgrammeFormHandleEvent);
             AppSetupDIA(form);
             break;
+        case WelcomeForm:
+            FrmSetEventHandler(form, WelcomeFormHandleEvent);
+            AppSetupDIA(form);
+            break;
+        case RatesForm:
+            FrmSetEventHandler(form, RatesFormHandleEvent);
+            AppSetupDIA(form);
+            break;
         case DiagForm:
             FrmSetEventHandler(form, DiagFormHandleEvent);
             AppSetupDIA(form);
@@ -286,7 +305,9 @@ UInt32 PilotMain(UInt16 cmd, MemPtr cmdPBP, UInt16 launchFlags)
             return errNone;
         }
         PgmInstallPresets();
-        FrmGotoForm(FillListForm);
+        /* First launch: no vehicle yet means the Welcome steps, never an empty table. */
+        if (DbCount(dbVehicles) == 0) { gSetupStep = 1; FrmGotoForm(WelcomeForm); }
+        else FrmGotoForm(FillListForm);
         AppEventLoop();
         FrmCloseAllForms();
         PrefsSave(&gPrefs);

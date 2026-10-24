@@ -3,6 +3,7 @@
 #include "units.h"
 #include "currency.h"
 #include "resources.h"
+#include "setup.h"
 
 static void SetPopup(FormType *form, UInt16 triggerId, UInt16 listId, Int16 sel)
 {
@@ -49,18 +50,25 @@ static void SavePrefs(FormType *form)
 Boolean PrefsFormHandleEvent(EventType *event)
 {
     FormType *form = FrmGetActiveForm();
-    static const UInt16 bottom[] = { PrefsDoneButton, PrefsCancelButton };
+    static const UInt16 bottom[] = { PrefsDoneButton, PrefsCancelButton, PrefsRatesButton };
     switch (event->eType) {
     case frmOpenEvent:
-        AppFitForm(form, bottom, 2);
+        AppFitForm(form, bottom, 3);
+        if (gSetupStep == 2) FrmSetTitle(form, "Setup 2 of 3: units");
         LoadPrefs(form);
         FrmDrawForm(form);
         return true;
     case frmUpdateEvent: FrmDrawForm(form); return true;
-    case winDisplayChangedEvent: AppFitForm(form, bottom, 2); WinEraseWindow(); FrmDrawForm(form); return true;
+    case winDisplayChangedEvent: AppFitForm(form, bottom, 3); WinEraseWindow(); FrmDrawForm(form); return true;
     case ctlSelectEvent:
-        if (event->data.ctlSelect.controlID == PrefsDoneButton) { SavePrefs(form); FrmGotoForm(FillListForm); return true; }
-        if (event->data.ctlSelect.controlID == PrefsCancelButton) { FrmGotoForm(FillListForm); return true; }
+        if (event->data.ctlSelect.controlID == PrefsDoneButton) {
+            SavePrefs(form);
+            if (gSetupStep == 2) { gSetupStep = 3; FrmGotoForm(WelcomeForm); }
+            else FrmGotoForm(FillListForm);
+            return true;
+        }
+        if (event->data.ctlSelect.controlID == PrefsCancelButton) { gSetupStep = 0; FrmGotoForm(FillListForm); return true; }
+        if (event->data.ctlSelect.controlID == PrefsRatesButton) { SavePrefs(form); FrmGotoForm(RatesForm); return true; }
         break;
     default: break;
     }

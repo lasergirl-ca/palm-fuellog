@@ -162,7 +162,7 @@ static Boolean SaveProgramme(FormType *form) FORMS_SEC;
 static void RuleText(char *buf, const ProgrammeRecord *p)
 {
     char num[16];
-    static const char *const unit[] = { "", "L", "gal", "$" };
+    static const char *unit[] = { "", "L", "gal", "$" };
     if (p->earnBasis == pgmEarnNone || p->earnRate == 0) StrCopy(buf, "no earn rule");
     else {
         PgmRateText(num, p->earnRate);
@@ -229,7 +229,7 @@ static void DrawProgrammes(void)
 
 static void LayoutProgrammes(FormType *form)
 {
-    static const UInt16 bottom[] = { PgmsNewButton, PgmsDoneButton };
+    static UInt16 bottom[] = { PgmsNewButton, PgmsDoneButton };
     Coord w, h;
     AppFitForm(form, bottom, 2);
     WinGetDisplayExtent(&w, &h); h = AppFormHeight(form);
@@ -459,7 +459,7 @@ static Boolean SaveProgramme(FormType *form)
 Boolean EditProgrammeFormHandleEvent(EventType *event)
 {
     FormType *form = FrmGetActiveForm();
-    static const UInt16 bottom[] = { PgmDoneButton, PgmCancelButton, PgmArchiveButton };
+    static UInt16 bottom[] = { PgmDoneButton, PgmCancelButton, PgmArchiveButton };
     switch (event->eType) {
     case frmOpenEvent:
         AppScrollReset();

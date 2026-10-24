@@ -620,6 +620,23 @@ static Boolean Save(FormType *form)
         FrmAlert(BadNumberAlert);
         return false;
     }
+    if (ho == 1 && ht == 1 && gPrevOdo && odo > gPrevOdo) {
+        /* The trip meter and the odometer disagree: offer the corrected reading. */
+        UInt32 moved = odo - gPrevOdo, gap = moved > trip ? moved - trip : trip - moved;
+        UInt32 tol = moved / 50 > 50 ? moved / 50 : 50;
+        if (gap > tol) {
+            char tripTxt[20], movedTxt[20], useTxt[20];
+            UInt16 hit;
+            TextFixed(tripTxt, (Int32)UnitDistToDisplay(trip, gFillVeh.odoUnit), 1, gPoint, gThousands);
+            StrCat(tripTxt, " "); StrCat(tripTxt, UnitDistLabel(gFillVeh.odoUnit));
+            TextFixed(movedTxt, (Int32)UnitDistToDisplay(moved, gFillVeh.odoUnit), 1, gPoint, gThousands);
+            StrCat(movedTxt, " "); StrCat(movedTxt, UnitDistLabel(gFillVeh.odoUnit));
+            TextFixed(useTxt, (Int32)(UnitDistToDisplay(gPrevOdo + trip, gFillVeh.odoUnit) / 10), 0, gPoint, gThousands);
+            hit = FrmCustomAlert(OdometerAlert, tripTxt, movedTxt, useTxt);
+            if (hit == 0) odo = gPrevOdo + trip;
+            else if (hit == 1) return false;
+        }
+    }
     if (hv != 1 && hc != 1) { FrmAlert(NeedVolumeAlert); return false; }
     if (hv == 1 && hp == 1 && hc != 1) { UInt32 gross = CalcTotalCents(price, ml); cents = gross > gDiscount ? gross - gDiscount : 0; }
     if (gFill.currency != gPrefs.homeCurrency) {

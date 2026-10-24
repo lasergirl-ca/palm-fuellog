@@ -13,6 +13,7 @@ BEGIN
     BUTTON "SP4" ID MainSp4Button AT (4 144 28 12)
     BUTTON "SP6" ID MainSp6Button AT (36 144 28 12)
     BUTTON "M1" ID MainM1Button AT (68 144 24 12)
+    BUTTON "Setup" ID MainSetupButton AT (4 128 36 12)
 END
 
 FORM ID ResultsForm AT (0 0 160 160)
@@ -186,6 +187,7 @@ BEGIN
     POPUPLIST ID PrefsKeepTrigger PrefsKeepList
     BUTTON "Done" ID PrefsDoneButton AT (4 146 36 12)
     BUTTON "Cancel" ID PrefsCancelButton AT (46 146 40 12)
+    BUTTON "Rates..." ID PrefsRatesButton AT (92 146 44 12)
 END
 
 FORM ID VehiclesForm AT (0 0 160 160)
@@ -405,4 +407,61 @@ BEGIN
     TITLE "Name the programme"
     MESSAGE "Give the programme a name so it can be picked on a fill."
     BUTTONS "OK"
+END
+
+FORM ID WelcomeForm AT (0 0 160 160)
+NOFRAME
+USABLE
+BEGIN
+    TITLE "Welcome"
+    LABEL "Set up FuelLog" AUTOID AT (4 17) FONT 1
+    LABEL "                                    " ID WelcomeStepLabel AT (4 29) FONT 0
+    LABEL "Name:" ID WelcomeNameLabel AT (34 54) FONT 0
+    FIELD ID WelcomeNameField AT (62 54 94 12) UNDERLINED MAXCHARS 23
+    LABEL "Odometer:" ID WelcomeOdoLabel AT (16 67) FONT 0
+    FIELD ID WelcomeOdoField AT (62 67 50 12) UNDERLINED MAXCHARS 9 NUMERIC
+    LABEL "Odometer in:" ID WelcomeUnitLabel AT (6 80) FONT 0
+    PUSHBUTTON "km" ID WelcomeKmButton AT (62 80 24 12) GROUP 1
+    PUSHBUTTON "mi" ID WelcomeMiButton AT (PREVRIGHT 80 24 12) GROUP 1
+    LABEL "Powertrain:" ID WelcomePowerLabel AT (14 93) FONT 0
+    POPUPTRIGGER "Fuel" ID WelcomePowerTrigger AT (62 93 90 12) LEFTANCHOR
+    LIST "Fuel" "Hybrid" "Plug-in hybrid" "Electric" ID WelcomePowerList AT (62 93 90 44) NONUSABLE VISIBLEITEMS 4
+    POPUPLIST ID WelcomePowerTrigger WelcomePowerList
+    LABEL "Trip meter:" ID WelcomeTripLabel AT (16 106) FONT 0
+    POPUPTRIGGER "Reset each fill" ID WelcomeTripTrigger AT (62 106 90 12) LEFTANCHOR
+    LIST "Reset each fill" "Never reset" "Not used" ID WelcomeTripList AT (62 106 90 33) NONUSABLE VISIBLEITEMS 3
+    POPUPLIST ID WelcomeTripTrigger WelcomeTripList
+    LABEL "                                    " ID WelcomeNote1 AT (4 122) FONT 0
+    LABEL "                                    " ID WelcomeNote2 AT (4 132) FONT 0
+    BUTTON "Finish" ID WelcomeNextButton AT (4 146 36 12)
+    BUTTON "Skip" ID WelcomeSkipButton AT (46 146 36 12)
+END
+
+FORM ID RatesForm AT (0 0 160 160)
+NOFRAME
+USABLE
+BEGIN
+    TITLE "Exchange rates"
+    LABEL "                                    " ID RatesNoteLabel AT (4 17) FONT 0
+    LABEL "1 USD =  " ID 2410 AT (8 32) FONT 0
+    FIELD ID 2420 AT (52 32 50 12) UNDERLINED MAXCHARS 9 NUMERIC
+    LABEL "1 CAD =  " ID 2411 AT (8 45) FONT 0
+    FIELD ID 2421 AT (52 45 50 12) UNDERLINED MAXCHARS 9 NUMERIC
+    LABEL "1 EUR =  " ID 2412 AT (8 58) FONT 0
+    FIELD ID 2422 AT (52 58 50 12) UNDERLINED MAXCHARS 9 NUMERIC
+    LABEL "1 AUD =  " ID 2413 AT (8 71) FONT 0
+    FIELD ID 2423 AT (52 71 50 12) UNDERLINED MAXCHARS 9 NUMERIC
+    LABEL "A new fill starts with the rate here;" AUTOID AT (4 90) FONT 0
+    LABEL "the one typed on the fill is kept." AUTOID AT (4 100) FONT 0
+    BUTTON "Done" ID RatesDoneButton AT (4 146 36 12)
+    BUTTON "Cancel" ID RatesCancelButton AT (46 146 40 12)
+END
+
+ALERT ID OdometerAlert
+CONFIRMATION
+DEFAULTBUTTON 0
+BEGIN
+    TITLE "Check the odometer"
+    MESSAGE "The trip meter reads ^1, but the odometer moved ^2 since the last fill. Did you mean ^3?"
+    BUTTONS "Use it" "Edit" "Save anyway"
 END

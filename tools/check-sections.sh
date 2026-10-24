@@ -36,6 +36,16 @@ for obj in "$@"; do
     ' "$local" "$map" -)
     if [ -n "$out" ]; then echo "$out"; status=1; fi
 done
+# A `static const` table inside a sectioned function is emitted into that
+# code section but addressed A5-relative (END16), so it reads garbage on the
+# device (M2 lesson: vanished buttons, a fatal exception). Make such tables
+# plain `static` (they go to .data) or file-scope.
+for obj in "$@"; do
+    out=$(m68k-palmos-objdump -r "$obj" | awk -v obj="$obj" '
+        /END16/ && ($3 ~ /^(forms|sec2|xport|\.text)([+-]|$)/) {
+            print "check-sections: " obj " addresses " $3 " A5-relative at " $1 "; a static const table inside a sectioned function?" }')
+    if [ -n "$out" ]; then echo "$out"; status=1; fi
+done
 n=$(wc -l < "$map" | tr -d ' ')
 rm -f "$map" "$local"
 [ $status -eq 0 ] && echo "check-sections: ok ($n sectioned function(s))"

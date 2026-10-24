@@ -144,7 +144,7 @@ static void DrawVehicles(void)
             WinDrawChars(buf, StrLen(buf), 156 - FntCharsWidth(buf, StrLen(buf)), y);
         }
         {
-            static const char *const power[] = { "Fuel", "Hybrid", "Plug-in hybrid", "Electric" };
+            static const char *power[] = { "Fuel", "Hybrid", "Plug-in hybrid", "Electric" };
             StrCopy(buf, power[gScanVeh.powertrain < 4 ? gScanVeh.powertrain : 0]);
             StrCat(buf, gScanVeh.archived ? "; archived" : "");
             StrCat(buf, "; "); StrIToA(num, VehFillCount(gScanVeh.id)); StrCat(buf, num); StrCat(buf, " fills");
@@ -156,7 +156,7 @@ static void DrawVehicles(void)
 
 static void LayoutVehicles(FormType *form)
 {
-    static const UInt16 bottom[] = { VehiclesNewButton, VehiclesDoneButton, VehiclesArchivedCheckbox };
+    static UInt16 bottom[] = { VehiclesNewButton, VehiclesDoneButton, VehiclesArchivedCheckbox };
     Coord w, h;
     RectangleType r;
     UInt16 idx;
@@ -326,7 +326,7 @@ static Boolean SaveVehicle(FormType *form)
 Boolean EditVehicleFormHandleEvent(EventType *event)
 {
     FormType *form = FrmGetActiveForm();
-    static const UInt16 bottom[] = { VehDoneButton, VehCancelButton, VehDeleteButton, VehStatusLabel };
+    static UInt16 bottom[] = { VehDoneButton, VehCancelButton, VehDeleteButton, VehStatusLabel };
     switch (event->eType) {
     case frmOpenEvent:
         AppScrollReset();

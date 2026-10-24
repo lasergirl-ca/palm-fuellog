@@ -183,3 +183,34 @@
 #define TooManyProgrammesAlert 1509
 #define DeleteProgrammeAlert 1510
 #define NeedPgmNameAlert     1511
+
+#define MainSetupButton      1008
+#define PrefsRatesButton     1620
+#define OdometerAlert        1512
+
+#define WelcomeForm          2300
+#define WelcomeStepLabel     2301
+#define WelcomeNameLabel     2302
+#define WelcomeNameField     2303
+#define WelcomeOdoLabel      2304
+#define WelcomeOdoField      2305
+#define WelcomeUnitLabel     2306
+#define WelcomeKmButton      2307
+#define WelcomeMiButton      2308
+#define WelcomePowerLabel    2309
+#define WelcomePowerTrigger  2310
+#define WelcomePowerList     2311
+#define WelcomeTripLabel     2312
+#define WelcomeTripTrigger   2313
+#define WelcomeTripList      2314
+#define WelcomeNote1         2315
+#define WelcomeNote2         2316
+#define WelcomeNextButton    2317
+#define WelcomeSkipButton    2318
+
+#define RatesForm            2400
+#define RatesNoteLabel       2401
+#define RatesLabel0          2410   /* + currency */
+#define RatesField0          2420
+#define RatesDoneButton      2402
+#define RatesCancelButton    2403
