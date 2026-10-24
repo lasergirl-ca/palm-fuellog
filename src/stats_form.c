@@ -77,7 +77,7 @@ static void EcoText(char *b, UInt32 l100x10)
 
 static void DrawStats(void)
 {
-    char b[40], n1[20], n2[20];
+    char b[40], n1[24], n2[20];
     Coord y = (Coord)(17 - gStatsScroll), top = gStatsArea.topLeft.y;
     Boolean electricOnly = gStats.fuelCount == 0 && gStats.chargeCount > 0;
     const Stats *s = &gStats;
@@ -88,6 +88,7 @@ static void DrawStats(void)
     if (s->count == 0) {
         FntSetFont(stdFont);
         DrawLeft("No fills yet for this choice.", y + 20);
+        AppListScrollBar(FrmGetActiveForm(), StatsScrollBar, 0, 0, gStatsArea.extent.y, gStatsArea.topLeft.y, (Coord)(gStatsArea.topLeft.y + gStatsArea.extent.y));
         WinResetClip();
         gStatsHeight = 40;
         return;

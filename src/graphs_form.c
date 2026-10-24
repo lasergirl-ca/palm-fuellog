@@ -83,7 +83,7 @@ static void Collect(void)
         if (!all && gGrFill.vehicle != gPrefs.currentVehicle) continue;
         v = gGrFill.vehicle < statsMaxId ? gGrFill.vehicle : 0;
         c = (gGrFill.flags & fillFlagCharge) ? 1 : 0;
-        s = all ? SeriesFor(gGrFill.vehicle) : 0;
+        s = (all && gGrKind != grSpend) ? SeriesFor(gGrFill.vehicle) : 0;   /* spend pools the fleet */
         if (gGrKind == grSpend) {
             UInt16 y; UInt8 m, d; UInt16 idx;
             DateDaysToYmd(gGrFill.date, &y, &m, &d);
@@ -164,7 +164,7 @@ static void SeriesColour(UInt8 s)
 
 static void DrawGraph(void)
 {
-    char b[32];
+    char b[64];
     Coord s = DeviceHasHiRes() ? 2 : 1, y0, y1, x0, x1;
     UInt16 oldSys = 0, i;
     RectangleType r;

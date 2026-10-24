@@ -58,6 +58,9 @@ int main(void)
 
     check("167 days is 5.5 months", SvcMonthsX10(167), 55);
     check("365 days is 12.0 months", SvcMonthsX10(365), 120);
+    /* A crawl of a pace keeps the projected date in range instead of wrapping. */
+    SvcCompute(&oil, 1, last, 100000, 110000, today, 2, &d);
+    check("tiny pace: projected date clamped", d.distDue, today + 20000);
     check("fuel presets", SvcPresetCount(0), 9);
     check("electric presets", SvcPresetCount(3), 5);
     SvcPreset(0, 0, &oil);

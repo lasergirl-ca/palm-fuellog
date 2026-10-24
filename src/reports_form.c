@@ -77,7 +77,7 @@ static void RowText(const ReportRow *row, const char *label, Coord y, Boolean bo
 
 static void DrawReport(void)
 {
-    char b[40];
+    char b[56];
     Coord y = (Coord)(kRptTop - gRptScroll);
     UInt8 i, shown = 0;
 

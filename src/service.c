@@ -36,6 +36,7 @@ void SvcCompute(const ServiceTypeRecord *t, UInt8 haveLast, UInt16 lastDate, UIn
         d->kmLeftX10 = dueOdo >= odoNow ? (Int32)(dueOdo - odoNow) : -(Int32)(odoNow - dueOdo);
         if (paceX10) {
             UInt32 daysAhead = d->kmLeftX10 > 0 ? ((UInt32)d->kmLeftX10 + paceX10 / 2) / paceX10 : 0;
+            if (daysAhead > 20000) daysAhead = 20000;   /* a crawl of a pace: keep the date in range */
             d->distDue = (UInt16)(today + daysAhead);
         }
     }

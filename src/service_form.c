@@ -495,7 +495,7 @@ static void Summary(FormType *form)
     else b[0] = 0;
     AppSetLabel(form, SvtSummary2, b);
     if (d.hasDist) {
-        StrCopy(b, "Warning starts at "); DistText(n, odo + gSvt.intervalDist - gSvt.warnDist, gThousands); StrCat(b, n); StrCat(b, " "); StrCat(b, UnitDistLabel(gPrefs.distanceUnit));
+        { UInt32 dueOdo = odo + gSvt.intervalDist; StrCopy(b, "Warning starts at "); DistText(n, dueOdo > gSvt.warnDist ? dueOdo - gSvt.warnDist : 0, gThousands); } StrCat(b, n); StrCat(b, " "); StrCat(b, UnitDistLabel(gPrefs.distanceUnit));
     } else { StrCopy(b, "Warning starts "); StrIToA(n, gSvt.warnDays); StrCat(b, n); StrCat(b, " days ahead"); }
     AppSetLabel(form, SvtSummary3, b);
 }
@@ -542,6 +542,7 @@ static Boolean SaveSvt(FormType *form)
     gSvt.intervalDist = r == 1 ? UnitDistFromDisplay(v, gPrefs.distanceUnit) : 0;
     r = TextParseFixed(AppGetFieldText(form, SvtMonthsField), 0, gPoint, gThousands, &v);
     if (r < 0) { FrmAlert(BadNumberAlert); return false; }
+    if (r == 1 && v > 255) { FrmAlert(BadNumberAlert); return false; }
     gSvt.intervalMonths = (UInt8)(r == 1 ? v : 0);
     r = TextParseFixed(AppGetFieldText(form, SvtWarnDistField), 1, gPoint, gThousands, &v);
     if (r < 0) { FrmAlert(BadNumberAlert); return false; }
@@ -613,7 +614,7 @@ static char gSvlNames[kSvlChecks][svtNameLen];
 static UInt8 gSvlCount;
 static UInt16 gSvlDate;
 static char gSvlDateText[12];
-static UInt16 gSvlClamp[24];
+static UInt16 gSvlClamp[kSvlChecks + 13];
 static UInt16 gSvlClampCount;
 
 static void PlaceSvl(FormType *form)
@@ -627,7 +628,7 @@ static void PlaceSvl(FormType *form)
     for (i = 0; i < kSvlChecks; i++) {
         UInt16 idx = FrmGetObjectIndex(form, SvlCheck0 + i);
         if (i < gSvlCount) { FrmGetObjectPosition(form, idx, &x, &y); FrmSetObjectPosition(form, idx, x, (Coord)(56 + i * 12)); FrmShowObject(form, idx); gSvlClamp[gSvlClampCount++] = SvlCheck0 + i; }
-        else FrmHideObject(form, idx);
+        else { FrmGetObjectPosition(form, idx, &x, &y); FrmSetObjectPosition(form, idx, x, 56); FrmHideObject(form, idx); }   /* parked, so it adds no scroll room */
     }
     y = (Coord)(56 + gSvlCount * 12);
     {
@@ -646,7 +647,7 @@ static void PlaceSvl(FormType *form)
                 FrmSetObjectPosition(form, idx, ox, (Coord)(y + (rows[r][k] == SvlCurrencyTrigger ? 0 : 0)));
                 gSvlClamp[gSvlClampCount++] = rows[r][k];
             }
-            if (r == 1) { UInt16 li = FrmGetObjectIndex(form, SvlCurrencyList); FrmGetObjectPosition(form, li, &x, &y); FrmSetObjectPosition(form, li, x, (Coord)(y)); }
+            if (r == 1) { UInt16 li = FrmGetObjectIndex(form, SvlCurrencyList); Coord lx, ly; FrmGetObjectPosition(form, li, &lx, &ly); FrmSetObjectPosition(form, li, lx, y); }
         }
     }
     AppShowByPosition(form, gSvlClamp, gSvlClampCount);
@@ -662,7 +663,7 @@ static void NextLine(FormType *form)
     UInt8 i;
     UInt32 odo = 0;
     b[0] = 0;
-    if (TextParseFixed(AppGetFieldText(form, SvlOdoField), 1, gPoint, gThousands, &odo) == 1) odo = UnitDistFromDisplay(odo, gSvcVeh.odoUnit);
+    if (TextParseFixed(AppGetFieldText(form, SvlOdoField), 1, gPoint, gThousands, &odo) == 1) odo = UnitDistFromDisplay(odo, gPrefs.distanceUnit);   /* DistText shows it in this unit */
     for (i = 0; i < gSvlCount; i++) {
         if (!CtlGetValue(FrmGetObjectPtr(form, FrmGetObjectIndex(form, SvlCheck0 + i)))) continue;
         if (SvtGetAt(gSvlTypeIndex[i], &gScanSvt) != errNone || (gScanSvt.intervalDist == 0 && gScanSvt.intervalMonths == 0)) continue;
@@ -741,8 +742,10 @@ static Boolean SaveSvl(FormType *form)
     Boolean other = CtlGetValue(FrmGetObjectPtr(form, FrmGetObjectIndex(form, SvlOtherCheckbox))) != 0;
     r = TextParseFixed(AppGetFieldText(form, SvlOdoField), 1, gPoint, gThousands, &odo);
     if (r < 0) { FrmAlert(BadNumberAlert); return false; }
-    gSvl.odometer = r == 1 ? UnitDistFromDisplay(odo, gSvcVeh.odoUnit) : 0;
-    gSvl.services = 0;
+    gSvl.odometer = r == 1 ? UnitDistFromDisplay(odo, gPrefs.distanceUnit) : 0;
+    /* Clear only the bits this form showed: archived or overflow types stay as they were. */
+    for (i = 0; i < gSvlCount; i++) gSvl.services &= ~(1UL << gSvlTypeId[i]);
+    gSvl.services &= ~svlOtherBit;
     for (i = 0; i < gSvlCount; i++)
         if (CtlGetValue(FrmGetObjectPtr(form, FrmGetObjectIndex(form, SvlCheck0 + i)))) gSvl.services |= 1UL << gSvlTypeId[i];
     StrNCopy(gSvl.other, AppGetFieldText(form, SvlOtherField), svlOtherLen - 1); gSvl.other[svlOtherLen - 1] = 0;
@@ -757,7 +760,7 @@ static Boolean SaveSvl(FormType *form)
     gSvl.payment = AppGroupSelection(form, 1) == SvlCardButton ? fillPaymentCard : fillPaymentCash;
     StrNCopy(gSvl.shop, AppGetFieldText(form, SvlShopField), svlShopLen - 1); gSvl.shop[svlShopLen - 1] = 0;
     StrNCopy(gSvl.detail, AppGetFieldText(form, SvlDetailField), svlDetailLen - 1); gSvl.detail[svlDetailLen - 1] = 0;
-    if (gEditSvlIndex != dmMaxRecordIndex) DbRemove(dbServiceVisits, gEditSvlIndex);
+    if (gEditSvlIndex != dmMaxRecordIndex) { DbRemove(dbServiceVisits, gEditSvlIndex); gEditSvlIndex = dmMaxRecordIndex; }
     if (DbAdd(dbServiceVisits, gSvcPacked, ServiceVisitPack(&gSvl, gSvcPacked), NULL)) { FrmAlert(SaveFailedAlert); return false; }
     gPrefs.lastPayment = gSvl.payment;
     PrefsSave(&gPrefs);
