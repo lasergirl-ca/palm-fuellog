@@ -27,6 +27,8 @@ void CsvFillRow(OutStream *out, const CsvCtx *c, const FillRecord *f, const char
 /* One quoted, transcoded text field (no leading comma). */
 void CsvText(OutStream *out, const char *palmText) IO_SEC;
 
+UInt8 CsvUnicodeToPalm(UInt16 unicode) IO_SEC;   /* Windows-1252 and Latin-1 fold; else '?' */
+
 /* Reading. A byte source: returns 0..255, or -1 at the end. */
 typedef Int16 (*CsvGetcFn)(void *ctx);
 /* Reads one record (quoted newlines kept) into buf, UTF-8 converted to Palm

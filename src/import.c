@@ -1,5 +1,6 @@
 #include "import.h"
 #include "csv.h"
+#include "xlsxread.h"
 #include "units.h"
 #include "app.h"
 #include "db.h"
@@ -10,8 +11,104 @@
 
 ImportSummary gImport;
 static CardIn gIn;
+static Int16 Getc(void *ctx) { return CardInGetc((CardIn *)ctx); }
 static char *gRecord;                     /* csvMaxRecord bytes, heap during a pass */
 static char *gFields[csvMaxFields];
+
+/* ---- the row source: a CSV through the card reader, or an XLSX through the reader
+ * with its parts inflated to temporary files in Import/ ---- */
+static Boolean gIsXlsx;
+static XlsxReader gXr;
+static FileRef gXlsxFile, gTmpW, gTmpR[3];
+static UInt16 gSrcVol;
+/* Section placement: see sections.h. */
+static const char *TmpPath(UInt8 which) IO_SEC;
+static Int32 XrReadAt(void *ctx, UInt32 pos, UInt8 *buf, UInt32 len) IO_SEC;
+static Int32 XrTmpBegin(void *ctx, UInt8 which) IO_SEC;
+static Int32 XrTmpWrite(void *ctx, const UInt8 *buf, UInt32 len) IO_SEC;
+static Int32 XrTmpEnd(void *ctx) IO_SEC;
+static Int32 XrTmpReadAt(void *ctx, UInt8 which, UInt32 pos, UInt8 *buf, UInt32 len) IO_SEC;
+static void SrcClose(void) IO_SEC;
+static Err SrcOpen(UInt16 vol, const char *path) IO_SEC;
+static Int32 SrcNext(UInt32 *line) IO_SEC;
+
+static const char *TmpPath(UInt8 which) { static char p[48]; StrCopy(p, cardImport); StrCat(p, "/.part"); p[StrLen(p) + 1] = 0; p[StrLen(p)] = (char)('0' + which); return p; }
+
+static Int32 XrReadAt(void *ctx, UInt32 pos, UInt8 *buf, UInt32 len)
+{
+    UInt32 got = 0;
+    (void)ctx;
+    if (VFSFileSeek(gXlsxFile, vfsOriginBeginning, (Int32)pos) != errNone) return -1;
+    if (VFSFileRead(gXlsxFile, len, buf, &got) != errNone && got == 0) return 0;
+    return (Int32)got;
+}
+static Int32 XrTmpBegin(void *ctx, UInt8 which)
+{
+    (void)ctx;
+    if (gTmpR[which]) { VFSFileClose(gTmpR[which]); gTmpR[which] = 0; }
+    VFSFileDelete(gSrcVol, TmpPath(which));
+    return VFSFileOpen(gSrcVol, TmpPath(which), vfsModeWrite | vfsModeCreate | vfsModeTruncate, &gTmpW) == errNone ? 0 : -1;
+}
+static Int32 XrTmpWrite(void *ctx, const UInt8 *buf, UInt32 len)
+{
+    UInt32 wrote = 0;
+    (void)ctx;
+    return VFSFileWrite(gTmpW, len, buf, &wrote) == errNone && wrote == len ? 0 : -1;
+}
+static Int32 XrTmpEnd(void *ctx) { (void)ctx; VFSFileClose(gTmpW); gTmpW = 0; return 0; }
+static Int32 XrTmpReadAt(void *ctx, UInt8 which, UInt32 pos, UInt8 *buf, UInt32 len)
+{
+    UInt32 got = 0;
+    (void)ctx;
+    if (!gTmpR[which] && VFSFileOpen(gSrcVol, TmpPath(which), vfsModeRead, &gTmpR[which]) != errNone) return -1;
+    if (VFSFileSeek(gTmpR[which], vfsOriginBeginning, (Int32)pos) != errNone) return 0;
+    if (VFSFileRead(gTmpR[which], len, buf, &got) != errNone && got == 0) return 0;
+    return (Int32)got;
+}
+
+static void SrcClose(void)
+{
+    UInt8 i;
+    if (gIsXlsx) {
+        if (gXlsxFile) { VFSFileClose(gXlsxFile); gXlsxFile = 0; }
+        if (gTmpW) { VFSFileClose(gTmpW); gTmpW = 0; }
+        for (i = 0; i < 3; i++) { if (gTmpR[i]) { VFSFileClose(gTmpR[i]); gTmpR[i] = 0; } VFSFileDelete(gSrcVol, TmpPath(i)); }
+        if (gXr.window) MemPtrFree(gXr.window); if (gXr.inBuf) MemPtrFree(gXr.inBuf);
+        if (gXr.crcTable) MemPtrFree(gXr.crcTable); if (gXr.sstOffsets) MemPtrFree(gXr.sstOffsets);
+        MemSet(&gXr, sizeof gXr, 0);
+    } else CardInClose(&gIn);
+}
+
+static Err SrcOpen(UInt16 vol, const char *path)
+{
+    UInt16 l = StrLen(path);
+    gSrcVol = vol;
+    gIsXlsx = l > 5 && StrCaselessCompare(path + l - 5, ".xlsx") == 0;
+    if (!gIsXlsx) return CardInOpen(&gIn, vol, path);
+    MemSet(&gXr, sizeof gXr, 0);
+    if (VFSFileOpen(vol, path, vfsModeRead, &gXlsxFile) != errNone) return vfsErrFileNotFound;
+    VFSFileSize(gXlsxFile, &gXr.fileSize);
+    gXr.readAt = XrReadAt; gXr.tmpBegin = XrTmpBegin; gXr.tmpWrite = XrTmpWrite; gXr.tmpEnd = XrTmpEnd; gXr.tmpReadAt = XrTmpReadAt;
+    gXr.window = MemPtrNew(inflateWindowSize); gXr.inBuf = MemPtrNew(4096); gXr.inSize = 4096;
+    gXr.crcTable = MemPtrNew(256 * sizeof(UInt32)); gXr.sstOffsets = MemPtrNew(4096 * sizeof(UInt32)); gXr.sstCap = 4096;
+    if (!gXr.window || !gXr.inBuf || !gXr.crcTable || !gXr.sstOffsets) { SrcClose(); return memErrNotEnoughSpace; }
+    if (XlsxrOpen(&gXr) != 0) { SrcClose(); return dmErrCorruptDatabase; }
+    return errNone;
+}
+
+/* Next row into gFields (count), 0 for a blank row, -1 at the end. */
+static Int32 SrcNext(UInt32 *line)
+{
+    if (gIsXlsx) {
+        Int32 n = XlsxrNextRow(&gXr, gFields, csvMaxFields, gRecord, csvMaxRecord);
+        *line = gXr.rowNo;
+        return n;
+    } else {
+        Int32 len = CsvNextRecord(Getc, &gIn, gRecord, csvMaxRecord, line);
+        if (len <= 0) return len;
+        return CsvSplit(gRecord, gFields, csvMaxFields);
+    }
+}
 static CsvMap gMap;
 static FillRecord gImpFill, gImpScan;
 static VehicleRecord gImpVeh;
@@ -37,7 +134,6 @@ static Err Pass(UInt16 vol, Boolean write) IO_SEC;
 static void Line(const char *s, Coord *y, Boolean bold) IO_SEC;
 static void DrawImport(void) IO_SEC;
 
-static Int16 Getc(void *ctx) { return CardInGetc((CardIn *)ctx); }
 
 static Boolean NameEq(const char *a, const char *b) { return StrCaselessCompare(a, b) == 0; }
 
@@ -161,22 +257,23 @@ static Err Pass(UInt16 vol, Boolean write)
     StrCopy(path, cardImport); StrCat(path, "/"); StrCat(path, gImport.file);
     gRecord = MemPtrNew(csvMaxRecord);
     if (!gRecord) return memErrNotEnoughSpace;
-    err = CardInOpen(&gIn, vol, path);
+    err = SrcOpen(vol, path);
     if (err) { MemPtrFree(gRecord); gRecord = NULL; return err; }
     gSeenCount = 0;
     /* header */
-    do { len = CsvNextRecord(Getc, &gIn, gRecord, csvMaxRecord, &line); } while (len == 0);
-    if (len < 0) { CardInClose(&gIn); MemPtrFree(gRecord); gRecord = NULL; gImport.badHeader = 1; return errNone; }
-    n = CsvSplit(gRecord, gFields, csvMaxFields);
-    if (CsvMapHeader(gFields, n, &gMap) == 0) { CardInClose(&gIn); MemPtrFree(gRecord); gRecord = NULL; gImport.badHeader = 1; return errNone; }
+    do { len = SrcNext(&line); n = (Int16)len; } while (len == 0);
+    if (len < 0) { SrcClose(); MemPtrFree(gRecord); gRecord = NULL; gImport.badHeader = 1; return errNone; }
+    if (CsvMapHeader(gFields, n, &gMap) == 0) { SrcClose(); MemPtrFree(gRecord); gRecord = NULL; gImport.badHeader = 1; return errNone; }
+    if (gIsXlsx) XlsxrSetDateColumns(&gXr, gMap.date, gMap.time);
     ResolveProgrammes(write);
     for (;;) {
         UInt8 k, vid;
         recLine = line + 1;
-        len = CsvNextRecord(Getc, &gIn, gRecord, csvMaxRecord, &line);
+        len = SrcNext(&line);
+        if (gIsXlsx) recLine = line;
         if (len < 0) break;
         if (len == 0) continue;
-        n = CsvSplit(gRecord, gFields, csvMaxFields);
+        n = (Int16)len;
         if (!write) gImport.rows++;
         if (CsvRowToFill(&gMap, gFields, n, &gImpFill, veh, why) != 0) { if (!write) AddError(recLine, why); continue; }
         /* odometer must not fall for the same vehicle within the file */
@@ -211,7 +308,7 @@ static Err Pass(UInt16 vol, Boolean write)
             if (vid && IsDuplicate(&gImpFill)) gImport.duplicates++; else gImport.ready++;
         }
     }
-    CardInClose(&gIn);
+    SrcClose();
     MemPtrFree(gRecord); gRecord = NULL;
     return errNone;
 }
@@ -249,9 +346,9 @@ Boolean ChooseFileFormHandleEvent(EventType *event)
         gFileCount = 0;
         for (i = 0; i < n; i++) {
             UInt16 l = StrLen(gFiles[i]);
-            if (l > 4 && StrCaselessCompare(gFiles[i] + l - 4, ".csv") == 0) { if (gFileCount != i) StrCopy(gFiles[gFileCount], gFiles[i]); gFileCount++; }
+            if ((l > 4 && StrCaselessCompare(gFiles[i] + l - 4, ".csv") == 0) || (l > 5 && StrCaselessCompare(gFiles[i] + l - 5, ".xlsx") == 0)) { if (gFileCount != i) StrCopy(gFiles[gFileCount], gFiles[i]); gFileCount++; }
         }
-        if (gFileCount == 0) { StrCopy(gFiles[0], "(no CSV files)"); gFileCount = 1; }
+        if (gFileCount == 0) { StrCopy(gFiles[0], "(no CSV or XLSX files)"); gFileCount = 1; }
         for (i = 0; i < gFileCount; i++) gFilePtrs[i] = gFiles[i];
         LstSetListChoices(lst, gFilePtrs, (Int16)gFileCount);
         LstSetSelection(lst, 0);

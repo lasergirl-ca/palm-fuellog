@@ -12,7 +12,6 @@ static UInt16 kCp1252[32] = {   /* plain static: a const table lands in the code
 static const char *kGradeNames[7] = { "Regular", "Mid", "Premium", "Diesel", "Home AC", "Public AC", "DC fast" };
 
 static UInt16 PalmToUnicode(UInt8 c) IO_SEC;
-static UInt8  UnicodeToPalm(UInt16 u) IO_SEC;
 static void   OutUtf8(OutStream *out, UInt16 u) IO_SEC;
 static UInt8 StrEqI(const char *a, const char *b) IO_SEC;
 static UInt8 StartsI(const char *s, const char *prefix) IO_SEC;
@@ -28,7 +27,7 @@ static UInt16 PalmToUnicode(UInt8 c)
     return c;
 }
 
-static UInt8 UnicodeToPalm(UInt16 u)
+UInt8 CsvUnicodeToPalm(UInt16 u)
 {
     UInt8 i;
     if (u < 0x80) return (UInt8)u;
@@ -161,7 +160,7 @@ Int32 CsvNextRecord(CsvGetcFn getc, void *ctx, char *buf, UInt16 cap, UInt32 *li
                     if (cc < 0 || (cc & 0xC0) != 0x80) { ok = 0; break; }
                     u = (UInt16)((u << 6) | (cc & 0x3F));
                 }
-                if (ok) { if (n < cap - 1) buf[n++] = (char)(extra == 3 ? '?' : UnicodeToPalm(u)); continue; }
+                if (ok) { if (n < cap - 1) buf[n++] = (char)(extra == 3 ? '?' : CsvUnicodeToPalm(u)); continue; }
             }
             if (n < cap - 1) buf[n++] = (char)c;   /* Windows-1252 byte as is */
             continue;
