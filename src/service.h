@@ -28,6 +28,7 @@ void   SvcCompute(const ServiceTypeRecord *t, UInt8 haveLast, UInt16 lastDate, U
 /* km x 10 per day between two readings; 0 when the dates are the same. */
 UInt32 SvcPaceX10(UInt32 odoFirst, UInt32 odoLast, UInt16 dateFirst, UInt16 dateLast) EXPORT_SEC;
 UInt32 SvcDefaultWarnDist(UInt32 intervalDist) EXPORT_SEC;   /* 10 % */
+UInt16 SvcMonthsX10(UInt16 days) EXPORT_SEC;                 /* 167 days -> 55 (5.5 months) */
 
 /* Presets by powertrain: intervals blank, warn 14 days. id is the index. */
 UInt8  SvcPresetCount(UInt8 powertrain) EXPORT_SEC;

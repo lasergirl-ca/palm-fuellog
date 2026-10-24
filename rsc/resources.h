@@ -293,3 +293,11 @@
 #define VehScrollBar         1823
 #define SvtScrollBar         2716
 #define PrefsScrollBar       1621
+
+#define ServiceHistoryButton 2607
+#define SvlDeleteButton      2840
+#define HistoryForm          2900
+#define HistDoneButton       2901
+#define HistIntervalsButton  2902
+#define HistScrollBar        2903
+#define DeleteVisitAlert     1517

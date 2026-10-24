@@ -498,9 +498,10 @@ BEGIN
     POPUPTRIGGER "All vehicles" ID ServiceVehicleTrigger AT (96 1 62 12) RIGHTANCHOR
     LIST "All vehicles" ID ServiceVehicleList AT (60 1 98 60) NONUSABLE VISIBLEITEMS 6
     POPUPLIST ID ServiceVehicleTrigger ServiceVehicleList
-    BUTTON "Log" ID ServiceLogButton AT (4 146 30 12)
-    BUTTON "New" ID ServiceNewButton AT (40 146 30 12)
-    BUTTON "Done" ID ServiceDoneButton AT (76 146 36 12)
+    BUTTON "Log" ID ServiceLogButton AT (4 146 28 12)
+    BUTTON "New" ID ServiceNewButton AT (36 146 28 12)
+    BUTTON "History" ID ServiceHistoryButton AT (68 146 44 12)
+    BUTTON "Done" ID ServiceDoneButton AT (116 146 36 12)
     SCROLLBAR ID ServiceScrollBar AT (152 15 7 130) VALUE 0 MIN 0 MAX 0 PAGESIZE 100
 END
 
@@ -576,6 +577,7 @@ BEGIN
     BUTTON "Done" ID SvlDoneButton AT (4 280 36 12)
     BUTTON "Cancel" ID SvlCancelButton AT (46 280 40 12)
     BUTTON "Note" ID SvlNoteButton AT (92 280 34 12)
+    BUTTON "Delete" ID SvlDeleteButton AT (118 280 38 12)
     SCROLLBAR ID SvlScrollBar AT (153 15 7 130) VALUE 0 MIN 0 MAX 0 PAGESIZE 100
 END
 
@@ -610,4 +612,23 @@ BEGIN
     TITLE "Service limit"
     MESSAGE "A vehicle keeps up to 31 service types. Archive one first."
     BUTTONS "OK"
+END
+
+FORM ID HistoryForm AT (0 0 160 160)
+NOFRAME
+USABLE
+BEGIN
+    TITLE "History"
+    BUTTON "Done" ID HistDoneButton AT (4 146 36 12)
+    BUTTON "Intervals" ID HistIntervalsButton AT (46 146 48 12)
+    SCROLLBAR ID HistScrollBar AT (152 15 7 130) VALUE 0 MIN 0 MAX 0 PAGESIZE 100
+END
+
+ALERT ID DeleteVisitAlert
+CONFIRMATION
+DEFAULTBUTTON 1
+BEGIN
+    TITLE "Delete this visit?"
+    MESSAGE "The services it covered will count from the visit before it."
+    BUTTONS "Delete" "Cancel"
 END

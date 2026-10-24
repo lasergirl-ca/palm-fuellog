@@ -10,8 +10,10 @@
 #include "vehicles.h"
 #include "programmes.h"
 #include "resources.h"
+#include "service_form.h"
 
 static Stats gStats;                 /* 1 KB: static, off the stack */
+static UInt32 gServiceCents;         /* service visits, home currency */
 static FillRecord gStatsFill;
 static ProgrammeRecord gStatsPgm;
 static char gSVNames[vehMaxVehicles + 1][vehNameLen];
@@ -41,6 +43,7 @@ static void Compute(void)
         if (gPrefs.currentVehicle != 255 && gStatsFill.vehicle != gPrefs.currentVehicle) continue;
         StatsAdd(&gStats, &gStatsFill);
     }
+    gServiceCents = SvcSpendCents(gPrefs.currentVehicle);
 }
 
 static void DrawLeft(const char *s, Coord y) { WinDrawChars(s, StrLen(s), 4, y); }
@@ -148,6 +151,16 @@ static void DrawStats(void)
         StrCopy(b, "$"); TextFixed(b + 1, (Int32)StatsCostPer100km(s), 2, gPoint, 0);
         StrCopy(n1, "Cost per 100 "); StrCat(n1, UnitDistLabel(gPrefs.distanceUnit));
         Row(n1, b, &y);
+        if (gServiceCents) {
+            /* Running cost: fuel and electricity plus service over the same distance. */
+            StrCopy(b, "$"); TextFixed(b + 1, (Int32)CalcCostPer100kmCents(s->homeCents + gServiceCents, s->distance), 2, gPoint, 0);
+            StrCopy(n1, "With service /100 "); StrCat(n1, UnitDistLabel(gPrefs.distanceUnit));
+            Row(n1, b, &y);
+        }
+    }
+    if (gServiceCents) {
+        StrCopy(b, "$"); TextFixed(b + 1, (Int32)gServiceCents, 2, gPoint, gThousands);
+        Row("Service spend", b, &y);
     }
     if (s->fuelCount) {
         VolText(n1, StatsAvgFillMl(s), 0);

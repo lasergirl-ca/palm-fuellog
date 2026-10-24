@@ -266,6 +266,10 @@ static Boolean AppHandleEvent(EventType *event)
             FrmSetEventHandler(form, LogServiceFormHandleEvent);
             AppSetupDIA(form);
             break;
+        case HistoryForm:
+            FrmSetEventHandler(form, HistoryFormHandleEvent);
+            AppSetupDIA(form);
+            break;
         case DiagForm:
             FrmSetEventHandler(form, DiagFormHandleEvent);
             AppSetupDIA(form);

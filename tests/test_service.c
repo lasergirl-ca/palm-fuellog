@@ -56,6 +56,8 @@ int main(void)
     check("no pace: due is the time date", d.due, DateYmdToDays(2026, 11, 14));
     check("no pace: still Soon by km", d.status, svcStatusSoon);
 
+    check("167 days is 5.5 months", SvcMonthsX10(167), 55);
+    check("365 days is 12.0 months", SvcMonthsX10(365), 120);
     check("fuel presets", SvcPresetCount(0), 9);
     check("electric presets", SvcPresetCount(3), 5);
     SvcPreset(0, 0, &oil);

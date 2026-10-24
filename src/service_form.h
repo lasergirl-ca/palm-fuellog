@@ -9,6 +9,9 @@
 Boolean ServiceFormHandleEvent(EventType *event) SVC_SEC;
 Boolean EditServiceFormHandleEvent(EventType *event) SVC_SEC;
 Boolean LogServiceFormHandleEvent(EventType *event) SVC_SEC;
+Boolean HistoryFormHandleEvent(EventType *event) SVC_SEC;
+/* Home-currency cents spent on service visits for a vehicle (255 = all). */
+UInt32  SvcSpendCents(UInt8 vehicle) SVC_SEC;
 
 /* The most urgent service for a vehicle (255 = every live vehicle): its
  * status, and a line for the fill list such as "Oil and filter due in

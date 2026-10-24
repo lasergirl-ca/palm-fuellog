@@ -19,6 +19,9 @@ UInt32 SvcPaceX10(UInt32 odoFirst, UInt32 odoLast, UInt16 dateFirst, UInt16 date
 
 UInt32 SvcDefaultWarnDist(UInt32 intervalDist) { return (intervalDist + 5) / 10; }
 
+/* A month is 30.4375 days (487/16): months x 10 = days x 160 / 487. */
+UInt16 SvcMonthsX10(UInt16 days) { return (UInt16)(((UInt32)days * 160 + 243) / 487); }
+
 void SvcCompute(const ServiceTypeRecord *t, UInt8 haveLast, UInt16 lastDate, UInt32 lastOdo,
                 UInt32 odoNow, UInt16 today, UInt32 paceX10, SvcDue *d)
 {

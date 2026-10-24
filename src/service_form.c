@@ -16,6 +16,9 @@ static FillRecord gScanFillS;
 static VehicleRecord gSvcVeh;
 static UInt8 gSvcPacked[svlFixedSize + fillMaxNotes + 8];
 static UInt16 gEditSvtIndex = dmMaxRecordIndex;
+static UInt16 gEditSvlIndex = dmMaxRecordIndex;   /* visit being edited, or new */
+static UInt16 gHistType = dmMaxRecordIndex;        /* service type the History shows; all visits when dmMaxRecordIndex */
+static UInt16 gSvlReturn = ServiceForm;            /* where Log Service goes back to */
 static UInt8 gSvcVehicle;                      /* the vehicle the service screens work on */
 static char gSVNames[vehMaxVehicles + 1][vehNameLen];
 static char *gSVPtrs[vehMaxVehicles + 1];
@@ -373,9 +376,9 @@ static void DrawService(void)
 
 static void LayoutService(FormType *form)
 {
-    static UInt16 bottom[] = { ServiceLogButton, ServiceNewButton, ServiceDoneButton };
+    static UInt16 bottom[] = { ServiceLogButton, ServiceNewButton, ServiceHistoryButton, ServiceDoneButton };
     Coord w, h;
-    AppFitForm(form, bottom, 3);
+    AppFitForm(form, bottom, 4);
     WinGetDisplayExtent(&w, &h); h = AppFormHeight(form);
     gSvcArea.topLeft.x = 0; gSvcArea.topLeft.y = kSvcTop; gSvcArea.extent.x = w;
     gSvcArea.extent.y = (Coord)(((h - 17 - 12 - kSvcTop) / kSvcRowH) * kSvcRowH);
@@ -408,7 +411,13 @@ Boolean ServiceFormHandleEvent(EventType *event)
     case penDownEvent:
         if (RctPtInRectangle(event->screenX, event->screenY, &gSvcArea)) {
             UInt16 row = (UInt16)((event->screenY - gSvcArea.topLeft.y) / kSvcRowH + gSvcFirst);
-            if (row < gSvcRowCount) { gEditSvtIndex = gSvcRows[row]; FrmGotoForm(EditServiceForm); return true; }
+            if (row < gSvcRowCount) {
+                UInt16 date; UInt32 odo;
+                gEditSvtIndex = gSvcRows[row];
+                if (SvtGetAt(gEditSvtIndex, &gSvt) == errNone && LastVisit(gSvt.vehicle, gSvt.id, &date, &odo)) { gHistType = gEditSvtIndex; FrmGotoForm(HistoryForm); }
+                else FrmGotoForm(EditServiceForm);
+                return true;
+            }
         }
         break;
     case sclRepeatEvent: case sclExitEvent: {
@@ -439,7 +448,8 @@ Boolean ServiceFormHandleEvent(EventType *event)
         break;
     case ctlSelectEvent:
         switch (event->data.ctlSelect.controlID) {
-        case ServiceLogButton: FrmGotoForm(LogServiceForm); return true;
+        case ServiceLogButton: gEditSvlIndex = dmMaxRecordIndex; gSvlReturn = ServiceForm; FrmGotoForm(LogServiceForm); return true;
+        case ServiceHistoryButton: gHistType = dmMaxRecordIndex; FrmGotoForm(HistoryForm); return true;
         case ServiceNewButton:
             if (NextTypeId(gSvcVehicle) == 255) { FrmAlert(TooManyServicesAlert); return true; }
             gEditSvtIndex = dmMaxRecordIndex; FrmGotoForm(EditServiceForm); return true;
@@ -607,11 +617,11 @@ static UInt16 gSvlClampCount;
 
 static void PlaceSvl(FormType *form)
 {
-    static UInt16 bottom[] = { SvlDoneButton, SvlCancelButton, SvlNoteButton };
+    static UInt16 bottom[] = { SvlDoneButton, SvlCancelButton, SvlNoteButton, SvlDeleteButton };
     Coord y = 56;
     UInt8 i;
     Coord x;
-    AppFitForm(form, bottom, 3);
+    AppFitForm(form, bottom, 4);
     gSvlClampCount = 0;
     for (i = 0; i < kSvlChecks; i++) {
         UInt16 idx = FrmGetObjectIndex(form, SvlCheck0 + i);
@@ -640,8 +650,8 @@ static void PlaceSvl(FormType *form)
     }
     AppShowByPosition(form, gSvlClamp, gSvlClampCount);
     {
-        static UInt16 pinned[] = { SvlDoneButton, SvlCancelButton, SvlNoteButton, SvlScrollBar };
-        AppScrollBarUpdate(form, SvlScrollBar, pinned, 4);
+        static UInt16 pinned[] = { SvlDoneButton, SvlCancelButton, SvlNoteButton, SvlDeleteButton, SvlScrollBar };
+        AppScrollBarUpdate(form, SvlScrollBar, pinned, 5);
     }
 }
 
@@ -668,19 +678,31 @@ static void LoadSvl(FormType *form)
     char b[20];
     UInt16 n = DbCount(dbServiceTypes), i;
     UInt32 odo;
-    gSvcVehicle = SvcVehicleNow();
-    VehGet(gSvcVehicle, &gSvcVeh);
-    MemSet(&gSvl, sizeof gSvl, 0);
-    gSvl.vehicle = gSvcVehicle;
-    gSvl.currency = CurrencyForNewEntry(gSvcVeh.defaultCurrency, gPrefs.defaultCurrency, gPrefs.lastCurrency);
-    gSvl.fxRate = CurrencyDefaultRate(gSvl.currency, gPrefs.homeCurrency, gPrefs.fxRate);
-    gSvl.payment = gPrefs.lastPayment;
-    gSvlDate = AppToday();
+    Boolean editing = gEditSvlIndex != dmMaxRecordIndex && SvlGetAt(gEditSvlIndex, &gSvl) == errNone;
+    if (editing) {
+        gSvcVehicle = gSvl.vehicle;
+        VehGet(gSvcVehicle, &gSvcVeh);
+        gSvlDate = gSvl.date;
+        odo = gSvl.odometer;
+    } else {
+        gEditSvlIndex = dmMaxRecordIndex;
+        gSvcVehicle = SvcVehicleNow();
+        VehGet(gSvcVehicle, &gSvcVeh);
+        MemSet(&gSvl, sizeof gSvl, 0);
+        gSvl.vehicle = gSvcVehicle;
+        gSvl.currency = CurrencyForNewEntry(gSvcVeh.defaultCurrency, gPrefs.defaultCurrency, gPrefs.lastCurrency);
+        gSvl.fxRate = CurrencyDefaultRate(gSvl.currency, gPrefs.homeCurrency, gPrefs.fxRate);
+        gSvl.payment = gPrefs.lastPayment;
+        gSvlDate = AppToday();
+        odo = VehLastOdometer(gSvcVehicle);
+    }
+    FrmSetTitle(form, editing ? "Edit Visit" : "Log Service");
     DateShortText(gSvlDateText, gSvlDate);
     CtlSetLabel(FrmGetObjectPtr(form, FrmGetObjectIndex(form, SvlDateTrigger)), gSvlDateText);
-    odo = VehLastOdometer(gSvcVehicle);
     if (odo) { DistText(b, odo, 0); AppSetFieldText(form, SvlOdoField, b); } else AppSetFieldText(form, SvlOdoField, "");
-    AppSetLabel(form, SvlOdoHint, odo ? "from last fill" : "");
+    AppSetLabel(form, SvlOdoHint, editing ? "" : (odo ? "from last fill" : ""));
+    if (editing) FrmShowObject(form, FrmGetObjectIndex(form, SvlDeleteButton));
+    else FrmHideObject(form, FrmGetObjectIndex(form, SvlDeleteButton));
     gSvlCount = 0;
     for (i = 0; i < n && gSvlCount < kSvlChecks; i++) {
         ControlType *c;
@@ -689,22 +711,25 @@ static void LoadSvl(FormType *form)
         StrCopy(gSvlNames[gSvlCount], gScanSvt.name);
         c = FrmGetObjectPtr(form, FrmGetObjectIndex(form, SvlCheck0 + gSvlCount));
         CtlSetLabel(c, gSvlNames[gSvlCount]);
-        CtlSetValue(c, 0);
+        CtlSetValue(c, editing && (gSvl.services & (1UL << gScanSvt.id)) ? 1 : 0);
         gSvlCount++;
     }
-    CtlSetValue(FrmGetObjectPtr(form, FrmGetObjectIndex(form, SvlOtherCheckbox)), 0);
-    AppSetFieldText(form, SvlOtherField, "");
-    AppSetFieldText(form, SvlCostField, "");
+    CtlSetValue(FrmGetObjectPtr(form, FrmGetObjectIndex(form, SvlOtherCheckbox)), editing && (gSvl.services & svlOtherBit) ? 1 : 0);
+    AppSetFieldText(form, SvlOtherField, editing ? gSvl.other : "");
+    if (editing && gSvl.cost) { TextFixed(b, (Int32)gSvl.cost, 2, gPoint, 0); AppSetFieldText(form, SvlCostField, b); }
+    else AppSetFieldText(form, SvlCostField, "");
     {
         ListType *lst = FrmGetObjectPtr(form, FrmGetObjectIndex(form, SvlCurrencyList));
         LstSetSelection(lst, gSvl.currency);
         CtlSetLabel(FrmGetObjectPtr(form, FrmGetObjectIndex(form, SvlCurrencyTrigger)), CurrencyCode(gSvl.currency));
     }
     FrmSetControlGroupSelection(form, 1, gSvl.payment == fillPaymentCard ? SvlCardButton : SvlCashButton);
-    AppSetFieldText(form, SvlShopField, "");
-    AppSetFieldText(form, SvlDetailField, "");
+    AppSetFieldText(form, SvlShopField, editing ? gSvl.shop : "");
+    AppSetFieldText(form, SvlDetailField, editing ? gSvl.detail : "");
+    CtlSetLabel(FrmGetObjectPtr(form, FrmGetObjectIndex(form, SvlNoteButton)), gSvl.notes[0] ? "Note*" : "Note");
     AppSetLabel(form, SvlNextLabel, "");
     PlaceSvl(form);
+    if (editing) NextLine(form);
 }
 
 static Boolean SaveSvl(FormType *form)
@@ -731,6 +756,7 @@ static Boolean SaveSvl(FormType *form)
     gSvl.payment = AppGroupSelection(form, 1) == SvlCardButton ? fillPaymentCard : fillPaymentCash;
     StrNCopy(gSvl.shop, AppGetFieldText(form, SvlShopField), svlShopLen - 1); gSvl.shop[svlShopLen - 1] = 0;
     StrNCopy(gSvl.detail, AppGetFieldText(form, SvlDetailField), svlDetailLen - 1); gSvl.detail[svlDetailLen - 1] = 0;
+    if (gEditSvlIndex != dmMaxRecordIndex) DbRemove(dbServiceVisits, gEditSvlIndex);
     if (DbAdd(dbServiceVisits, gSvcPacked, ServiceVisitPack(&gSvl, gSvcPacked), NULL)) { FrmAlert(SaveFailedAlert); return false; }
     gPrefs.lastPayment = gSvl.payment;
     PrefsSave(&gPrefs);
@@ -740,7 +766,7 @@ static Boolean SaveSvl(FormType *form)
 Boolean LogServiceFormHandleEvent(EventType *event)
 {
     FormType *form = FrmGetActiveForm();
-    static UInt16 pinned[] = { SvlDoneButton, SvlCancelButton, SvlNoteButton, SvlScrollBar };
+    static UInt16 pinned[] = { SvlDoneButton, SvlCancelButton, SvlNoteButton, SvlDeleteButton, SvlScrollBar };
     switch (event->eType) {
     case frmOpenEvent:
         AppScrollReset();
@@ -749,15 +775,15 @@ Boolean LogServiceFormHandleEvent(EventType *event)
         return true;
     case frmUpdateEvent: FrmDrawForm(form); return true;
     case fldEnterEvent:
-        AppScrollToField(form, event->data.fldEnter.fieldID, pinned, 4);
+        AppScrollToField(form, event->data.fldEnter.fieldID, pinned, 5);
         AppShowByPosition(form, gSvlClamp, gSvlClampCount);
-        AppScrollBarUpdate(form, SvlScrollBar, pinned, 4);
+        AppScrollBarUpdate(form, SvlScrollBar, pinned, 5);
         break;
     case keyDownEvent: case sclRepeatEvent: case sclExitEvent:
-        if (AppScrollEvent(form, event, pinned, 4, SvlScrollBar)) { AppShowByPosition(form, gSvlClamp, gSvlClampCount); FrmDrawForm(form); return true; }
+        if (AppScrollEvent(form, event, pinned, 5, SvlScrollBar)) { AppShowByPosition(form, gSvlClamp, gSvlClampCount); FrmDrawForm(form); return true; }
         break;
     case winDisplayChangedEvent:
-        if (gScrollYPublic()) AppScrollBy(form, gScrollYPublic(), pinned, 4);
+        if (gScrollYPublic()) AppScrollBy(form, gScrollYPublic(), pinned, 5);
         PlaceSvl(form); WinEraseWindow(); FrmDrawForm(form); return true;
     case popSelectEvent:
         if (event->data.popSelect.listID == SvlCurrencyList) {
@@ -780,8 +806,14 @@ Boolean LogServiceFormHandleEvent(EventType *event)
             }
             return true;
         }
-        case SvlDoneButton: if (SaveSvl(form)) FrmGotoForm(ServiceForm); return true;
-        case SvlCancelButton: FrmGotoForm(ServiceForm); return true;
+        case SvlDoneButton: if (SaveSvl(form)) FrmGotoForm(gSvlReturn); return true;
+        case SvlCancelButton: FrmGotoForm(gSvlReturn); return true;
+        case SvlDeleteButton:
+            if (gEditSvlIndex != dmMaxRecordIndex && FrmAlert(DeleteVisitAlert) == 0) {
+                DbRemove(dbServiceVisits, gEditSvlIndex);
+                FrmGotoForm(gSvlReturn);
+            }
+            return true;
         case SvlNoteButton:
             AppNoteDialog(gSvl.notes);
             CtlSetLabel(FrmGetObjectPtr(form, FrmGetObjectIndex(form, SvlNoteButton)), gSvl.notes[0] ? "Note*" : "Note");
@@ -790,6 +822,196 @@ Boolean LogServiceFormHandleEvent(EventType *event)
         }
         break;
     }
+    default: break;
+    }
+    return false;
+}
+
+/* ---- History ---- */
+
+#define kHistMax 64
+#define kHistRowH 20
+#define kHistTop 63
+static UInt16 gHistIdx[kHistMax];       /* visit database indexes, newest first */
+static UInt32 gHistGapDist[kHistMax];   /* km x 10 since the visit before, 0 for the first */
+static UInt16 gHistGapDays[kHistMax];
+static UInt8  gHistOver[kHistMax];      /* 1 distance, 2 time, 3 both past the interval */
+static UInt8  gHistCount, gHistFirst;
+static UInt32 gHistLongest, gHistAvg, gHistCents;
+static RectangleType gHistArea;
+
+UInt32 SvcSpendCents(UInt8 vehicle)
+{
+    UInt16 n = DbCount(dbServiceVisits), i;
+    UInt32 cents = 0;
+    for (i = 0; i < n; i++) {
+        if (SvlGetAt(i, &gScanSvl) != errNone) continue;
+        if (vehicle != 255 && gScanSvl.vehicle != vehicle) continue;
+        cents += CalcHomeCents(gScanSvl.cost, gScanSvl.fxRate ? gScanSvl.fxRate : fxOne);
+    }
+    return cents;
+}
+
+/* Visits of the vehicle (covering the chosen service) oldest first, with the gap to each
+ * from the one before; stored newest first for drawing. */
+/* Section placement: see sections.h. */
+static void CollectHistory(void) SVC_SEC;
+static void DrawHistory(void) SVC_SEC;
+static void LayoutHistory(FormType *form) SVC_SEC;
+
+static void CollectHistory(void)
+{
+    UInt16 n = DbCount(dbServiceVisits), i;
+    UInt16 prevDate = 0; UInt32 prevOdo = 0, sumDist = 0; UInt8 gaps = 0;
+    Boolean perType = gHistType != dmMaxRecordIndex && SvtGetAt(gHistType, &gSvt) == errNone;
+    gHistCount = 0; gHistLongest = 0; gHistAvg = 0; gHistCents = 0;
+    for (i = 0; i < n && gHistCount < kHistMax; i++) {
+        UInt8 k, over = 0;
+        if (SvlGetAt(i, &gScanSvl) != errNone || gScanSvl.vehicle != gSvcVehicle) continue;
+        if (perType && !(gScanSvl.services & (1UL << gSvt.id))) continue;
+        /* shift down: newest first */
+        for (k = gHistCount; k > 0; k--) { gHistIdx[k] = gHistIdx[k - 1]; gHistGapDist[k] = gHistGapDist[k - 1]; gHistGapDays[k] = gHistGapDays[k - 1]; gHistOver[k] = gHistOver[k - 1]; }
+        gHistIdx[0] = i;
+        if (gHistCount > 0 && gScanSvl.odometer > prevOdo) {
+            gHistGapDist[0] = gScanSvl.odometer - prevOdo;
+            gHistGapDays[0] = (UInt16)(gScanSvl.date > prevDate ? gScanSvl.date - prevDate : 0);
+            if (perType && gSvt.intervalDist && gHistGapDist[0] > gSvt.intervalDist) over |= 1;
+            if (perType && gSvt.intervalMonths && SvcMonthsX10(gHistGapDays[0]) > (UInt16)gSvt.intervalMonths * 10) over |= 2;
+            if (gHistGapDist[0] > gHistLongest) gHistLongest = gHistGapDist[0];
+            sumDist += gHistGapDist[0]; gaps++;
+        } else { gHistGapDist[0] = 0; gHistGapDays[0] = 0; }
+        gHistOver[0] = over;
+        gHistCents += CalcHomeCents(gScanSvl.cost, gScanSvl.fxRate ? gScanSvl.fxRate : fxOne);
+        prevDate = gScanSvl.date; prevOdo = gScanSvl.odometer;
+        gHistCount++;
+    }
+    if (gaps) gHistAvg = (sumDist + gaps / 2) / gaps;
+}
+
+static void DrawHistory(void)
+{
+    char b[48], n[20];
+    Coord y;
+    UInt8 row;
+    RectangleType r;
+    Boolean perType = gHistType != dmMaxRecordIndex && SvtGetAt(gHistType, &gSvt) == errNone;
+
+    r.topLeft.x = 0; r.topLeft.y = 15; r.extent.x = 160; r.extent.y = (Coord)(gHistArea.topLeft.y + gHistArea.extent.y - 15);
+    WinEraseRectangle(&r, 0);
+    FntSetFont(boldFont);
+    WinDrawChars(perType ? gSvt.name : "All services", perType ? StrLen(gSvt.name) : 12, 4, 15);
+    FntSetFont(stdFont);
+    if (perType && (gSvt.intervalDist || gSvt.intervalMonths)) {
+        StrCopy(b, "every ");
+        if (gSvt.intervalDist) { DistText(n, gSvt.intervalDist, gThousands); StrCat(b, n); StrCat(b, " "); StrCat(b, UnitDistLabel(gPrefs.distanceUnit)); }
+        if (gSvt.intervalMonths) { StrCat(b, gSvt.intervalDist ? " or " : ""); StrIToA(n, gSvt.intervalMonths); StrCat(b, n); StrCat(b, " months"); }
+    } else StrCopy(b, perType ? "no interval set" : "every visit for this vehicle");
+    WinDrawChars(b, StrLen(b), 4, 26);
+    /* Headlines: longest gap, average gap, spend over N visits. */
+    FntSetFont(boldFont);
+    if (gHistLongest) { DistText(b, gHistLongest, gThousands); StrCat(b, " "); StrCat(b, UnitDistLabel(gPrefs.distanceUnit)); } else StrCopy(b, "--");
+    WinDrawChars(b, StrLen(b), 4, 38);
+    if (gHistAvg) { DistText(b, gHistAvg, gThousands); StrCat(b, " "); StrCat(b, UnitDistLabel(gPrefs.distanceUnit)); } else StrCopy(b, "--");
+    WinDrawChars(b, StrLen(b), 58, 38);
+    StrCopy(b, "$"); TextFixed(b + 1, (Int32)gHistCents, 2, gPoint, gThousands);
+    DrawRightAt(b, 150, 38);
+    FntSetFont(stdFont);
+    WinDrawChars("longest gap", 11, 4, 48);
+    WinDrawChars("average", 7, 58, 48);
+    StrIToA(b, gHistCount); StrCat(b, gHistCount == 1 ? " visit" : " visits");
+    DrawRightAt(b, 150, 48);
+    y = kHistTop;
+    if (gHistCount == 0) { WinDrawChars("No visits yet. Tap Log on Service.", 34, 6, y + 10); }
+    if (gHistFirst >= gHistCount) gHistFirst = 0;
+    for (row = gHistFirst; row < gHistCount && y + kHistRowH <= gHistArea.topLeft.y + gHistArea.extent.y; row++, y += kHistRowH) {
+        if (SvlGetAt(gHistIdx[row], &gScanSvl) != errNone) continue;
+        FntSetFont(stdFont);
+        DueDateText(b, gScanSvl.date);
+        WinDrawChars(b, StrLen(b), 4, y);
+        DistText(b, gScanSvl.odometer, gThousands);
+        DrawRightAt(b, 96, y);
+        if (gScanSvl.cost) { TextFixed(b, (Int32)gScanSvl.cost, 2, gPoint, gThousands); DrawRightAt(b, 150, y); }
+        /* second line: the gap, flagged when it ran past the interval */
+        if (gHistGapDist[row]) {
+            FntSetFont(gHistOver[row] ? boldFont : stdFont);
+            DistText(n, gHistGapDist[row], gThousands);
+            StrCopy(b, n); StrCat(b, " "); StrCat(b, UnitDistLabel(gPrefs.distanceUnit));
+            if (gHistGapDays[row]) { StrCat(b, ", "); TextFixed(n, (Int32)SvcMonthsX10(gHistGapDays[row]), 1, gPoint, 0); StrCat(b, n); StrCat(b, " months"); }
+            if (gHistOver[row] == 3) StrCat(b, "; over both");
+            else if (gHistOver[row] == 1) StrCat(b, "; over distance");
+            else if (gHistOver[row] == 2) StrCat(b, "; over time");
+        } else { FntSetFont(stdFont); StrCopy(b, row == gHistCount - 1 ? "first record" : ""); }
+        WinDrawChars(b, StrLen(b), 10, y + 10);
+        /* services covered, when showing every visit */
+        if (!perType) {
+            UInt8 cnt = 0, id;
+            for (id = 0; id < 31; id++) if (gScanSvl.services & (1UL << id)) cnt++;
+            if (gScanSvl.services & svlOtherBit) cnt++;
+            StrIToA(n, cnt); StrCat(n, cnt == 1 ? " item" : " items");
+            FntSetFont(stdFont);
+            DrawRightAt(n, 150, y + 10);
+        }
+    }
+    {
+        UInt16 visible = (UInt16)(gHistArea.extent.y / kHistRowH);
+        AppListScrollBar(FrmGetActiveForm(), HistScrollBar, (Int16)gHistFirst, (Int16)((Int16)gHistCount - (Int16)visible), (Int16)visible,
+                         gHistArea.topLeft.y, (Coord)(gHistArea.topLeft.y + gHistArea.extent.y));
+    }
+}
+
+static void LayoutHistory(FormType *form)
+{
+    static UInt16 bottom[] = { HistDoneButton, HistIntervalsButton };
+    Coord w, h;
+    AppFitForm(form, bottom, 2);
+    WinGetDisplayExtent(&w, &h); h = AppFormHeight(form);
+    gHistArea.topLeft.x = 0; gHistArea.topLeft.y = kHistTop; gHistArea.extent.x = w;
+    gHistArea.extent.y = (Coord)(((h - 17 - kHistTop) / kHistRowH) * kHistRowH);
+    if (gHistType == dmMaxRecordIndex) FrmHideObject(form, FrmGetObjectIndex(form, HistIntervalsButton));
+    else FrmShowObject(form, FrmGetObjectIndex(form, HistIntervalsButton));
+}
+
+Boolean HistoryFormHandleEvent(EventType *event)
+{
+    FormType *form = FrmGetActiveForm();
+    switch (event->eType) {
+    case frmOpenEvent:
+        gSvcVehicle = SvcVehicleNow();
+        gHistFirst = 0;
+        LayoutHistory(form);
+        CollectHistory();
+        FrmDrawForm(form);
+        DrawHistory();
+        return true;
+    case frmUpdateEvent: FrmDrawForm(form); DrawHistory(); return true;
+    case winDisplayChangedEvent: LayoutHistory(form); WinEraseWindow(); FrmDrawForm(form); DrawHistory(); return true;
+    case penDownEvent:
+        if (RctPtInRectangle(event->screenX, event->screenY, &gHistArea)) {
+            UInt16 row = (UInt16)((event->screenY - gHistArea.topLeft.y) / kHistRowH + gHistFirst);
+            if (row < gHistCount) { gEditSvlIndex = gHistIdx[row]; gSvlReturn = HistoryForm; FrmGotoForm(LogServiceForm); return true; }
+        }
+        break;
+    case sclRepeatEvent: case sclExitEvent: {
+        Int16 v;
+        if (AppListScrollEvent(event, &v)) { gHistFirst = (UInt8)(v < 0 ? 0 : v); DrawHistory(); return true; }
+        break;
+    }
+    case keyDownEvent: {
+        UInt16 visible = (UInt16)(gHistArea.extent.y / kHistRowH);
+        Boolean page;
+        Int16 dir = AppScrollDirection(event, &page);
+        UInt16 step = page ? visible : 1;
+        if (dir > 0 && gHistFirst + visible < gHistCount) { gHistFirst = (UInt8)(gHistFirst + step); DrawHistory(); return true; }
+        if (dir < 0 && gHistFirst > 0) { gHistFirst = (UInt8)(gHistFirst > step ? gHistFirst - step : 0); DrawHistory(); return true; }
+        break;
+    }
+    case ctlSelectEvent:
+        switch (event->data.ctlSelect.controlID) {
+        case HistDoneButton: FrmGotoForm(ServiceForm); return true;
+        case HistIntervalsButton: gEditSvtIndex = gHistType; FrmGotoForm(EditServiceForm); return true;
+        default: break;
+        }
+        break;
     default: break;
     }
     return false;
