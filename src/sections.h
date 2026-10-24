@@ -10,6 +10,7 @@
 #define SVC_SEC    __attribute__((section("svcs")))    /* the service forms */
 #define RPT_SEC    __attribute__((section("rpts")))    /* reports and graphs */
 #define IO_SEC     __attribute__((section("io")))      /* card, export, import, backup */
+#define XP_SEC     __attribute__((section("exp2")))    /* XLSX and PDF export */
 #else
 #define SEC2
 #define EXPORT_SEC
@@ -17,5 +18,6 @@
 #define SVC_SEC
 #define RPT_SEC
 #define IO_SEC
+#define XP_SEC
 #endif
 #endif

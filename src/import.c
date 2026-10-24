@@ -10,7 +10,7 @@
 
 ImportSummary gImport;
 static CardIn gIn;
-static char gRecord[csvMaxRecord];
+static char *gRecord;                     /* csvMaxRecord bytes, heap during a pass */
 static char *gFields[csvMaxFields];
 static CsvMap gMap;
 static FillRecord gImpFill, gImpScan;
@@ -159,19 +159,21 @@ static Err Pass(UInt16 vol, Boolean write)
     Int16 n;
     Err err;
     StrCopy(path, cardImport); StrCat(path, "/"); StrCat(path, gImport.file);
+    gRecord = MemPtrNew(csvMaxRecord);
+    if (!gRecord) return memErrNotEnoughSpace;
     err = CardInOpen(&gIn, vol, path);
-    if (err) return err;
+    if (err) { MemPtrFree(gRecord); gRecord = NULL; return err; }
     gSeenCount = 0;
     /* header */
-    do { len = CsvNextRecord(Getc, &gIn, gRecord, sizeof gRecord, &line); } while (len == 0);
-    if (len < 0) { CardInClose(&gIn); gImport.badHeader = 1; return errNone; }
+    do { len = CsvNextRecord(Getc, &gIn, gRecord, csvMaxRecord, &line); } while (len == 0);
+    if (len < 0) { CardInClose(&gIn); MemPtrFree(gRecord); gRecord = NULL; gImport.badHeader = 1; return errNone; }
     n = CsvSplit(gRecord, gFields, csvMaxFields);
-    if (CsvMapHeader(gFields, n, &gMap) == 0) { CardInClose(&gIn); gImport.badHeader = 1; return errNone; }
+    if (CsvMapHeader(gFields, n, &gMap) == 0) { CardInClose(&gIn); MemPtrFree(gRecord); gRecord = NULL; gImport.badHeader = 1; return errNone; }
     ResolveProgrammes(write);
     for (;;) {
         UInt8 k, vid;
         recLine = line + 1;
-        len = CsvNextRecord(Getc, &gIn, gRecord, sizeof gRecord, &line);
+        len = CsvNextRecord(Getc, &gIn, gRecord, csvMaxRecord, &line);
         if (len < 0) break;
         if (len == 0) continue;
         n = CsvSplit(gRecord, gFields, csvMaxFields);
@@ -210,6 +212,7 @@ static Err Pass(UInt16 vol, Boolean write)
         }
     }
     CardInClose(&gIn);
+    MemPtrFree(gRecord); gRecord = NULL;
     return errNone;
 }
 

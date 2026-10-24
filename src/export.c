@@ -30,6 +30,13 @@ static void BuildCtx(void)
     }
 }
 
+Boolean ExportWants(const FillRecord *f, UInt8 vehicle, UInt16 year)
+{
+    if (vehicle != 255 && f->vehicle != vehicle) return false;
+    if (year) { UInt16 y; UInt8 m, d; DateDaysToYmd(f->date, &y, &m, &d); if (y != year) return false; }
+    return true;
+}
+
 Err ExportCsv(UInt16 vol, UInt8 vehicle, UInt16 year, char *nameOut, UInt32 *bytes)
 {
     char path[80];

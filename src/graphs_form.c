@@ -26,8 +26,8 @@ static char gGVNames[vehMaxVehicles + 1][vehNameLen];
 static char *gGVPtrs[vehMaxVehicles + 1];
 static UInt8 gGVIds[vehMaxVehicles + 1];
 static UInt8 gGrKind;
-static Int32 gGrX[kGrMax], gGrY[kGrMax];     /* x: days or month index; y: display value x 10 (or cents) */
-static UInt8 gGrS[kGrMax];                    /* series (vehicle slot) per point */
+static Int32 *gGrX, *gGrY;                    /* x: days or month index; y: display value x 10 (or cents); heap while open */
+static UInt8 *gGrS;                           /* series (vehicle slot) per point */
 static UInt16 gGrN;
 static UInt8 gGrSeriesId[kGrSeries], gGrSeriesCount;
 static char gGrSeriesName[kGrSeries][vehNameLen];
@@ -35,7 +35,7 @@ static Int32 gGrMin, gGrMax, gGrMean, gGrXMin, gGrXMax;
 static Int16 gGrSelected = -1;
 static RectangleType gGrPlot;                 /* standard coordinates */
 static struct { UInt32 lastFullOdo, pending; UInt8 haveFull; } gGrChain[statsMaxId][2];
-static UInt32 gGrMonthCents[kGrMax];          /* spend per month, by month index from gGrFirstMonth */
+static UInt32 *gGrMonthCents;                 /* spend per month, by month index from gGrFirstMonth */
 static UInt16 gGrFirstMonth;
 
 /* Section placement: see sections.h. */
@@ -61,9 +61,28 @@ static UInt8 SeriesFor(UInt8 vehicle)
     return gGrSeriesCount++;
 }
 
+/* Section placement: see sections.h. */
+static Boolean GrAlloc(void) RPT_SEC;
+static void GrFree(void) RPT_SEC;
+
+static Boolean GrAlloc(void)
+{
+    if (!gGrX) gGrX = MemPtrNew(kGrMax * sizeof(Int32));
+    if (!gGrY) gGrY = MemPtrNew(kGrMax * sizeof(Int32));
+    if (!gGrS) gGrS = MemPtrNew(kGrMax);
+    if (!gGrMonthCents) gGrMonthCents = MemPtrNew(kGrMax * sizeof(UInt32));
+    return gGrX && gGrY && gGrS && gGrMonthCents;
+}
+
+static void GrFree(void)
+{
+    if (gGrX) MemPtrFree(gGrX); if (gGrY) MemPtrFree(gGrY); if (gGrS) MemPtrFree(gGrS); if (gGrMonthCents) MemPtrFree(gGrMonthCents);
+    gGrX = gGrY = NULL; gGrS = NULL; gGrMonthCents = NULL;
+}
+
 static void AddPoint(Int32 x, Int32 y, UInt8 s)
 {
-    if (gGrN >= kGrMax) return;
+    if (gGrN >= kGrMax || !gGrX) return;
     gGrX[gGrN] = x; gGrY[gGrN] = y; gGrS[gGrN] = s; gGrN++;
 }
 
@@ -75,7 +94,8 @@ static void Collect(void)
     UInt16 months = 0;
     gGrN = 0; gGrSeriesCount = 0; gGrSelected = -1;
     MemSet(gGrChain, sizeof gGrChain, 0);
-    if (gGrKind == grSpend) MemSet(gGrMonthCents, sizeof gGrMonthCents, 0);
+    if (!GrAlloc()) return;
+    if (gGrKind == grSpend) MemSet(gGrMonthCents, kGrMax * sizeof(UInt32), 0);
     gGrFirstMonth = 0;
     for (i = 0; i < n; i++) {
         UInt8 v, c, s;
@@ -314,6 +334,7 @@ Boolean GraphsFormHandleEvent(EventType *event)
         DrawGraph();
         return true;
     case frmUpdateEvent: FrmDrawForm(form); DrawGraph(); return true;
+    case frmCloseEvent: GrFree(); gGrN = 0; break;
     case winDisplayChangedEvent: LayoutGraph(form); WinEraseWindow(); FrmDrawForm(form); DrawGraph(); return true;
     case penDownEvent:
         if (gGrN && RctPtInRectangle(event->screenX, event->screenY, &gGrPlot)) {

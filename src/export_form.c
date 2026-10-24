@@ -79,10 +79,11 @@ static void DoExport(FormType *form)
     UInt32 bytes = 0;
     Err err;
     if (AppGroupSelection(form, 2) == ExpPalmButton) { FrmAlert(NotYetAlert); return; }
-    if (AppGroupSelection(form, 1) != ExpCsvButton) { FrmAlert(NotYetAlert); return; }
     if (CardFind(&vol) != errNone) { FrmAlert(NoCardAlert); return; }
     AppSetLabel(form, ExpFileLabel, "Writing...");
-    err = ExportCsv(vol, gExpVehicle, gExpYear, name, &bytes);
+    if (AppGroupSelection(form, 1) == ExpXlsxButton) err = ExportXlsx(vol, gExpVehicle, gExpYear, name, &bytes);
+    else if (AppGroupSelection(form, 1) == ExpPdfButton) err = ExportPdf(vol, gExpVehicle, gExpYear, name, &bytes);
+    else err = ExportCsv(vol, gExpVehicle, gExpYear, name, &bytes);
     if (err) { StrIToA(kb, err); FrmCustomAlert(ExportFailedAlert, name, kb, ""); FileLabel(form); return; }
     StrIToA(kb, (bytes + 512) / 1024);
     FrmCustomAlert(ExportDoneAlert, name, kb, "");
