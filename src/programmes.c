@@ -18,7 +18,8 @@ static UInt8 gPacked[pgmFixedSize + pgmAliasLen + 4];
 static RectangleType gPgmRows;
 static UInt16 gOrder[pgmMaxProgrammes];  /* list rows -> database index */
 static UInt16 gOrderCount;
-#define kPgmRowH 22
+#define kPgmRowH 20
+static UInt16 gPgmFirst;   /* first row shown; page keys move it */
 #define kPgmTop 18
 
 /* ---- lookups ---- */
@@ -206,7 +207,8 @@ static void DrawProgrammes(void)
         WinDrawChars("No programmes. Tap New to add one.", 34, 6, y + 20);
         return;
     }
-    for (row = 0; row < gOrderCount && y + kPgmRowH <= gPgmRows.topLeft.y + gPgmRows.extent.y; row++, y += kPgmRowH) {
+    if (gPgmFirst >= gOrderCount) gPgmFirst = 0;
+    for (row = gPgmFirst; row < gOrderCount && y + kPgmRowH <= gPgmRows.topLeft.y + gPgmRows.extent.y; row++, y += kPgmRowH) {
         Int32 bal;
         if (PgmGetAt(gOrder[row], &gScanPgm) != errNone) continue;
         FntSetFont(gScanPgm.archived ? stdFont : boldFont);
@@ -252,10 +254,18 @@ Boolean ProgrammesFormHandleEvent(EventType *event)
         LayoutProgrammes(form); WinEraseWindow(); FrmDrawForm(form); DrawProgrammes(); return true;
     case penDownEvent:
         if (RctPtInRectangle(event->screenX, event->screenY, &gPgmRows)) {
-            UInt16 row = (UInt16)((event->screenY - gPgmRows.topLeft.y) / kPgmRowH);
+            UInt16 row = (UInt16)((event->screenY - gPgmRows.topLeft.y) / kPgmRowH + gPgmFirst);
             if (row < gOrderCount) { gEditProgrammeIndex = gOrder[row]; FrmGotoForm(EditProgrammeForm); return true; }
         }
         break;
+    case keyDownEvent: {
+        /* Page keys move through a long list by a screenful. */
+        UInt16 visible = (UInt16)(gPgmRows.extent.y / kPgmRowH);
+        WChar c = event->data.keyDown.chr;
+        if (c == vchrPageDown && gPgmFirst + visible < gOrderCount) { gPgmFirst += visible; DrawProgrammes(); return true; }
+        if (c == vchrPageUp && gPgmFirst > 0) { gPgmFirst = gPgmFirst > visible ? gPgmFirst - visible : 0; DrawProgrammes(); return true; }
+        break;
+    }
     case ctlSelectEvent:
         switch (event->data.ctlSelect.controlID) {
         case PgmsNewButton:

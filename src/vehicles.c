@@ -14,6 +14,7 @@ static FillRecord gScanFillV;
 static Boolean gShowArchived;
 static RectangleType gVehRows;
 #define kVehRowH 22
+static UInt16 gVehFirst;   /* first row shown; page keys move it */
 #define kVehTop 18
 
 Int16 VehFindById(UInt8 id)
@@ -130,6 +131,8 @@ static void DrawVehicles(void)
         WinDrawChars("No vehicles yet. Tap New to add one.", 36, 6, y + 20);
         return;
     }
+    if (!VisibleAt(gVehFirst, &idx)) gVehFirst = 0;
+    row = gVehFirst;
     while (VisibleAt(row, &idx) && y + kVehRowH <= gVehRows.topLeft.y + gVehRows.extent.y) {
         UInt32 odo;
         DbGetVehicle(idx, &gScanVeh);
@@ -183,10 +186,17 @@ Boolean VehiclesFormHandleEvent(EventType *event)
         LayoutVehicles(form); WinEraseWindow(); FrmDrawForm(form); DrawVehicles(); return true;
     case penDownEvent:
         if (RctPtInRectangle(event->screenX, event->screenY, &gVehRows)) {
-            UInt16 row = (UInt16)((event->screenY - gVehRows.topLeft.y) / kVehRowH), idx;
+            UInt16 row = (UInt16)((event->screenY - gVehRows.topLeft.y) / kVehRowH + gVehFirst), idx;
             if (VisibleAt(row, &idx)) { gEditVehicleIndex = idx; FrmGotoForm(EditVehicleForm); return true; }
         }
         break;
+    case keyDownEvent: {
+        UInt16 visible = (UInt16)(gVehRows.extent.y / kVehRowH), idx;
+        WChar c = event->data.keyDown.chr;
+        if (c == vchrPageDown && VisibleAt(gVehFirst + visible, &idx)) { gVehFirst += visible; DrawVehicles(); return true; }
+        if (c == vchrPageUp && gVehFirst > 0) { gVehFirst = gVehFirst > visible ? gVehFirst - visible : 0; DrawVehicles(); return true; }
+        break;
+    }
     case ctlSelectEvent:
         switch (event->data.ctlSelect.controlID) {
         case VehiclesNewButton:
