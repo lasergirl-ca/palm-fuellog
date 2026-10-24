@@ -44,6 +44,7 @@ static char gPgmNames[pgmMaxProgrammes + 1][pgmNameLen];
 static char *gPgmPtrs[pgmMaxProgrammes + 1];
 static UInt8 gPgmIds[pgmMaxProgrammes + 1];
 static UInt16 gPgmChoices;
+static char gRowNames[fillMaxPoints][pgmNameLen];   /* trigger labels, cut to the trigger's width */
 
 static void Recompute(FormType *form);
 static Int32 ReadVolume(FormType *form, UInt32 *ml);
@@ -169,7 +170,11 @@ static void PtsShowRows(FormType *dlg, Boolean fillFields)
             Int16 sel = 0;
             for (k = 0; k < gPgmChoices; k++) if (gPgmIds[k] == gPts[i].pgm) sel = (Int16)k;
             LstSetSelection(lst, sel);
-            CtlSetLabel(trg, gPgmPtrs[sel]);
+            /* The trigger is 78 px with its arrow; cut the name to what fits. */
+            StrCopy(gRowNames[i], gPgmPtrs[sel]);
+            FntSetFont(stdFont);
+            while (gRowNames[i][0] && FntCharsWidth(gRowNames[i], StrLen(gRowNames[i])) > 62) gRowNames[i][StrLen(gRowNames[i]) - 1] = 0;
+            CtlSetLabel(trg, gRowNames[i]);
             if (fillFields) {
                 TextFixed(b, gPts[i].earned, 0, gPoint, 0); AppSetFieldText(dlg, PtsEarned0 + i, b);
                 if (gPts[i].redeemed) { TextFixed(b, gPts[i].redeemed, 0, gPoint, 0); AppSetFieldText(dlg, PtsRedeemed0 + i, b); }
