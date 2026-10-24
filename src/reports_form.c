@@ -229,7 +229,7 @@ Boolean ReportsFormHandleEvent(EventType *event)
         case RptNextButton: StepYear(form, 1); return true;
         case RptDoneButton: FrmGotoForm(StatsForm); return true;
         case RptGraphsButton: FrmGotoForm(GraphsForm); return true;
-        case RptExportButton: FrmAlert(NotYetAlert); return true;
+        case RptExportButton: FrmGotoForm(ExportForm); return true;
         default: break;
         }
         break;

@@ -1,0 +1,59 @@
+#include "export.h"
+#include "card.h"
+#include "csv.h"
+#include "app.h"
+#include "db.h"
+#include "datecalc.h"
+#include "vehicles.h"
+#include "programmes.h"
+
+static CsvCtx gCsv;
+static FillRecord gExpFill;
+static VehicleRecord gExpVeh;
+static ProgrammeRecord gExpPgm;
+static CardOut gOut;
+
+/* Section placement: see sections.h. */
+static void BuildCtx(void) IO_SEC;
+
+static void BuildCtx(void)
+{
+    UInt16 n = DbCount(dbProgrammes), i;
+    MemSet(&gCsv, sizeof gCsv, 0);
+    gCsv.distUnit = gPrefs.distanceUnit; gCsv.volUnit = gPrefs.volumeUnit; gCsv.priceUnit = gPrefs.priceUnit;
+    gCsv.priceCents = gPrefs.priceFormat == 1; gCsv.homeCurrency = gPrefs.homeCurrency;
+    for (i = 0; i < n && gCsv.pgmCount < csvMaxPgms; i++) {
+        if (PgmGetAt(i, &gExpPgm) != errNone) continue;
+        gCsv.pgmIds[gCsv.pgmCount] = gExpPgm.id;
+        StrCopy(gCsv.pgmNames[gCsv.pgmCount], gExpPgm.name);
+        gCsv.pgmCount++;
+    }
+}
+
+Err ExportCsv(UInt16 vol, UInt8 vehicle, UInt16 year, char *nameOut, UInt32 *bytes)
+{
+    char path[80];
+    UInt16 n = DbCount(dbFills), i;
+    UInt8 lastVeh = 255;
+    Err err;
+    CardExportName(nameOut, ".csv");
+    StrCopy(path, cardExport); StrCat(path, "/"); StrCat(path, nameOut);
+    err = CardEnsureDirs(vol);
+    if (err) return err;
+    err = CardOutOpen(&gOut, vol, path);
+    if (err) return err;
+    BuildCtx();
+    CsvBom(&gOut.out);
+    CsvHeader(&gOut.out, &gCsv);
+    for (i = 0; i < n; i++) {
+        if (DbGetFill(i, &gExpFill) != errNone) continue;
+        if (vehicle != 255 && gExpFill.vehicle != vehicle) continue;
+        if (year) { UInt16 y; UInt8 m, d; DateDaysToYmd(gExpFill.date, &y, &m, &d); if (y != year) continue; }
+        if (gExpFill.vehicle != lastVeh) { VehGet(gExpFill.vehicle, &gExpVeh); lastVeh = gExpFill.vehicle; }
+        CsvFillRow(&gOut.out, &gCsv, &gExpFill, gExpVeh.name);
+        if (gOut.out.err) break;
+    }
+    err = CardOutClose(&gOut);
+    *bytes = CardFileSize(vol, path);
+    return err;
+}

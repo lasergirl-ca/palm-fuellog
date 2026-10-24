@@ -22,6 +22,7 @@ void DbCloseAll(void);
 DmOpenRef DbRef(UInt8 which);
 UInt16 DbSchemaVersion(UInt8 which);   /* as read at open, before migration */
 UInt16 DbCount(UInt8 which);
+const char *DbName(UInt8 which);     /* "FuelLog-ZFlg" */
 
 /* Packed record access. Add keeps the fill and visit databases sorted. */
 Err DbAdd(UInt8 which, const UInt8 *packed, UInt32 len, UInt16 *indexOut);

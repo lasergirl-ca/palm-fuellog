@@ -333,6 +333,7 @@ Boolean FillListHandleEvent(EventType *event)
         if (event->data.menu.itemID == MenuPrefs) { FrmGotoForm(PrefsForm); return true; }
         if (event->data.menu.itemID == MenuVehicles) { FrmGotoForm(VehiclesForm); return true; }
         if (event->data.menu.itemID == MenuProgrammes) { FrmGotoForm(ProgrammesForm); return true; }
+        if (event->data.menu.itemID == MenuExport) { FrmGotoForm(ExportForm); return true; }
         if (event->data.menu.itemID == MenuDiagnostics) { FrmGotoForm(DiagForm); return true; }
         if (event->data.menu.itemID == MenuAbout) {
             /* Diagnostics for the layout: display vs window height and DIA changes seen. */

@@ -24,6 +24,8 @@
 #include "stats_form.h"
 #include "service_form.h"
 #include "reports_form.h"
+#include "export_form.h"
+#include "backup.h"
 
 #define kMinRomVersion sysMakeROMVersion(3, 0, 0, sysROMStageRelease, 0)
 
@@ -279,6 +281,14 @@ static Boolean AppHandleEvent(EventType *event)
             FrmSetEventHandler(form, GraphsFormHandleEvent);
             AppSetupDIA(form);
             break;
+        case ExportForm:
+            FrmSetEventHandler(form, ExportFormHandleEvent);
+            AppSetupDIA(form);
+            break;
+        case RestoreForm:
+            FrmSetEventHandler(form, RestoreFormHandleEvent);
+            AppSetupDIA(form);
+            break;
         case DiagForm:
             FrmSetEventHandler(form, DiagFormHandleEvent);
             AppSetupDIA(form);
@@ -363,6 +373,7 @@ UInt32 PilotMain(UInt16 cmd, MemPtr cmdPBP, UInt16 launchFlags)
         else FrmGotoForm(FillListForm);
         AppEventLoop();
         FrmCloseAllForms();
+        BackupAuto();           /* weekly card backup on exit, when due */
         PrefsSave(&gPrefs);
         DbCloseAll();
     }

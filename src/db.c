@@ -117,6 +117,7 @@ void DbCloseAll(void)
 }
 
 DmOpenRef DbRef(UInt8 which) { return gRef[which]; }
+const char *DbName(UInt8 which) { return kSpec[which].name; }
 UInt16 DbSchemaVersion(UInt8 which) { return gVersion[which]; }
 UInt16 DbCount(UInt8 which) { return gRef[which] ? DmNumRecords(gRef[which]) : 0; }
 

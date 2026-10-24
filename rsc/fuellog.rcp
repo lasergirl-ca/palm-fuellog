@@ -97,6 +97,7 @@ BEGIN
         MENUITEM "Preferences..." ID MenuPrefs "R"
         MENUITEM "Vehicles..." ID MenuVehicles "V"
         MENUITEM "Programmes..." ID MenuProgrammes "P"
+        MENUITEM "Export, backup, import..." ID MenuExport "E"
         MENUITEM SEPARATOR
         MENUITEM "Diagnostics" ID MenuDiagnostics
         MENUITEM "About FuelLog" ID MenuAbout
@@ -682,4 +683,106 @@ BEGIN
     POPUPLIST ID GrKindTrigger GrKindList
     BUTTON "Done" ID GrDoneButton AT (4 146 36 12)
     BUTTON "Reports" ID GrReportsButton AT (46 146 44 12)
+END
+
+FORM ID ExportForm AT (0 0 160 160)
+NOFRAME
+USABLE
+BEGIN
+    TITLE "Export"
+    LABEL "Format:" AUTOID AT (22 17) FONT 0
+    PUSHBUTTON "CSV" ID ExpCsvButton AT (58 17 30 12) GROUP 1
+    PUSHBUTTON "XLSX" ID ExpXlsxButton AT (PREVRIGHT 17 34 12) GROUP 1
+    PUSHBUTTON "PDF" ID ExpPdfButton AT (PREVRIGHT 17 30 12) GROUP 1
+    LABEL "Vehicle:" AUTOID AT (20 30) FONT 0
+    POPUPTRIGGER "All vehicles" ID ExpVehicleTrigger AT (58 30 94 12) LEFTANCHOR
+    LIST "All vehicles" ID ExpVehicleList AT (58 30 94 60) NONUSABLE VISIBLEITEMS 6
+    POPUPLIST ID ExpVehicleTrigger ExpVehicleList
+    LABEL "Range:" AUTOID AT (24 43) FONT 0
+    POPUPTRIGGER "All years" ID ExpRangeTrigger AT (58 43 60 12) LEFTANCHOR
+    LIST "All years" ID ExpRangeList AT (58 43 60 60) NONUSABLE VISIBLEITEMS 6
+    POPUPLIST ID ExpRangeTrigger ExpRangeList
+    LABEL "Send to:" AUTOID AT (16 56) FONT 0
+    PUSHBUTTON "SD card" ID ExpCardButton AT (58 56 44 12) GROUP 2
+    PUSHBUTTON "Other Palm" ID ExpPalmButton AT (PREVRIGHT 56 54 12) GROUP 2
+    LABEL "                                        " ID ExpFileLabel AT (4 72) FONT 0
+    BUTTON "Export" ID ExpExportButton AT (4 85 44 12)
+    LABEL "Backup" AUTOID AT (4 103) FONT 1
+    LABEL "                                        " ID ExpBackupLabel AT (4 115) FONT 0
+    BUTTON "Back up now" ID ExpBackupButton AT (4 128 64 12)
+    BUTTON "Restore..." ID ExpRestoreButton AT (74 128 52 12)
+    LABEL "Import" AUTOID AT (4 146) FONT 1
+    LABEL "CSV from Import/ on the card" AUTOID AT (4 158) FONT 0
+    BUTTON "Choose a file..." ID ExpImportButton AT (4 171 76 12)
+    BUTTON "Done" ID ExpDoneButton AT (4 190 36 12)
+    SCROLLBAR ID ExpScrollBar AT (153 15 7 130) VALUE 0 MIN 0 MAX 0 PAGESIZE 100
+END
+
+FORM ID RestoreForm AT (0 0 160 160)
+NOFRAME
+USABLE
+BEGIN
+    TITLE "Restore"
+    LABEL "Backup sets on the card, newest first:" AUTOID AT (4 17) FONT 0
+    LIST "" ID RstList AT (4 30 150 99) USABLE VISIBLEITEMS 9
+    LABEL "Restoring replaces the whole log." AUTOID AT (4 132) FONT 0
+    BUTTON "Restore" ID RstRestoreButton AT (4 146 44 12)
+    BUTTON "Cancel" ID RstCancelButton AT (54 146 40 12)
+END
+
+ALERT ID NoCardAlert
+ERROR
+BEGIN
+    TITLE "No card"
+    MESSAGE "No SD card was found. Insert one and try again."
+    BUTTONS "OK"
+END
+
+ALERT ID ExportDoneAlert
+INFORMATION
+BEGIN
+    TITLE "Saved"
+    MESSAGE "Saved ^1 (^2 KB) in Export on the card."
+    BUTTONS "OK"
+END
+
+ALERT ID ExportFailedAlert
+ERROR
+BEGIN
+    TITLE "Could not write"
+    MESSAGE "^1 was not written (error ^2)."
+    BUTTONS "OK"
+END
+
+ALERT ID RestoreConfirmAlert
+CONFIRMATION
+DEFAULTBUTTON 1
+BEGIN
+    TITLE "Replace the log?"
+    MESSAGE "Restore the set ^1? Every fill, vehicle, programme and service now on the Palm will be replaced."
+    BUTTONS "Restore" "Cancel"
+END
+
+ALERT ID RestoreDoneAlert
+INFORMATION
+BEGIN
+    TITLE "Restored"
+    MESSAGE "The set ^1 is now the live log."
+    BUTTONS "OK"
+END
+
+ALERT ID BackupDoneAlert
+INFORMATION
+BEGIN
+    TITLE "Backed up"
+    MESSAGE "Backed up to Backup/^1 on the card."
+    BUTTONS "OK"
+END
+
+ALERT ID NewerBackupAlert
+ERROR
+BEGIN
+    TITLE "Newer backup"
+    MESSAGE "That set was written by a newer FuelLog and cannot be restored here."
+    BUTTONS "OK"
 END
