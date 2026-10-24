@@ -27,6 +27,9 @@
 #include "export_form.h"
 #include "import.h"
 #include "backup.h"
+#include "beam.h"
+#include <ExgMgr.h>
+#include <VFSMgr.h>
 
 #define kMinRomVersion sysMakeROMVersion(3, 0, 0, sysROMStageRelease, 0)
 
@@ -354,8 +357,89 @@ static void RestoreAlarmAfterReset(void)
     if (SysCurAppDatabase(&card, &dbId) == errNone) AlmSetAlarm(card, dbId, 0, p.nextAlarm, true);
 }
 
+/* Receives a .fuel transfer with system traps only, so it works without
+ * globals: a records bundle goes into the inbox database for the next
+ * launch (or right away when the app is running); a file envelope is
+ * written to the card. */
+static void ReceiveBeam(ExgSocketType *sock, Boolean running)
+{
+    UInt8 head[10], chunk[1024];
+    UInt32 got, total = 0;
+    Err err;
+    UInt16 kind;
+    if (ExgAccept(sock) != errNone) return;
+    got = ExgReceive(sock, head, 8, &err);
+    if (err || got < 8 || head[0] != 'F' || head[1] != 'U' || head[2] != 'E' || head[3] != 'L') { ExgDisconnect(sock, err ? err : exgErrBadData); return; }
+    kind = (UInt16)((head[6] << 8) | head[7]);
+    if (kind == beamKindFile) {
+        UInt8 nameLen, fmt; char name[48], path[96]; UInt16 vol; FileRef f = 0;
+        UInt32 iter = vfsIteratorStart;
+        got = ExgReceive(sock, head, 2, &err);
+        if (err || got < 2) { ExgDisconnect(sock, exgErrBadData); return; }
+        nameLen = head[0]; fmt = head[1];
+        if (nameLen > 40) nameLen = 40;
+        got = ExgReceive(sock, name, nameLen, &err);
+        name[got] = 0;
+        if (VFSVolumeEnumerate(&vol, &iter) != errNone) { ExgDisconnect(sock, vfsErrVolumeBadRef); return; }
+        StrCopy(path, fmt == 2 ? "/PALM/Programs/FuelLog/Export/" : "/PALM/Programs/FuelLog/Import/");
+        StrCat(path, name);
+        VFSFileDelete(vol, path);
+        if (VFSFileOpen(vol, path, vfsModeWrite | vfsModeCreate | vfsModeTruncate, &f) != errNone) { ExgDisconnect(sock, vfsErrFileGeneric); return; }
+        for (;;) {
+            UInt32 wrote;
+            got = ExgReceive(sock, chunk, sizeof chunk, &err);
+            if (err || got == 0) break;
+            VFSFileWrite(f, got, chunk, &wrote);
+            total += got;
+        }
+        VFSFileClose(f);
+        ExgDisconnect(sock, err);
+        if (running) FrmCustomAlert(ReceivedFileAlert, name, fmt == 2 ? "Export" : "Import", "");
+        return;
+    }
+    {
+        /* records: gather into memory, then one inbox record */
+        MemHandle h = MemHandleNew(8);
+        UInt8 *p;
+        if (!h) { ExgDisconnect(sock, memErrNotEnoughSpace); return; }
+        p = MemHandleLock(h); MemMove(p, head, 8); MemHandleUnlock(h); total = 8;
+        for (;;) {
+            got = ExgReceive(sock, chunk, sizeof chunk, &err);
+            if (err || got == 0) break;
+            if (MemHandleResize(h, total + got) != errNone) { err = memErrNotEnoughSpace; break; }
+            p = MemHandleLock(h); MemMove(p + total, chunk, got); MemHandleUnlock(h);
+            total += got;
+        }
+        ExgDisconnect(sock, err);
+        if (!err) {
+            LocalID id = DmFindDatabase(0, beamInboxName);
+            DmOpenRef inbox;
+            if (!id) { DmCreateDatabase(0, beamInboxName, 'ZFlg', 'Inbx', false); id = DmFindDatabase(0, beamInboxName); }
+            inbox = id ? DmOpenDatabase(0, id, dmModeReadWrite) : 0;
+            if (inbox) {
+                UInt16 at = dmMaxRecordIndex;
+                MemHandle rec = DmNewRecord(inbox, &at, total);
+                if (rec) {
+                    p = MemHandleLock(h);
+                    DmWrite(MemHandleLock(rec), 0, p, total);
+                    MemHandleUnlock(rec); MemHandleUnlock(h);
+                    DmReleaseRecord(inbox, at, true);
+                }
+                DmCloseDatabase(inbox);
+            }
+        }
+        MemHandleFree(h);
+        if (running) { if (BeamProcessInbox()) FrmUpdateForm(FrmGetActiveFormID(), frmRedrawUpdateCode); }
+    }
+}
+
 UInt32 PilotMain(UInt16 cmd, MemPtr cmdPBP, UInt16 launchFlags)
 {
+    if (cmd == sysAppLaunchCmdExgReceiveData) {
+        ReceiveBeam((ExgSocketType *)cmdPBP, (launchFlags & sysAppLaunchFlagSubCall) != 0);
+        return errNone;
+    }
+    if (cmd == sysAppLaunchCmdExgAskUser) return errNone;   /* the system's own dialog asks */
     if (cmd == sysAppLaunchCmdSystemReset) {
         RestoreAlarmAfterReset();
         return errNone;
@@ -376,6 +460,8 @@ UInt32 PilotMain(UInt16 cmd, MemPtr cmdPBP, UInt16 launchFlags)
             return errNone;
         }
         PgmInstallPresets();
+        BeamRegister();
+        BeamProcessInbox();
         SvcScheduleAlarm();
         /* First launch: no vehicle yet means the Welcome steps, never an empty table. */
         if (DbCount(dbVehicles) == 0) { gSetupStep = 1; FrmGotoForm(WelcomeForm); }

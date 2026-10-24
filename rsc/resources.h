@@ -367,3 +367,9 @@
 #define ImpScrollBar         3403
 #define ImportDoneAlert      1527
 #define NoImportFilesAlert   1528
+
+#define ExpLogButton         3218
+#define ReceivedBundleAlert  1529
+#define ReceivedFileAlert    1530
+#define BeamDoneAlert        1531
+#define BeamFailedAlert      1532

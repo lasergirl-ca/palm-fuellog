@@ -270,21 +270,13 @@ static void ServicesSheet(UInt8 vehicle)
     XlsxSheetEnd(&gXw);
 }
 
-Err ExportXlsx(UInt16 vol, UInt8 vehicle, UInt16 year, char *nameOut, UInt32 *bytes)
+void ExportXlsxTo(OutStream *out, UInt8 vehicle, UInt16 year)
 {
     static const char *sheets[] = { "Fills", "Monthly", "Vehicles", "Programmes", "Services" };
-    char path[80];
-    Err err;
-    CardExportName(nameOut, ".xlsx");
-    StrCopy(path, cardExport); StrCat(path, "/"); StrCat(path, nameOut);
-    err = CardEnsureDirs(vol);
-    if (err) return err;
     gCrc = MemPtrNew(256 * sizeof(UInt32));
-    if (!gCrc) return memErrNotEnoughSpace;
-    err = CardOutOpen(&gXOut, vol, path);
-    if (err) { MemPtrFree(gCrc); gCrc = NULL; return err; }
+    if (!gCrc) { out->err = -1; return; }
     LoadProgrammes();
-    XlsxBegin(&gXw, &gXOut.out, gCrc);
+    XlsxBegin(&gXw, out, gCrc);
     XlsxWritePackage(&gXw, sheets, 5);
     FillsSheet(vehicle, year);
     MonthlySheet(vehicle, year);
@@ -292,10 +284,30 @@ Err ExportXlsx(UInt16 vol, UInt8 vehicle, UInt16 year, char *nameOut, UInt32 *by
     ProgrammesSheet();
     ServicesSheet(vehicle);
     XlsxEnd(&gXw);
-    err = CardOutClose(&gXOut);
     MemPtrFree(gCrc); gCrc = NULL;
+}
+
+Err ExportXlsx(UInt16 vol, UInt8 vehicle, UInt16 year, char *nameOut, UInt32 *bytes)
+{
+    char path[80];
+    Err err;
+    CardExportName(nameOut, ".xlsx");
+    StrCopy(path, cardExport); StrCat(path, "/"); StrCat(path, nameOut);
+    err = CardEnsureDirs(vol);
+    if (err) return err;
+    err = CardOutOpen(&gXOut, vol, path);
+    if (err) return err;
+    ExportXlsxTo(&gXOut.out, vehicle, year);
+    err = CardOutClose(&gXOut);
     *bytes = CardFileSize(vol, path);
     return err;
+}
+
+void ExportToStream(OutStream *out, UInt8 fmt, UInt8 vehicle, UInt16 year)
+{
+    if (fmt == 1) ExportXlsxTo(out, vehicle, year);
+    else if (fmt == 2) ExportPdfTo(out, vehicle, year);
+    else ExportCsvTo(out, vehicle, year);
 }
 
 /* ---- PDF ---- */
@@ -312,25 +324,18 @@ static void PdfLineText(Int16 x, Int16 y, const char *label, const char *value)
     PdfText(&gPw, pdfFontRegular, 12, x, y, b);
 }
 
-Err ExportPdf(UInt16 vol, UInt8 vehicle, UInt16 year, char *nameOut, UInt32 *bytes)
+void ExportPdfTo(OutStream *out, UInt8 vehicle, UInt16 year)
 {
-    char path[80], b[64], n1[24], n2[24];
+    char b[64], n1[24], n2[24];
     UInt16 n = DbCount(dbFills), i, rows = 0, pages = 0, count = 0;
     Int16 y;
     static Int16 cols[9] = { 36, 110, 190, 260, 330, 400, 470, 530, 756 };
     static const char *heads[8] = { "Date", "Odometer", "Trip", "Volume", "Price", "Total", "Points", "Notes" };
-    Err err;
     UInt8 lastVeh = 255;
 
-    CardExportName(nameOut, ".pdf");
-    StrCopy(path, cardExport); StrCat(path, "/"); StrCat(path, nameOut);
-    err = CardEnsureDirs(vol);
-    if (err) return err;
     gXStats = MemPtrNew(sizeof(Stats));
-    if (!gXStats) return memErrNotEnoughSpace;
-    err = CardOutOpen(&gXOut, vol, path);
-    if (err) { MemPtrFree(gXStats); gXStats = NULL; return err; }
-    PdfBegin(&gPw, &gXOut.out);
+    if (!gXStats) { out->err = -1; return; }
+    PdfBegin(&gPw, out);
 
     /* Page 1: summary from the Stats accumulator. */
     StatsBegin(gXStats);
@@ -455,8 +460,21 @@ Err ExportPdf(UInt16 vol, UInt8 vehicle, UInt16 year, char *nameOut, UInt32 *byt
         PdfPageEnd(&gPw);
     }
     PdfEnd(&gPw);
-    err = CardOutClose(&gXOut);
     MemPtrFree(gXStats); gXStats = NULL;
+}
+
+Err ExportPdf(UInt16 vol, UInt8 vehicle, UInt16 year, char *nameOut, UInt32 *bytes)
+{
+    char path[80];
+    Err err;
+    CardExportName(nameOut, ".pdf");
+    StrCopy(path, cardExport); StrCat(path, "/"); StrCat(path, nameOut);
+    err = CardEnsureDirs(vol);
+    if (err) return err;
+    err = CardOutOpen(&gXOut, vol, path);
+    if (err) return err;
+    ExportPdfTo(&gXOut.out, vehicle, year);
+    err = CardOutClose(&gXOut);
     *bytes = CardFileSize(vol, path);
     return err;
 }

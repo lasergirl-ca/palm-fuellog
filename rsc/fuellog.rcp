@@ -691,9 +691,10 @@ USABLE
 BEGIN
     TITLE "Export"
     LABEL "Format:" AUTOID AT (22 17) FONT 0
-    PUSHBUTTON "CSV" ID ExpCsvButton AT (58 17 30 12) GROUP 1
-    PUSHBUTTON "XLSX" ID ExpXlsxButton AT (PREVRIGHT 17 34 12) GROUP 1
-    PUSHBUTTON "PDF" ID ExpPdfButton AT (PREVRIGHT 17 30 12) GROUP 1
+    PUSHBUTTON "CSV" ID ExpCsvButton AT (56 17 22 12) GROUP 1
+    PUSHBUTTON "XLSX" ID ExpXlsxButton AT (PREVRIGHT 17 30 12) GROUP 1
+    PUSHBUTTON "PDF" ID ExpPdfButton AT (PREVRIGHT 17 22 12) GROUP 1
+    PUSHBUTTON "Log" ID ExpLogButton AT (PREVRIGHT 17 22 12) GROUP 1
     LABEL "Vehicle:" AUTOID AT (20 30) FONT 0
     POPUPTRIGGER "All vehicles" ID ExpVehicleTrigger AT (58 30 94 12) LEFTANCHOR
     LIST "All vehicles" ID ExpVehicleList AT (58 30 94 60) NONUSABLE VISIBLEITEMS 6
@@ -821,5 +822,38 @@ INFORMATION
 BEGIN
     TITLE "Nothing to import"
     MESSAGE "Put a CSV or XLSX file in /PALM/Programs/FuelLog/Import on the card first."
+    BUTTONS "OK"
+END
+
+ALERT ID ReceivedBundleAlert
+CONFIRMATION
+DEFAULTBUTTON 0
+BEGIN
+    TITLE "FuelLog data received"
+    MESSAGE "Another Palm sent ^1. Merge adds what is new and skips fills already here; Replace clears this log first."
+    BUTTONS "Merge" "Replace" "Discard"
+END
+
+ALERT ID ReceivedFileAlert
+INFORMATION
+BEGIN
+    TITLE "File received"
+    MESSAGE "^1 was saved to ^2 on the card."
+    BUTTONS "OK"
+END
+
+ALERT ID BeamDoneAlert
+INFORMATION
+BEGIN
+    TITLE "Sent"
+    MESSAGE "^1 sent to the other Palm."
+    BUTTONS "OK"
+END
+
+ALERT ID BeamFailedAlert
+ERROR
+BEGIN
+    TITLE "Not sent"
+    MESSAGE "^1 could not be sent (error ^2)."
     BUTTONS "OK"
 END

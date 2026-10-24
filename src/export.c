@@ -30,6 +30,21 @@ static void BuildCtx(void)
     }
 }
 
+void ExportCsvTo(OutStream *out, UInt8 vehicle, UInt16 year)
+{
+    UInt16 n = DbCount(dbFills), i;
+    UInt8 lastVeh = 255;
+    BuildCtx();
+    CsvBom(out);
+    CsvHeader(out, &gCsv);
+    for (i = 0; i < n; i++) {
+        if (DbGetFill(i, &gExpFill) != errNone || !ExportWants(&gExpFill, vehicle, year)) continue;
+        if (gExpFill.vehicle != lastVeh) { VehGet(gExpFill.vehicle, &gExpVeh); lastVeh = gExpFill.vehicle; }
+        CsvFillRow(out, &gCsv, &gExpFill, gExpVeh.name);
+        if (out->err) break;
+    }
+}
+
 Boolean ExportWants(const FillRecord *f, UInt8 vehicle, UInt16 year)
 {
     if (vehicle != 255 && f->vehicle != vehicle) return false;
@@ -49,18 +64,9 @@ Err ExportCsv(UInt16 vol, UInt8 vehicle, UInt16 year, char *nameOut, UInt32 *byt
     if (err) return err;
     err = CardOutOpen(&gOut, vol, path);
     if (err) return err;
-    BuildCtx();
-    CsvBom(&gOut.out);
-    CsvHeader(&gOut.out, &gCsv);
-    for (i = 0; i < n; i++) {
-        if (DbGetFill(i, &gExpFill) != errNone) continue;
-        if (vehicle != 255 && gExpFill.vehicle != vehicle) continue;
-        if (year) { UInt16 y; UInt8 m, d; DateDaysToYmd(gExpFill.date, &y, &m, &d); if (y != year) continue; }
-        if (gExpFill.vehicle != lastVeh) { VehGet(gExpFill.vehicle, &gExpVeh); lastVeh = gExpFill.vehicle; }
-        CsvFillRow(&gOut.out, &gCsv, &gExpFill, gExpVeh.name);
-        if (gOut.out.err) break;
-    }
+    ExportCsvTo(&gOut.out, vehicle, year);
     err = CardOutClose(&gOut);
+    (void)n; (void)i; (void)lastVeh;
     *bytes = CardFileSize(vol, path);
     return err;
 }

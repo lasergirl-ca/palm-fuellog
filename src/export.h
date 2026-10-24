@@ -11,4 +11,10 @@ Err ExportXlsx(UInt16 vol, UInt8 vehicle, UInt16 year, char *nameOut, UInt32 *by
 Err ExportPdf(UInt16 vol, UInt8 vehicle, UInt16 year, char *nameOut, UInt32 *bytes) XP_SEC;
 /* True when the fill passes the vehicle and year filter (shared by the exporters). */
 Boolean ExportWants(const FillRecord *f, UInt8 vehicle, UInt16 year) IO_SEC;
+#include "outstream.h"
+/* Write an export (0 CSV, 1 XLSX, 2 PDF) to any stream, for beaming. */
+void ExportToStream(OutStream *out, UInt8 fmt, UInt8 vehicle, UInt16 year) XP_SEC;
+void ExportCsvTo(OutStream *out, UInt8 vehicle, UInt16 year) IO_SEC;
+void ExportXlsxTo(OutStream *out, UInt8 vehicle, UInt16 year) XP_SEC;
+void ExportPdfTo(OutStream *out, UInt8 vehicle, UInt16 year) XP_SEC;
 #endif

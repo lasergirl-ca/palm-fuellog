@@ -9,6 +9,7 @@
 #include "datecalc.h"
 #include "vehicles.h"
 #include "resources.h"
+#include "beam.h"
 
 static char gEVNames[vehMaxVehicles + 1][vehNameLen];
 static char *gEVPtrs[vehMaxVehicles + 1];
@@ -33,7 +34,9 @@ static void DoBackup(FormType *form) IO_SEC;
 static void FileLabel(FormType *form)
 {
     char b[44], name[40];
-    UInt8 fmt = AppGroupSelection(form, 1) == ExpXlsxButton ? 1 : AppGroupSelection(form, 1) == ExpPdfButton ? 2 : 0;
+    UInt16 sel = AppGroupSelection(form, 1);
+    UInt8 fmt = sel == ExpXlsxButton ? 1 : sel == ExpPdfButton ? 2 : sel == ExpLogButton ? 3 : 0;
+    if (fmt == 3) { StrCopy(b, AppGroupSelection(form, 2) == ExpPalmButton ? "Sends the log to another FuelLog" : "The log goes to another Palm only"); AppSetLabel(form, ExpFileLabel, b); return; }
     CardExportName(name, fmt == 1 ? ".xlsx" : fmt == 2 ? ".pdf" : ".csv");
     StrCopy(b, AppGroupSelection(form, 2) == ExpPalmButton ? "Sends " : "Saves Export/"); StrCat(b, name);
     AppSetLabel(form, ExpFileLabel, b);
@@ -78,7 +81,16 @@ static void DoExport(FormType *form)
     char name[40], kb[12];
     UInt32 bytes = 0;
     Err err;
-    if (AppGroupSelection(form, 2) == ExpPalmButton) { FrmAlert(NotYetAlert); return; }
+    if (AppGroupSelection(form, 2) == ExpPalmButton || AppGroupSelection(form, 1) == ExpLogButton) {
+        UInt16 sel = AppGroupSelection(form, 1);
+        UInt8 fmt = sel == ExpXlsxButton ? 1 : sel == ExpPdfButton ? 2 : 0;
+        AppSetLabel(form, ExpFileLabel, "Sending...");
+        err = sel == ExpLogButton ? BeamSendLog(gExpVehicle) : BeamSendExport(fmt, gExpVehicle, gExpYear);
+        if (err) { StrIToA(kb, err); FrmCustomAlert(BeamFailedAlert, sel == ExpLogButton ? "The log" : "The export", kb, ""); }
+        else FrmCustomAlert(BeamDoneAlert, sel == ExpLogButton ? "The log" : "The export", "", "");
+        FileLabel(form);
+        return;
+    }
     if (CardFind(&vol) != errNone) { FrmAlert(NoCardAlert); return; }
     AppSetLabel(form, ExpFileLabel, "Writing...");
     if (AppGroupSelection(form, 1) == ExpXlsxButton) err = ExportXlsx(vol, gExpVehicle, gExpYear, name, &bytes);
@@ -147,7 +159,7 @@ Boolean ExportFormHandleEvent(EventType *event)
         break;
     case ctlSelectEvent:
         switch (event->data.ctlSelect.controlID) {
-        case ExpCsvButton: case ExpXlsxButton: case ExpPdfButton: case ExpCardButton: case ExpPalmButton: FileLabel(form); break;
+        case ExpCsvButton: case ExpXlsxButton: case ExpPdfButton: case ExpLogButton: case ExpCardButton: case ExpPalmButton: FileLabel(form); break;
         case ExpExportButton: DoExport(form); return true;
         case ExpBackupButton: DoBackup(form); return true;
         case ExpRestoreButton: FrmGotoForm(RestoreForm); return true;
