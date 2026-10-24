@@ -304,3 +304,24 @@
 
 #define ServiceAlarmAlert    1518
 #define ServiceDueAlert      1519
+
+#define ReportsForm          3000
+#define RptVehicleTrigger    3001
+#define RptVehicleList       3002
+#define RptPeriodTrigger     3003
+#define RptPeriodList        3004
+#define RptPrevButton        3005
+#define RptYearLabel         3006
+#define RptNextButton        3007
+#define RptDoneButton        3008
+#define RptGraphsButton      3009
+#define RptExportButton      3010
+#define RptScrollBar         3011
+
+#define GraphsForm           3100
+#define GrVehicleTrigger     3101
+#define GrVehicleList        3102
+#define GrKindTrigger        3103
+#define GrKindList           3104
+#define GrDoneButton         3105
+#define GrReportsButton      3106

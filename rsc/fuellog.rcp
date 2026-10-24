@@ -648,3 +648,38 @@ BEGIN
     MESSAGE "^1. Tap Service on the fill list for details."
     BUTTONS "OK"
 END
+
+FORM ID ReportsForm AT (0 0 160 160)
+NOFRAME
+USABLE
+BEGIN
+    TITLE "Reports"
+    POPUPTRIGGER "All vehicles" ID RptVehicleTrigger AT (96 1 62 12) RIGHTANCHOR
+    LIST "All vehicles" ID RptVehicleList AT (60 1 98 60) NONUSABLE VISIBLEITEMS 6
+    POPUPLIST ID RptVehicleTrigger RptVehicleList
+    POPUPTRIGGER "Monthly" ID RptPeriodTrigger AT (4 15 54 12) LEFTANCHOR
+    LIST "Monthly" "Yearly" ID RptPeriodList AT (4 15 54 22) NONUSABLE VISIBLEITEMS 2
+    POPUPLIST ID RptPeriodTrigger RptPeriodList
+    BUTTON "<" ID RptPrevButton AT (92 15 12 12) NOFRAME
+    LABEL "2026 to 2037" ID RptYearLabel AT (106 15) FONT 1
+    BUTTON ">" ID RptNextButton AT (140 15 12 12) NOFRAME
+    BUTTON "Done" ID RptDoneButton AT (4 146 36 12)
+    BUTTON "Graphs" ID RptGraphsButton AT (46 146 40 12)
+    BUTTON "Export" ID RptExportButton AT (92 146 40 12)
+    SCROLLBAR ID RptScrollBar AT (152 29 7 100) VALUE 0 MIN 0 MAX 0 PAGESIZE 100
+END
+
+FORM ID GraphsForm AT (0 0 160 160)
+NOFRAME
+USABLE
+BEGIN
+    TITLE "Graphs"
+    POPUPTRIGGER "All vehicles" ID GrVehicleTrigger AT (96 1 62 12) RIGHTANCHOR
+    LIST "All vehicles" ID GrVehicleList AT (60 1 98 60) NONUSABLE VISIBLEITEMS 6
+    POPUPLIST ID GrVehicleTrigger GrVehicleList
+    POPUPTRIGGER "Economy" ID GrKindTrigger AT (4 15 90 12) LEFTANCHOR
+    LIST "Economy" "Price per fill" "Spend per month" ID GrKindList AT (4 15 90 33) NONUSABLE VISIBLEITEMS 3
+    POPUPLIST ID GrKindTrigger GrKindList
+    BUTTON "Done" ID GrDoneButton AT (4 146 36 12)
+    BUTTON "Reports" ID GrReportsButton AT (46 146 44 12)
+END

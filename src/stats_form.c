@@ -271,7 +271,8 @@ Boolean StatsFormHandleEvent(EventType *event)
     case ctlSelectEvent:
         switch (event->data.ctlSelect.controlID) {
         case StatsDoneButton: FrmGotoForm(FillListForm); return true;
-        case StatsReportsButton: case StatsGraphsButton: FrmAlert(NotYetAlert); return true;
+        case StatsReportsButton: FrmGotoForm(ReportsForm); return true;
+        case StatsGraphsButton: FrmGotoForm(GraphsForm); return true;
         default: break;
         }
         break;

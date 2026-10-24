@@ -42,7 +42,7 @@ done
 # plain `static` (they go to .data) or file-scope.
 for obj in "$@"; do
     out=$(m68k-palmos-objdump -r "$obj" | awk -v obj="$obj" '
-        /END16/ && ($3 ~ /^(forms|svcs|sec2|xport|\.text)([+-]|$)/) {
+        /END16/ && ($3 ~ /^(forms|svcs|rpts|sec2|xport|\.text)([+-]|$)/) {
             print "check-sections: " obj " addresses " $3 " A5-relative at " $1 "; a static const table inside a sectioned function?" }')
     if [ -n "$out" ]; then echo "$out"; status=1; fi
 done
