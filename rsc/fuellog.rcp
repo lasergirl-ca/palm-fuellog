@@ -545,7 +545,7 @@ BEGIN
     SELECTORTRIGGER "Oct 22" ID SvlDateTrigger AT (58 17 44 12)
     LABEL "Odometer:" AUTOID AT (12 30) FONT 0
     FIELD ID SvlOdoField AT (58 30 50 12) UNDERLINED MAXCHARS 10 NUMERIC
-    LABEL "from last fill" ID SvlOdoHint AT (111 30) FONT 0
+    LABEL "last fill     " ID SvlOdoHint AT (111 30) FONT 0
     LABEL "Done at this visit" ID SvlDoneLabel AT (4 43) FONT 1
     CHECKBOX "                       " ID 2810 AT (12 56 140 12)
     CHECKBOX "                       " ID 2811 AT (12 68 140 12)

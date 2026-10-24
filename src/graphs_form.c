@@ -238,7 +238,7 @@ static void DrawGraph(void)
         } else {
             UInt16 y, yy; UInt8 m, d, mm;
             Int32 days;
-            UInt16 months, step, k = 0;
+            UInt16 months, step, k = 0, drawn = 0;
             DateDaysToYmd((UInt16)gGrXMin, &y, &m, &d);
             DateDaysToYmd((UInt16)gGrXMax, &yy, &mm, &d);
             months = (UInt16)((yy * 12 + mm) - (y * 12 + m) + 1);
@@ -248,6 +248,14 @@ static void DrawGraph(void)
                 days = DateYmdToDays(y, m, 1);
                 if (days < gGrXMin || days > gGrXMax || (k % step)) continue;
                 WinDrawChars(DateMonthName(m), 3, (Coord)(PX(days, 1) - 8), ly);
+                drawn++;
+            }
+            if (drawn < 2) {
+                /* Under a month of data: name the first and last dates instead. */
+                DateShortText(b, (UInt16)gGrXMin);
+                WinDrawChars(b, StrLen(b), gGrPlot.topLeft.x, ly);
+                DateShortText(b, (UInt16)gGrXMax);
+                WinDrawChars(b, StrLen(b), (Coord)(gGrPlot.topLeft.x + gGrPlot.extent.x - FntCharsWidth(b, StrLen(b))), ly);
             }
         }
     }

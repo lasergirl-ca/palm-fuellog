@@ -101,8 +101,9 @@ static UInt32 Pace(UInt8 vehicle)
         if (count++ == 0) { firstDate = gScanFillS.date; firstOdo = gScanFillS.odometer; }
         lastDate = gScanFillS.date; lastOdo = gScanFillS.odometer;
     }
-    if (count >= 3) return SvcPaceX10(firstOdo, lastOdo, firstDate, lastDate);
-    if (allCount >= 2) return SvcPaceX10(allFirstOdo, allLastOdo, allFirstDate, allLastDate);
+    /* A pace needs at least a week of driving behind it, or a weekend of fills reads as 1,000 km/day. */
+    if (count >= 3 && lastDate >= firstDate + 7) return SvcPaceX10(firstOdo, lastOdo, firstDate, lastDate);
+    if (allCount >= 2 && allLastDate >= allFirstDate + 7) return SvcPaceX10(allFirstOdo, allLastOdo, allFirstDate, allLastDate);
     return 0;
 }
 
@@ -317,8 +318,9 @@ static void DrawService(void)
     r.topLeft.x = 0; r.topLeft.y = 15; r.extent.x = 160; r.extent.y = (Coord)(gSvcArea.topLeft.y + gSvcArea.extent.y + 12 - 15);
     WinEraseRectangle(&r, 0);
     FntSetFont(stdFont);
-    StrCopy(b, "Odometer "); DistText(n, gSvcOdoNow, gThousands); StrCat(b, n); StrCat(b, " "); StrCat(b, UnitDistLabel(gPrefs.distanceUnit));
+    StrCopy(b, "Odo "); DistText(n, gSvcOdoNow, gThousands); StrCat(b, n); StrCat(b, " "); StrCat(b, UnitDistLabel(gPrefs.distanceUnit));
     if (gSvcPace) { StrCat(b, ", pace "); DistText(n, gSvcPace, 0); StrCat(b, n); StrCat(b, " "); StrCat(b, UnitDistLabel(gPrefs.distanceUnit)); StrCat(b, "/day"); }
+    else StrCat(b, ", pace after a week");
     WinDrawChars(b, StrLen(b), 4, 15);
     if (gSvcRowCount == 0) {
         WinDrawChars("No services for this vehicle.", 29, 6, y + 20);
@@ -702,7 +704,7 @@ static void LoadSvl(FormType *form)
     DateShortText(gSvlDateText, gSvlDate);
     CtlSetLabel(FrmGetObjectPtr(form, FrmGetObjectIndex(form, SvlDateTrigger)), gSvlDateText);
     if (odo) { DistText(b, odo, 0); AppSetFieldText(form, SvlOdoField, b); } else AppSetFieldText(form, SvlOdoField, "");
-    AppSetLabel(form, SvlOdoHint, editing ? "" : (odo ? "from last fill" : ""));
+    AppSetLabel(form, SvlOdoHint, editing ? "" : (odo ? "last fill" : ""));
     if (editing) FrmShowObject(form, FrmGetObjectIndex(form, SvlDeleteButton));
     else FrmHideObject(form, FrmGetObjectIndex(form, SvlDeleteButton));
     gSvlCount = 0;

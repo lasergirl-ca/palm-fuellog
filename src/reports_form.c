@@ -85,9 +85,9 @@ static void DrawReport(void)
     WinSetClip(&gRptArea);
     FntSetFont(boldFont);
     WinDrawChars(gRptMode == rptMonthly ? "Month" : "Year", gRptMode == rptMonthly ? 5 : 4, 4, y);
-    DrawRightAt("Fills", 44, y);
+    DrawRightAt("#", 44, y);
     DrawRightAt(UnitVolLabel(gPrefs.volumeUnit), 78, y);
-    StrCopy(b, "Spend "); StrCat(b, CurrencySymbol(gPrefs.homeCurrency)); DrawRightAt(b, 118, y);
+    DrawRightAt(CurrencySymbol(gPrefs.homeCurrency), 118, y);
     DrawRightAt(EcoHeader(), 150, y);
     y += kRptRow + 1;
     for (i = 0; i < rptMaxRows; i++) {
