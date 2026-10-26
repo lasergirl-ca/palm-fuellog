@@ -77,7 +77,7 @@ static void EcoText(char *b, UInt32 l100x10)
 
 static void DrawStats(void)
 {
-    char b[40], n1[24], n2[20];
+    char b[64], n1[24], n2[20];
     Coord y = (Coord)(17 - gStatsScroll), top = gStatsArea.topLeft.y;
     Boolean electricOnly = gStats.fuelCount == 0 && gStats.chargeCount > 0;
     const Stats *s = &gStats;

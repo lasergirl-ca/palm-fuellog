@@ -15,7 +15,8 @@ typedef struct {
 } PointsAge;
 
 void   PointsBegin(PointsAge *a, UInt8 rule, UInt8 months) EXPORT_SEC;
-/* Fills in date order: earned opens a lot, redeemed drains the oldest lots. */
+/* Fills in date order: earned opens a lot (date 0 = the opening balance, never expiring),
+ * redeemed drains the oldest lots still alive on that date. */
 void   PointsAdd(PointsAge *a, UInt16 date, Int32 earned, Int32 redeemed) EXPORT_SEC;
 /* The expiry date of a lot earned on `date` under the rule (0 = never). */
 UInt16 PointsExpiryDate(UInt8 rule, UInt8 months, UInt16 date) EXPORT_SEC;

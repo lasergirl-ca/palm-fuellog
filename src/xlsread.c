@@ -454,7 +454,7 @@ static void NumberText(XlsReader *r, Int16 col, char *out, UInt16 cap)
     UInt16 n = 0;
     char digits[12];
     UInt8 k, len;
-    if (cap < 16) { out[0] = 0; return; }
+    if (cap < 20) { out[0] = 0; return; }   /* "-4294967295.123456" and the NUL */
     if (r->nextBig) { Cp(out, "#", cap); return; }
     if (col == r->dateCol && col >= 0 && !r->nextNeg) {
         Int32 days = (Int32)r->nextInt - (r->date1904 ? 0 : 1462);

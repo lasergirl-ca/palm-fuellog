@@ -785,10 +785,11 @@ static Boolean SaveSvl(FormType *form)
     if (other && gSvl.other[0]) {
         /* One tap turns a one-off item into a tracked service type. */
         UInt32 used; UInt8 id = TypeIdByNameHere(gSvcVehicle, gSvl.other, &used);
+        UInt8 nid = NextTypeId(gSvcVehicle);     /* before the scan buffer is reused below */
         Boolean promote = false;
-        if (id == 255 && NextTypeId(gSvcVehicle) != 255 && FrmCustomAlert(TrackOtherAlert, gSvl.other, "", "") == 0) {
+        if (id == 255 && nid != 255 && FrmCustomAlert(TrackOtherAlert, gSvl.other, "", "") == 0) {
             MemSet(&gScanSvt, sizeof gScanSvt, 0);
-            gScanSvt.vehicle = gSvcVehicle; gScanSvt.id = NextTypeId(gSvcVehicle); gScanSvt.warnDays = 14;
+            gScanSvt.vehicle = gSvcVehicle; gScanSvt.id = nid; gScanSvt.warnDays = 14;
             StrNCopy(gScanSvt.name, gSvl.other, sizeof gScanSvt.name - 1);
             if (DbAdd(dbServiceTypes, gSvcPacked, ServiceTypePack(&gScanSvt, gSvcPacked), NULL) == errNone) { id = gScanSvt.id; promote = true; }
         } else if (id != 255) promote = true;      /* it already is a type: tick that instead */

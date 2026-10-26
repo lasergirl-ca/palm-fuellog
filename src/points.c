@@ -30,13 +30,15 @@ void PointsAdd(PointsAge *a, UInt16 date, Int32 earned, Int32 redeemed)
             for (i = 0; i + 1 < a->count; i++) { a->left[i] = a->left[i + 1]; a->expires[i] = a->expires[i + 1]; }
             a->count--;
         }
-        a->expires[a->count] = PointsExpiryDate(a->rule, a->months, date);
+        a->expires[a->count] = date ? PointsExpiryDate(a->rule, a->months, date) : 0;   /* date 0: the opening balance, which never expires */
         a->left[a->count] = earned;
         a->count++;
     }
     if (redeemed > 0) {
         for (i = 0; i < a->count && redeemed > 0; i++) {
-            Int32 take = a->left[i] < redeemed ? a->left[i] : redeemed;
+            Int32 take;
+            if (a->expires[i] && a->expires[i] < date) continue;   /* already gone when this was redeemed */
+            take = a->left[i] < redeemed ? a->left[i] : redeemed;
             a->left[i] -= take; redeemed -= take;
         }
     }

@@ -122,6 +122,11 @@ static void VisibleArea(Coord *top, Coord *bottom)
 #ifndef vchrRockerCenter
 #define vchrRockerCenter 0x0136
 #endif
+#ifndef vchrNavChange
+#define vchrNavChange 0x0507
+#define navBitSelect 0x0010
+#define navChangeSelect 0x1000
+#endif
 
 Int16 AppScrollDirection(const EventType *event, Boolean *page)
 {
@@ -139,17 +144,31 @@ Int16 AppScrollDirection(const EventType *event, Boolean *page)
 Int16 AppRowKey(const EventType *event, Int16 *sel, UInt16 *first, UInt16 count, UInt16 visible)
 {
     WChar c;
+    UInt8 down, up, centre;
     if (event->eType != keyDownEvent || count == 0) return 0;
     c = event->data.keyDown.chr;
     if (*sel >= (Int16)count) *sel = (Int16)count - 1;
-    if (c == vchrRockerCenter) return *sel >= 0 ? 2 : 0;
-    if (c != vchrRockerUp && c != vchrRockerDown) return 0;
+    /* A Treo rocker sends its own codes; a Palm 5-way (the T|X) sends page keys for up and
+     * down and vchrNavChange with the select bit for the centre. Palm's convention: page
+     * keys page until a row is highlighted, then they move the highlight; the first centre
+     * press highlights the top row, the next opens it. */
+    centre = c == vchrRockerCenter ||
+             (c == vchrNavChange && (event->data.keyDown.keyCode & (navBitSelect | navChangeSelect)) == (navBitSelect | navChangeSelect));
+    if (centre) {
+        if (*sel >= 0) return 2;
+        *sel = (Int16)*first;
+        return 1;
+    }
+    if (c == vchrNavChange) return 0;
+    down = c == vchrRockerDown || (c == vchrPageDown && *sel >= 0);
+    up = c == vchrRockerUp || (c == vchrPageUp && *sel >= 0);
+    if (!down && !up) return 0;
     if (visible == 0) visible = 1;
     if (*sel < 0) {
         /* nothing picked yet: start at the top or bottom of what is on screen */
         UInt16 last = (UInt16)(*first + visible - 1);
-        *sel = c == vchrRockerDown ? (Int16)*first : (Int16)(last < count ? last : count - 1);
-    } else if (c == vchrRockerDown) { if (*sel + 1 < (Int16)count) (*sel)++; }
+        *sel = down ? (Int16)*first : (Int16)(last < count ? last : count - 1);
+    } else if (down) { if (*sel + 1 < (Int16)count) (*sel)++; }
     else if (*sel > 0) (*sel)--;
     if (*sel < (Int16)*first) *first = (UInt16)*sel;
     else if (*sel >= (Int16)(*first + visible)) *first = (UInt16)(*sel - visible + 1);

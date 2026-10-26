@@ -27,6 +27,18 @@ int main(void)
     check("expiring by Nov 30: 700", PointsExpiringBy(&a, oct22, DateYmdToDays(2026, 11, 30), &when), 700);
     check("nothing expired yet", PointsExpired(&a, oct22), 0);
     check("by Nov 5 the September lot has gone", PointsExpired(&a, DateYmdToDays(2026, 11, 5)), 100);
+    {
+        /* a redemption after the September lot expired comes out of October */
+        PointsAge b;
+        UInt16 nov10 = DateYmdToDays(2026, 11, 10);
+        PointsBegin(&b, pgmExpiryMonthAfter, 0);
+        PointsAdd(&b, 0, 50, 0);               /* opening balance: never expires, spent first */
+        PointsAdd(&b, sep20, 400, 0);
+        PointsAdd(&b, oct10, 600, 0);
+        PointsAdd(&b, nov10, 0, 300);
+        check("expired September lot stays expired", PointsExpired(&b, nov10), 400);
+        check("November redemption drains opening then October", PointsExpiringBy(&b, nov10, DateYmdToDays(2026, 11, 30), &when), 350);
+    }
     PointsBegin(&a, pgmExpiryNone, 0);
     PointsAdd(&a, oct1, 1000, 0);
     check("never-expiring programme flags nothing", PointsExpiringBy(&a, oct22, DateYmdToDays(2027, 12, 31), &when), 0);
