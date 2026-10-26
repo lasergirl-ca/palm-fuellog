@@ -5,6 +5,7 @@ Proudly made in 🇨🇦 Canada!
 I have been replacing the paper fuel log that lived in my friend's glovebox with a Palm OS app, and it is at the release-candidate stage. FuelLog is a new native Palm OS 5 app, written in C against the 5r3 SDK with prc-tools, pure 68K, GPLv3, and built on a Mac in 2026.
 
 **Download:** https://github.com/lasergirl-ca/palm-fuellog/releases/tag/v1.0-rc2
+
 **Source:** https://github.com/lasergirl-ca/palm-fuellog
 
 ## What it does
