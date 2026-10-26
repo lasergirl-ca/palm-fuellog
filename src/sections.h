@@ -11,6 +11,7 @@
 #define RPT_SEC    __attribute__((section("rpts")))    /* reports and graphs */
 #define IO_SEC     __attribute__((section("io")))      /* card, export, import, backup */
 #define XP_SEC     __attribute__((section("exp2")))    /* XLSX and PDF export */
+#define FILL_SEC   __attribute__((section("fillf")))   /* the fill form */
 #else
 #define SEC2
 #define EXPORT_SEC
@@ -19,5 +20,6 @@
 #define RPT_SEC
 #define IO_SEC
 #define XP_SEC
+#define FILL_SEC
 #endif
 #endif

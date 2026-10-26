@@ -26,7 +26,7 @@ static UInt8 gFVIds[vehMaxVehicles + 1];
 static char gDateText[12];    /* CtlSetLabel keeps the pointer, so the text must persist */
 static char gTimeText[timeStringLength];
 /* Grade popup rows for this vehicle: fuel grades, charge kinds, or both. */
-static const char *const kGradeNames[7] = { "Regular", "Mid", "Premium", "Diesel", "Home AC", "Public AC", "DC fast" };
+static const char *kGradeNames[7] = {   /* non-const array: see sections.h */ "Regular", "Mid", "Premium", "Diesel", "Home AC", "Public AC", "DC fast" };
 static char *gGradePtrs[7];
 static UInt8 gGradeMap[7];   /* popup row -> grade value */
 static UInt16 gGradeRows;
@@ -54,6 +54,39 @@ static Int32 ReadPrice(FormType *form, UInt32 *price);
 static Int32 ReadTotal(FormType *form, UInt32 *cents);
 
 /* ---- points ---- */
+
+/* Section placement: see sections.h. */
+static Boolean PgmPaymentOk(const ProgrammeRecord *p) FILL_SEC;
+static void PointsAutoApply(void) FILL_SEC;
+static void RuleOf(const ProgrammeRecord *p, CalcRedeemRule *r) FILL_SEC;
+static void PointsRecompute(FormType *form, UInt32 ml, UInt32 gross) FILL_SEC;
+static Int32 ParseSigned(const char *t, Int32 *out) FILL_SEC;
+static void PtsHint(FormType *dlg, UInt8 i) FILL_SEC;
+static void PtsShowObj(FormType *dlg, UInt16 id, Boolean show) FILL_SEC;
+static void PtsShowRows(FormType *dlg, Boolean fillFields) FILL_SEC;
+static void PtsRefresh(FormType *dlg, Boolean fillFields) FILL_SEC;
+static Boolean PointsDialogHandleEvent(EventType *e) FILL_SEC;
+static void PointsDialog(FormType *form) FILL_SEC;
+static void NoteDialog(FormType *form) FILL_SEC;
+static void ShowRate(FormType *form) FILL_SEC;
+static Boolean IsChargeGrade(UInt8 grade) FILL_SEC;
+static void SetMode(FormType *form, Boolean charge) FILL_SEC;
+static void BuildGradeList(FormType *form, UInt8 powertrain, UInt8 grade) FILL_SEC;
+static UInt8 SelectedGrade(FormType *form) FILL_SEC;
+static void Touch(UInt8 which) FILL_SEC;
+static Int32 ReadVolume(FormType *form, UInt32 *ml) FILL_SEC;
+static Int32 ReadPrice(FormType *form, UInt32 *price) FILL_SEC;
+static Int32 ReadTotal(FormType *form, UInt32 *cents) FILL_SEC;
+static void ShowVolume(FormType *form, UInt32 ml) FILL_SEC;
+static void ShowPrice(FormType *form, UInt32 price) FILL_SEC;
+static void ShowTotal(FormType *form, UInt32 cents) FILL_SEC;
+static void Recompute(FormType *form) FILL_SEC;
+static void CheckTrip(FormType *form) FILL_SEC;
+static void AfterEdit(FormType *form, UInt16 fieldId) FILL_SEC;
+static UInt8 EntryUnitFor(UInt8 currency) FILL_SEC;
+static void SetEntryUnit(FormType *form, UInt8 unit) FILL_SEC;
+static void Load(FormType *form) FILL_SEC;
+static Boolean Save(FormType *form) FILL_SEC;
 
 static Boolean PgmPaymentOk(const ProgrammeRecord *p)
 {
@@ -126,7 +159,7 @@ static UInt32 gDlgMl, gDlgGross;
 static void PtsHint(FormType *dlg, UInt8 i)
 {
     char b[40], num[16];
-    static const char *const unit[] = { "", "/L", "/gal", "/$" };
+    static const char *unit[] = { "", "/L", "/gal", "/$" };
     if (!PgmGet(gPts[i].pgm, &gPgm)) return;
     if (gPts[i].redeemed > 0) {
         CalcRedeemRule rule;
@@ -702,9 +735,9 @@ static Boolean Save(FormType *form)
 Boolean FillFormHandleEvent(EventType *event)
 {
     FormType *form = FrmGetActiveForm();
-    static const UInt16 bottom[] = { FillDoneButton, FillCancelButton, FillNoteButton, FillDeleteButton };
-    static const UInt16 pinned[] = { FillDoneButton, FillCancelButton, FillNoteButton, FillDeleteButton, FillVehicleTrigger, FillVehicleList, FillScrollBar };
-    static const UInt16 clamp[] = { FillMissedCheckbox, FillPointsLabel, FillPointsTrigger };   /* rows that can sit under the buttons */
+    static UInt16 bottom[] = { FillDoneButton, FillCancelButton, FillNoteButton, FillDeleteButton };
+    static UInt16 pinned[] = { FillDoneButton, FillCancelButton, FillNoteButton, FillDeleteButton, FillVehicleTrigger, FillVehicleList, FillScrollBar };
+    static UInt16 clamp[] = { FillMissedCheckbox, FillPointsLabel, FillPointsTrigger };   /* rows that can sit under the buttons */
 
     switch (event->eType) {
     case frmOpenEvent:

@@ -93,7 +93,7 @@ test: $(BUILD)
 	python3 -I tools/check_inflate.py $(BUILD)/test_inflate $(BUILD)/inflate $(INFLATE_EXTRA)
 
 check: $(APP).prc
-	python3 -I tools/prcinfo.py $(APP).prc --expect-code 9
+	python3 -I tools/prcinfo.py $(APP).prc --expect-code 10
 
 docker:
 	docker run --rm --platform linux/amd64 -v "$(CURDIR)":/src fuellog-toolchain make
