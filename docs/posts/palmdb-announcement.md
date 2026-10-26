@@ -1,6 +1,8 @@
-# FuelLog 1.0 rc2: a native fuel log for the Palm T|X (and other 68K Palms)
+FuelLog 1.0 rc2: a native fuel log for the Palm T|X (and other 68K Palms)
 
-I have been replacing the paper fuel log that lived in my glovebox with a Palm OS app, and it is at the release-candidate stage. FuelLog is a new native Palm OS 5 app, written in C against the 5r3 SDK with prc-tools, pure 68K, GPLv3, and built on a Mac in 2026. Proudly made in 🇨🇦 Canada!
+Proudly made in 🇨🇦 Canada!
+
+I have been replacing the paper fuel log that lived in my friend's glovebox with a Palm OS app, and it is at the release-candidate stage. FuelLog is a new native Palm OS 5 app, written in C against the 5r3 SDK with prc-tools, pure 68K, GPLv3, and built on a Mac in 2026.
 
 **Download:** https://github.com/lasergirl-ca/palm-fuellog/releases/tag/v1.0-rc2
 **Source:** https://github.com/lasergirl-ca/palm-fuellog
