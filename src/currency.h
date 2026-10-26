@@ -10,7 +10,8 @@
 #define curCAD 1
 #define curEUR 2
 #define curAUD 3
-#define curCount 4
+#define curNZD 4
+#define curCount 5
 #define curLastUsed 255      /* Prefs: default currency follows the last entry */
 
 #define fxOne 1000000UL      /* a rate of 1.000000 */
@@ -24,7 +25,13 @@ const char *CurrencyExcelFormat(UInt8 currency) EXPORT_SEC;
 UInt8 CurrencyForNewEntry(UInt8 vehicleOverride, UInt8 prefsDefault, UInt8 lastUsed) EXPORT_SEC;
 
 /* The rate a new entry starts with: 1.0 when the entry is in the home
- * currency, else the last rate kept for that currency in Prefs. */
+ * currency, else the last rate kept for that currency in Prefs, else the
+ * built-in rate. */
 UInt32 CurrencyDefaultRate(UInt8 currency, UInt8 home, const UInt32 *lastRates) EXPORT_SEC;
+
+/* Home units per one unit of `currency` from the table baked in at build time
+ * (tools/fetch_rates.py, src/rates_default.h), and the date of that table. */
+UInt32 CurrencyBuiltInRate(UInt8 currency, UInt8 home) EXPORT_SEC;
+const char *CurrencyRatesDate(void) EXPORT_SEC;
 
 #endif

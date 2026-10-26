@@ -7,7 +7,8 @@
 #include "ptypes.h"
 #include "sections.h"
 
-#define prefsVersion 2
+#define prefsVersion 3
+#define prefsRateSlots 8     /* fxRate entries: room for currencies beyond curCount without another version */
 #define prefsAppPrefId 0
 
 typedef struct {
@@ -22,7 +23,7 @@ typedef struct {
     UInt8  lastCurrency;
     UInt8  lastPayment;       /* fillPayment* */
     UInt8  autoBackup;
-    UInt32 fxRate[4];         /* last rate per currency, home units per unit x 1e6 */
+    UInt32 fxRate[prefsRateSlots];   /* last rate per currency, home units per unit x 1e6; 0 = use the built-in rate (v3) */
     UInt16 lastBackupDate;    /* days since 1904, 0 = never */
     UInt8  backupSetsKept;
     UInt8  currentVehicle;    /* vehicle id, 255 = all */
@@ -30,6 +31,17 @@ typedef struct {
     UInt16 lastScrollRow;
     UInt32 nextAlarm;         /* v2: seconds of the service alarm set, 0 = none; re-set after a reset */
 } FuelPrefs;
+
+/* The v1/v2 layout (v1 ends before nextAlarm), for the upgrade. */
+typedef struct {
+    UInt16 version;
+    UInt8  distanceUnit, volumeUnit, economyUnit, priceUnit, priceFormat, homeCurrency, defaultCurrency, lastCurrency, lastPayment, autoBackup;
+    UInt32 fxRate[4];
+    UInt16 lastBackupDate;
+    UInt8  backupSetsKept, currentVehicle;
+    UInt16 lastFormId, lastScrollRow;
+    UInt32 nextAlarm;
+} FuelPrefsV2;
 
 void PrefsSetDefaults(FuelPrefs *p) EXPORT_SEC;
 /* Bring a struct of an older version up to date; returns 0 when the version

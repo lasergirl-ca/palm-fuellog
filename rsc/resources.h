@@ -393,3 +393,4 @@
 #define ExpBackupTitle       3226
 #define ExpImportTitle       3227
 #define ExpImportHint        3228
+#define RatesDateLabel       2404

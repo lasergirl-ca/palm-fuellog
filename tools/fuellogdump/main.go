@@ -159,7 +159,7 @@ func programmes(dir string) (map[byte]string, [][]byte) {
 }
 
 var grades = []string{"Regular", "Mid", "Premium", "Diesel", "Home AC", "Public AC", "DC fast"}
-var currencies = []string{"USD", "CAD", "EUR", "AUD"}
+var currencies = []string{"USD", "CAD", "EUR", "AUD", "NZD"}
 
 func name(list []string, i byte) string {
 	if int(i) < len(list) {

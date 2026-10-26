@@ -1,6 +1,8 @@
 /* Unit and currency conversions: known values from the design spec's factor
  * table, and round trips that must land within one display digit. */
 #include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
 #include "../src/units.h"
 #include "../src/currency.h"
 #include "../src/calc.h"
@@ -85,7 +87,10 @@ int main(void)
         UInt32 rates[curCount] = { 1360000, 0, 1480000, 0 };
         check("home currency rate is 1.0", CurrencyDefaultRate(curCAD, curCAD, rates), 1000000);
         check("USD rate from table", CurrencyDefaultRate(curUSD, curCAD, rates), 1360000);
-        check("AUD unset rate is 1.0", CurrencyDefaultRate(curAUD, curCAD, rates), 1000000);
+        check("AUD unset rate is the built-in one", CurrencyDefaultRate(curAUD, curCAD, rates), CurrencyBuiltInRate(curAUD, curCAD));
+        check("built-in rate is a real number", CurrencyBuiltInRate(curNZD, curCAD) > 100000 && CurrencyBuiltInRate(curNZD, curCAD) < 10000000, 1);
+        check("built-in rate is symmetric to 1 in 1e4", labs((long)(CalcMulDiv(CurrencyBuiltInRate(curNZD, curCAD), CurrencyBuiltInRate(curCAD, curNZD), 1000000) - 1000000)) < 100, 1);
+        check("NZD code", strcmp(CurrencyCode(curNZD), "NZD"), 0);
     }
     /* Totals never move when a rate is edited later: the stored fxRate is what converts. */
     check("stored rate converts $84.62 -> $115.08", CalcHomeCents(8462, 1360000), 11508);

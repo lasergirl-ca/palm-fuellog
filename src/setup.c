@@ -163,9 +163,11 @@ static void LoadRates(FormType *form)
         if (!show) continue;
         StrCopy(gRateLabels[c], "1 "); StrCat(gRateLabels[c], CurrencyCode(c)); StrCat(gRateLabels[c], " =");
         AppSetLabel(form, RatesLabel0 + c, gRateLabels[c]);
-        TextFixed(b, (Int32)((gPrefs.fxRate[c] ? gPrefs.fxRate[c] : fxOne) / 100), 4, gPoint, 0);
+        TextFixed(b, (Int32)(CurrencyDefaultRate(c, gPrefs.homeCurrency, gPrefs.fxRate) / 100), 4, gPoint, 0);
         AppSetFieldText(form, RatesField0 + c, b);
     }
+    StrCopy(note, "Blank = built-in ECB rate of "); StrCat(note, CurrencyRatesDate());
+    AppSetLabel(form, RatesDateLabel, note);
 }
 
 static Boolean SaveRates(FormType *form)
@@ -178,6 +180,7 @@ static Boolean SaveRates(FormType *form)
         r = TextParseFixed(AppGetFieldText(form, RatesField0 + c), 4, gPoint, gThousands, &v);
         if (r < 0) { FrmAlert(BadNumberAlert); return false; }
         if (r == 1 && v) gPrefs.fxRate[c] = v * 100;
+        else if (r == 0) gPrefs.fxRate[c] = 0;        /* cleared: back to the built-in rate */
     }
     PrefsSave(&gPrefs);
     return true;

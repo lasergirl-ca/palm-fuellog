@@ -100,7 +100,10 @@ test: $(BUILD)
 check: $(APP).prc
 	python3 -I tools/prcinfo.py $(APP).prc --expect-code 11
 
-docker:
+rates:
+	python3 -I tools/fetch_rates.py src/rates_default.h
+
+docker: rates
 	docker run --rm --platform linux/amd64 -v "$(CURDIR)":/src fuellog-toolchain make
 
 docker-image:
