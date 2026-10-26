@@ -385,3 +385,11 @@
 #define ImpKbList            3406
 #define ExpPgmTrigger        3219
 #define ExpPgmList           3220
+#define ExpFormatLabel       3221
+#define ExpVehicleLabel      3222
+#define ExpRangeLabel        3223
+#define ExpPgmLabel          3224
+#define ExpSendLabel         3225
+#define ExpBackupTitle       3226
+#define ExpImportTitle       3227
+#define ExpImportHint        3228

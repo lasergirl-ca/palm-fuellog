@@ -124,6 +124,13 @@ Boolean ExportFormHandleEvent(EventType *event)
     FormType *form = FrmGetActiveForm();
     static UInt16 bottom[] = { ExpDoneButton };
     static UInt16 pinned[] = { ExpDoneButton, ExpScrollBar };
+    /* everything that scrolls: hidden while it sits under the title or the Done button */
+    static UInt16 clamp[] = { ExpFormatLabel, ExpCsvButton, ExpXlsxButton, ExpPdfButton, ExpLogButton,
+                              ExpVehicleLabel, ExpVehicleTrigger, ExpRangeLabel, ExpRangeTrigger, ExpPgmLabel, ExpPgmTrigger,
+                              ExpSendLabel, ExpCardButton, ExpPalmButton, ExpFileLabel, ExpExportButton,
+                              ExpBackupTitle, ExpBackupLabel, ExpBackupButton, ExpRestoreButton,
+                              ExpImportTitle, ExpImportHint, ExpImportButton };
+#define kExpClamp (sizeof clamp / sizeof clamp[0])
     switch (event->eType) {
     case frmOpenEvent: {
         ListType *lst = FrmGetObjectPtr(form, FrmGetObjectIndex(form, ExpVehicleList));
@@ -153,17 +160,18 @@ Boolean ExportFormHandleEvent(EventType *event)
         BuildYears(form);
         FileLabel(form);
         BackupLabel(form);
+        AppShowByPosition(form, clamp, kExpClamp);
         AppScrollBarUpdate(form, ExpScrollBar, pinned, 2);
         FrmDrawForm(form);
         return true;
     }
     case frmUpdateEvent: FrmDrawForm(form); return true;
     case keyDownEvent: case sclRepeatEvent: case sclExitEvent:
-        if (AppScrollEvent(form, event, pinned, 2, ExpScrollBar)) return true;
+        if (AppScrollEvent(form, event, pinned, 2, ExpScrollBar)) { AppShowByPosition(form, clamp, kExpClamp); FrmDrawForm(form); return true; }
         break;
     case winDisplayChangedEvent:
         if (gScrollYPublic()) AppScrollBy(form, gScrollYPublic(), pinned, 2);
-        AppFitForm(form, bottom, 1); AppScrollBarUpdate(form, ExpScrollBar, pinned, 2); WinEraseWindow(); FrmDrawForm(form); return true;
+        AppFitForm(form, bottom, 1); AppShowByPosition(form, clamp, kExpClamp); AppScrollBarUpdate(form, ExpScrollBar, pinned, 2); WinEraseWindow(); FrmDrawForm(form); return true;
     case popSelectEvent:
         if (event->data.popSelect.listID == ExpVehicleList) {
             gExpVehicle = gEVIds[event->data.popSelect.selection];

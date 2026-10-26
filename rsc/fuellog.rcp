@@ -708,34 +708,34 @@ NOFRAME
 USABLE
 BEGIN
     TITLE "Export"
-    LABEL "Format:" AUTOID AT (22 17) FONT 0
+    LABEL "Format:" ID ExpFormatLabel AT (22 17) FONT 0
     PUSHBUTTON "CSV" ID ExpCsvButton AT (56 17 22 12) GROUP 1
     PUSHBUTTON "XLSX" ID ExpXlsxButton AT (PREVRIGHT 17 30 12) GROUP 1
     PUSHBUTTON "PDF" ID ExpPdfButton AT (PREVRIGHT 17 22 12) GROUP 1
     PUSHBUTTON "Log" ID ExpLogButton AT (PREVRIGHT 17 22 12) GROUP 1
-    LABEL "Vehicle:" AUTOID AT (20 30) FONT 0
+    LABEL "Vehicle:" ID ExpVehicleLabel AT (20 30) FONT 0
     POPUPTRIGGER "All vehicles" ID ExpVehicleTrigger AT (58 30 94 12) LEFTANCHOR
     LIST "All vehicles" ID ExpVehicleList AT (58 30 94 60) NONUSABLE VISIBLEITEMS 6
     POPUPLIST ID ExpVehicleTrigger ExpVehicleList
-    LABEL "Range:" AUTOID AT (24 43) FONT 0
+    LABEL "Range:" ID ExpRangeLabel AT (24 43) FONT 0
     POPUPTRIGGER "All years" ID ExpRangeTrigger AT (58 43 60 12) LEFTANCHOR
     LIST "All years" ID ExpRangeList AT (58 43 60 60) NONUSABLE VISIBLEITEMS 6
     POPUPLIST ID ExpRangeTrigger ExpRangeList
-    LABEL "Points:" AUTOID AT (24 56) FONT 0
+    LABEL "Points:" ID ExpPgmLabel AT (24 56) FONT 0
     POPUPTRIGGER "All programmes" ID ExpPgmTrigger AT (58 56 94 12) LEFTANCHOR
     LIST "All programmes" ID ExpPgmList AT (58 56 94 60) NONUSABLE VISIBLEITEMS 6
     POPUPLIST ID ExpPgmTrigger ExpPgmList
-    LABEL "Send to:" AUTOID AT (16 69) FONT 0
+    LABEL "Send to:" ID ExpSendLabel AT (16 69) FONT 0
     PUSHBUTTON "SD card" ID ExpCardButton AT (58 69 44 12) GROUP 2
     PUSHBUTTON "Other Palm" ID ExpPalmButton AT (PREVRIGHT 69 54 12) GROUP 2
     LABEL "                                        " ID ExpFileLabel AT (4 85) FONT 0
     BUTTON "Export" ID ExpExportButton AT (4 98 44 12)
-    LABEL "Backup" AUTOID AT (4 116) FONT 1
+    LABEL "Backup" ID ExpBackupTitle AT (4 116) FONT 1
     LABEL "                                        " ID ExpBackupLabel AT (4 128) FONT 0
     BUTTON "Back up now" ID ExpBackupButton AT (4 141 64 12)
     BUTTON "Restore..." ID ExpRestoreButton AT (74 141 52 12)
-    LABEL "Import" AUTOID AT (4 159) FONT 1
-    LABEL "CSV, XLSX or XLS from Import/ on the card" AUTOID AT (4 171) FONT 0
+    LABEL "Import" ID ExpImportTitle AT (4 159) FONT 1
+    LABEL "CSV, XLSX or XLS from Import/ on the card" ID ExpImportHint AT (4 171) FONT 0
     BUTTON "Choose a file..." ID ExpImportButton AT (4 184 76 12)
     BUTTON "Done" ID ExpDoneButton AT (4 203 36 12)
     SCROLLBAR ID ExpScrollBar AT (153 15 7 130) VALUE 0 MIN 0 MAX 0 PAGESIZE 100
