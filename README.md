@@ -6,6 +6,8 @@ alarms, stats, reports and graphs, CSV/XLSX/PDF export to the SD card, CSV/XLSX/
 import, backups, and beaming between Palms. Pure 68K code, so it also runs on older
 Palms and in CloudpilotEmu.
 
+Proudly made in 🇨🇦 Canada!
+
 The design lives in the live doc (link in `docs/README.md`); `docs/` holds the
 export, the mock-ups, the paper form, the spike write-ups and one file per
 milestone (`M1.md` to `M8.md`) with what was built and what to check on the device.
