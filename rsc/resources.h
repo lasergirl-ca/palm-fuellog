@@ -375,3 +375,6 @@
 #define BeamFailedAlert      1532
 
 #define ReceivedDoneAlert    1533
+
+#define RptFromTrigger       3012
+#define RptToTrigger         3013

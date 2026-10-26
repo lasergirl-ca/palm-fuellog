@@ -54,6 +54,22 @@ int main(void)
     check("row for Nov is empty", r.rows[10].fills, 0);
     check("date outside the year", ReportRowFor(&r, DateYmdToDays(2025, 12, 31)), -1);
 
+    check("by vehicle: vehicle 1 has the 8 fills", r.byVehicle[1].fills, 8);
+    check("by vehicle: vehicle 1 economy 8.3", ReportRowEco(&r.byVehicle[1]), 83);
+
+    /* A custom range: Sep 1 to Sep 30 holds three fills. */
+    ReportBegin(&r, rptRange, 0);
+    ReportSetRange(&r, DateYmdToDays(2026, 9, 1), DateYmdToDays(2026, 9, 30));
+    add(&r, DateYmdToDays(2026, 8, 22), 81724, 44100, 7832, 1);
+    add(&r, DateYmdToDays(2026, 9, 3),  82262, 43900, 7713, 1);
+    add(&r, DateYmdToDays(2026, 9, 15), 82800, 44600, 7983, 1);
+    add(&r, DateYmdToDays(2026, 9, 27), 83092, 22000, 3870, 0);
+    add(&r, DateYmdToDays(2026, 10, 8), 83640, 45900, 8106, 1);
+    check("range: three fills", r.rows[0].fills, 3);
+    check("range: spend", r.rows[0].homeCents, 7713 + 7983 + 3870);
+    check("range: economy 8.2 (segments closing in September)", ReportRowEco(&r.rows[0]), 82);
+    check("range: October fill excluded", ReportRowFor(&r, DateYmdToDays(2026, 10, 8)), -1);
+
     ReportBegin(&r, rptYearly, 2020);
     add(&r, DateYmdToDays(2025, 11, 2), 70000, 40000, 6000, 1);
     add(&r, DateYmdToDays(2026, 1, 9), 70500, 40000, 6200, 1);

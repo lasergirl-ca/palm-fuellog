@@ -11,9 +11,12 @@ void ReportBegin(Report *r, UInt8 mode, UInt16 year)
     r->year = year;
 }
 
+void ReportSetRange(Report *r, UInt16 from, UInt16 to) { r->from = from; r->to = to; }
+
 Int16 ReportRowFor(const Report *r, UInt16 date)
 {
     UInt16 y; UInt8 m, d;
+    if (r->mode == rptRange) return date >= r->from && date <= r->to ? 0 : -1;
     DateDaysToYmd(date, &y, &m, &d);
     if (r->mode == rptMonthly) return y == r->year ? (Int16)(m - 1) : -1;
     if (y < r->year || y >= r->year + rptMaxRows) return -1;
@@ -45,6 +48,7 @@ void ReportAdd(Report *r, const FillRecord *f)
     if (row >= 0) {
         RowAdd(&r->rows[row], f, home, dkm);
         RowAdd(&r->total, f, home, dkm);
+        RowAdd(&r->byVehicle[v], f, home, dkm);
         if (f->payment == fillPaymentCard) r->cardCents += home; else r->cashCents += home;
         if (f->currency < 4) r->curCents[f->currency] += f->total;
     }
@@ -57,6 +61,7 @@ void ReportAdd(Report *r, const FillRecord *f)
             if (r->chain[v][c].haveFull && f->odometer > r->chain[v][c].lastFullOdo && !charge && row >= 0) {
                 r->rows[row].ftfMl += r->chain[v][c].pending; r->rows[row].ftfDkm += f->odometer - r->chain[v][c].lastFullOdo;
                 r->total.ftfMl += r->chain[v][c].pending; r->total.ftfDkm += f->odometer - r->chain[v][c].lastFullOdo;
+                r->byVehicle[v].ftfMl += r->chain[v][c].pending; r->byVehicle[v].ftfDkm += f->odometer - r->chain[v][c].lastFullOdo;
             }
             r->chain[v][c].lastFullOdo = f->odometer; r->chain[v][c].haveFull = 1; r->chain[v][c].pending = 0;
         }

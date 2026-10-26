@@ -659,11 +659,13 @@ BEGIN
     LIST "All vehicles" ID RptVehicleList AT (60 1 98 60) NONUSABLE VISIBLEITEMS 6
     POPUPLIST ID RptVehicleTrigger RptVehicleList
     POPUPTRIGGER "Monthly" ID RptPeriodTrigger AT (4 15 54 12) LEFTANCHOR
-    LIST "Monthly" "Yearly" ID RptPeriodList AT (4 15 54 22) NONUSABLE VISIBLEITEMS 2
+    LIST "Monthly" "Yearly" "Range" ID RptPeriodList AT (4 15 54 33) NONUSABLE VISIBLEITEMS 3
     POPUPLIST ID RptPeriodTrigger RptPeriodList
     BUTTON "<" ID RptPrevButton AT (92 15 12 12) NOFRAME
     LABEL "2026 to 2037" ID RptYearLabel AT (106 15) FONT 1
     BUTTON ">" ID RptNextButton AT (140 15 12 12) NOFRAME
+    SELECTORTRIGGER "Jul 27" ID RptFromTrigger AT (62 15 42 12) NONUSABLE
+    SELECTORTRIGGER "Oct 25" ID RptToTrigger AT (110 15 42 12) NONUSABLE
     BUTTON "Done" ID RptDoneButton AT (4 146 36 12)
     BUTTON "Graphs" ID RptGraphsButton AT (46 146 40 12)
     BUTTON "Export" ID RptExportButton AT (92 146 40 12)

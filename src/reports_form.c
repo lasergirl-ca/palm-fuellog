@@ -26,6 +26,9 @@ static UInt16 gRptYear;              /* monthly: the year; yearly: the first yea
 static RectangleType gRptArea;
 static Int16 gRptScroll, gRptHeight;
 static char gRptYearText[14];
+static UInt16 gRptFrom, gRptTo;
+static char gRptFromText[12], gRptToText[12];
+static VehicleRecord gRptVeh;
 #define kRptRow 11
 #define kRptTop 29
 
@@ -44,6 +47,7 @@ static void ComputeReport(void)
 {
     UInt16 n = DbCount(dbFills), i;
     ReportBegin(&gRpt, gRptMode, gRptYear);
+    if (gRptMode == rptRange) ReportSetRange(&gRpt, gRptFrom, gRptTo);
     for (i = 0; i < n; i++) {
         if (DbGetFill(i, &gRptFill) != errNone) continue;
         if (gPrefs.currentVehicle != 255 && gRptFill.vehicle != gPrefs.currentVehicle) continue;
@@ -84,7 +88,8 @@ static void DrawReport(void)
     WinEraseRectangle(&gRptArea, 0);
     WinSetClip(&gRptArea);
     FntSetFont(boldFont);
-    WinDrawChars(gRptMode == rptMonthly ? "Month" : "Year", gRptMode == rptMonthly ? 5 : 4, 4, y);
+    if (gRptMode == rptRange) WinDrawChars("Range", 5, 4, y);
+    else WinDrawChars(gRptMode == rptMonthly ? "Month" : "Year", gRptMode == rptMonthly ? 5 : 4, 4, y);
     DrawRightAt("#", 44, y);
     DrawRightAt(UnitVolLabel(gPrefs.volumeUnit), 78, y);
     DrawRightAt(CurrencySymbol(gPrefs.homeCurrency), 118, y);
@@ -92,7 +97,8 @@ static void DrawReport(void)
     y += kRptRow + 1;
     for (i = 0; i < rptMaxRows; i++) {
         if (gRpt.rows[i].fills == 0) continue;
-        if (gRptMode == rptMonthly) StrCopy(b, DateMonthName((UInt8)(i + 1))); else StrIToA(b, gRptYear + i);
+        if (gRptMode == rptRange) StrCopy(b, "Period");
+        else if (gRptMode == rptMonthly) StrCopy(b, DateMonthName((UInt8)(i + 1))); else StrIToA(b, gRptYear + i);
         RowText(&gRpt.rows[i], b, y, false);
         y += kRptRow; shown++;
     }
@@ -115,6 +121,22 @@ static void DrawReport(void)
         StrCopy(b, "Points net "); TextFixed(b + 11, gRpt.total.points, 0, gPoint, gThousands);
         WinDrawChars(b, StrLen(b), 4, y); y += kRptRow + 2;
     }
+    if (gPrefs.currentVehicle == 255) {
+        /* Per-vehicle breakdown: the same columns, one row per car with fills in the period. */
+        UInt8 v; Boolean any = false;
+        for (v = 1; v < rptMaxId; v++) if (gRpt.byVehicle[v].fills) any = true;
+        if (any) {
+            FntSetFont(boldFont); WinDrawChars("By vehicle", 10, 4, y); y += kRptRow;
+            for (v = 1; v < rptMaxId; v++) {
+                if (!gRpt.byVehicle[v].fills) continue;
+                VehGet(v, &gRptVeh);
+                StrNCopy(b, gRptVeh.name, 9); b[9] = 0;
+                RowText(&gRpt.byVehicle[v], b, y, false);
+                y += kRptRow;
+            }
+            y += 3;
+        }
+    }
     FntSetFont(boldFont); WinDrawChars("By payment", 10, 4, y); y += kRptRow;
     FntSetFont(stdFont);
     WinDrawChars("Cash", 4, 12, y); TextFixed(b, (Int32)gRpt.cashCents, 2, gPoint, gThousands); DrawRightAt(b, 118, y); y += kRptRow;
@@ -133,11 +155,45 @@ static void DrawReport(void)
                      gRptArea.topLeft.y, (Coord)(gRptArea.topLeft.y + gRptArea.extent.y));
 }
 
+/* Section placement: see sections.h. */
+static void ShowObj(FormType *form, UInt16 id, Boolean show) RPT_SEC;
+static void PickRangeDate(FormType *form, Boolean from) RPT_SEC;
+
+static void ShowObj(FormType *form, UInt16 id, Boolean show)
+{
+    UInt16 idx = FrmGetObjectIndex(form, id);
+    if (show) FrmShowObject(form, idx); else FrmHideObject(form, idx);
+}
+
 static void YearLabel(FormType *form)
 {
+    Boolean range = gRptMode == rptRange;
     if (gRptMode == rptMonthly) StrIToA(gRptYearText, gRptYear);
-    else { StrIToA(gRptYearText, gRptYear); StrCat(gRptYearText, "-"); StrIToA(gRptYearText + StrLen(gRptYearText), (gRptYear + rptMaxRows - 1) % 100); }
+    else if (gRptMode == rptYearly) { StrIToA(gRptYearText, gRptYear); StrCat(gRptYearText, "-"); StrIToA(gRptYearText + StrLen(gRptYearText), (gRptYear + rptMaxRows - 1) % 100); }
+    else gRptYearText[0] = 0;
     AppSetLabel(form, RptYearLabel, gRptYearText);
+    ShowObj(form, RptPrevButton, !range); ShowObj(form, RptNextButton, !range); ShowObj(form, RptYearLabel, !range);
+    if (range) {
+        DateShortText(gRptFromText, gRptFrom); DateShortText(gRptToText, gRptTo);
+        CtlSetLabel(FrmGetObjectPtr(form, FrmGetObjectIndex(form, RptFromTrigger)), gRptFromText);
+        CtlSetLabel(FrmGetObjectPtr(form, FrmGetObjectIndex(form, RptToTrigger)), gRptToText);
+    }
+    ShowObj(form, RptFromTrigger, range); ShowObj(form, RptToTrigger, range);
+}
+
+/* A date picker for one end of the range; keeps from <= to. */
+static void PickRangeDate(FormType *form, Boolean from)
+{
+    UInt16 y; UInt8 m, d; Int16 yy, mm, dd;
+    UInt16 *target = from ? &gRptFrom : &gRptTo;
+    DateDaysToYmd(*target, &y, &m, &d);
+    yy = (Int16)y; mm = m; dd = d;
+    if (SelectDay(selectDayByDay, &mm, &dd, &yy, from ? "Range from" : "Range to")) {
+        *target = DateYmdToDays((UInt16)yy, (UInt8)mm, (UInt8)dd);
+        if (gRptFrom > gRptTo) { if (from) gRptTo = gRptFrom; else gRptFrom = gRptTo; }
+        YearLabel(form);
+        gRptScroll = 0; ComputeReport(); DrawReport();
+    }
 }
 
 static void LayoutReport(FormType *form)
@@ -159,6 +215,14 @@ static void BuildRptPopup(FormType *form)
 
 static void StepYear(FormType *form, Int16 dir)
 {
+    if (gRptMode == rptRange) {
+        /* step the range by its own length */
+        UInt16 len = (UInt16)(gRptTo - gRptFrom + 1);
+        if (dir < 0 && gRptFrom >= len) { gRptFrom -= len; gRptTo -= len; }
+        else if (dir > 0) { gRptFrom += len; gRptTo += len; }
+        YearLabel(form); gRptScroll = 0; ComputeReport(); DrawReport();
+        return;
+    }
     gRptYear = (UInt16)(gRptYear + dir * (gRptMode == rptMonthly ? 1 : rptMaxRows));
     YearLabel(form);
     gRptScroll = 0;
@@ -174,6 +238,7 @@ Boolean ReportsFormHandleEvent(EventType *event)
         UInt16 y; UInt8 m, d;
         DateDaysToYmd(AppToday(), &y, &m, &d);
         if (gRptYear == 0) { gRptMode = rptMonthly; gRptYear = y; }
+        if (gRptTo == 0) { gRptTo = AppToday(); gRptFrom = (UInt16)(gRptTo - 90); }
         gRptScroll = 0;
         LayoutReport(form);
         BuildRptPopup(form);
@@ -217,7 +282,7 @@ Boolean ReportsFormHandleEvent(EventType *event)
             UInt16 y; UInt8 m, d;
             gRptMode = (UInt8)event->data.popSelect.selection;
             DateDaysToYmd(AppToday(), &y, &m, &d);
-            gRptYear = gRptMode == rptMonthly ? y : (UInt16)(y - rptMaxRows + 1);
+            if (gRptMode != rptRange) gRptYear = gRptMode == rptMonthly ? y : (UInt16)(y - rptMaxRows + 1);
             YearLabel(form);
             gRptScroll = 0; ComputeReport(); DrawReport();
             break;   /* let the trigger update its label */
@@ -227,6 +292,8 @@ Boolean ReportsFormHandleEvent(EventType *event)
         switch (event->data.ctlSelect.controlID) {
         case RptPrevButton: StepYear(form, -1); return true;
         case RptNextButton: StepYear(form, 1); return true;
+        case RptFromTrigger: PickRangeDate(form, true); return true;
+        case RptToTrigger: PickRangeDate(form, false); return true;
         case RptDoneButton: FrmGotoForm(StatsForm); return true;
         case RptGraphsButton: FrmGotoForm(GraphsForm); return true;
         case RptExportButton: FrmGotoForm(ExportForm); return true;
