@@ -49,7 +49,7 @@ $(BUILD)/$(APP): $(OBJS) $(BUILD)/sections.o $(SECT).ld
 	$(CC) $(CFLAGS) -o $@ $(OBJS) $(BUILD)/sections.o $(SECT).ld
 	tools/check-sections.sh $@ $(OBJS)
 
-$(BUILD)/rcp.stamp: rsc/fuellog.rcp rsc/resources.h | $(BUILD)
+$(BUILD)/rcp.stamp: rsc/fuellog.rcp rsc/resources.h $(wildcard rsc/icons/*.bmp) | $(BUILD)
 	$(PILRC) -q -I rsc rsc/fuellog.rcp $(BUILD)
 	touch $@
 
