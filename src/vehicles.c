@@ -99,6 +99,9 @@ UInt16 VehBuildChoices(ListType *lst, char names[][vehNameLen], char *ptrs[], UI
 
 /* Section placement: see sections.h. */
 static UInt16 VisibleAt(UInt16 row, UInt16 *dbIndex) FORMS_SEC;
+static UInt16 VisibleCount(void) FORMS_SEC;
+static void OpenVehicleRow(UInt16 row) FORMS_SEC;
+static Int16 gVehSel = -1;   /* 5-way highlighted row */
 static void DrawVehicles(void) FORMS_SEC;
 static void LayoutVehicles(FormType *form) FORMS_SEC;
 static void SetPopup(FormType *form, UInt16 triggerId, UInt16 listId, Int16 sel) FORMS_SEC;
@@ -119,6 +122,19 @@ static UInt16 VisibleAt(UInt16 row, UInt16 *dbIndex)
     return 0;
 }
 
+static UInt16 VisibleCount(void)
+{
+    UInt16 total = 0, idx;
+    while (VisibleAt(total, &idx)) total++;
+    return total;
+}
+
+static void OpenVehicleRow(UInt16 row)
+{
+    UInt16 idx;
+    if (VisibleAt(row, &idx)) { gVehSel = (Int16)row; gEditVehicleIndex = idx; FrmGotoForm(EditVehicleForm); }
+}
+
 static void DrawVehicles(void)
 {
     UInt16 row = 0, idx;
@@ -132,9 +148,12 @@ static void DrawVehicles(void)
         return;
     }
     if (!VisibleAt(gVehFirst, &idx)) gVehFirst = 0;
+    if (gVehSel >= 0 && !VisibleAt((UInt16)gVehSel, &idx)) gVehSel = -1;
     row = gVehFirst;
     while (VisibleAt(row, &idx) && y + kVehRowH <= gVehRows.topLeft.y + gVehRows.extent.y) {
         UInt32 odo;
+        Boolean hi = (Int16)row == gVehSel;
+        if (hi) { RectangleType sr; sr.topLeft.x = 0; sr.topLeft.y = y; sr.extent.x = 160; sr.extent.y = kVehRowH; AppRowHighlight(&sr); }
         DbGetVehicle(idx, &gScanVeh);
         FntSetFont(gScanVeh.archived ? stdFont : boldFont);
         WinDrawChars(gScanVeh.name, StrLen(gScanVeh.name), 4, y);
@@ -153,6 +172,7 @@ static void DrawVehicles(void)
             StrCat(buf, "; "); StrIToA(num, VehFillCount(gScanVeh.id)); StrCat(buf, num); StrCat(buf, " fills");
             WinDrawChars(buf, StrLen(buf), 10, y + 10);
         }
+        if (hi) AppRowPlain();
         y += kVehRowH; row++;
     }
     {
@@ -193,7 +213,7 @@ Boolean VehiclesFormHandleEvent(EventType *event)
     case penDownEvent:
         if (RctPtInRectangle(event->screenX, event->screenY, &gVehRows)) {
             UInt16 row = (UInt16)((event->screenY - gVehRows.topLeft.y) / kVehRowH + gVehFirst), idx;
-            if (VisibleAt(row, &idx)) { gEditVehicleIndex = idx; FrmGotoForm(EditVehicleForm); return true; }
+            if (VisibleAt(row, &idx)) { OpenVehicleRow(row); return true; }
         }
         break;
     case sclRepeatEvent: case sclExitEvent: {
@@ -207,7 +227,10 @@ Boolean VehiclesFormHandleEvent(EventType *event)
         Boolean page;
         Int16 dir = AppScrollDirection(event, &page);
         UInt16 step = page ? visible : 1;
+        Int16 rk = AppRowKey(event, &gVehSel, &gVehFirst, VisibleCount(), visible);
         (void)c;
+        if (rk == 2) { OpenVehicleRow((UInt16)gVehSel); return true; }
+        if (rk == 1) { DrawVehicles(); return true; }
         if (dir > 0 && VisibleAt(gVehFirst + visible, &idx)) { gVehFirst += step; DrawVehicles(); return true; }
         if (dir < 0 && gVehFirst > 0) { gVehFirst = gVehFirst > step ? gVehFirst - step : 0; DrawVehicles(); return true; }
         break;
@@ -218,7 +241,7 @@ Boolean VehiclesFormHandleEvent(EventType *event)
             if (VehNextId() == 0) { FrmAlert(TooManyVehiclesAlert); return true; }
             gEditVehicleIndex = dmMaxRecordIndex; FrmGotoForm(EditVehicleForm); return true;
         case VehiclesDoneButton: FrmGotoForm(FillListForm); return true;
-        case VehiclesArchivedCheckbox: gShowArchived = CtlGetValue(FrmGetObjectPtr(form, FrmGetObjectIndex(form, VehiclesArchivedCheckbox))); DrawVehicles(); return true;
+        case VehiclesArchivedCheckbox: gShowArchived = CtlGetValue(FrmGetObjectPtr(form, FrmGetObjectIndex(form, VehiclesArchivedCheckbox))); gVehSel = -1; DrawVehicles(); return true;
         default: break;
         }
         break;

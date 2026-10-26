@@ -20,6 +20,7 @@ static UInt8 gPacked[pgmFixedSize + pgmAliasLen + 4];
 static RectangleType gPgmRows;
 static UInt16 gOrder[pgmMaxProgrammes];  /* list rows -> database index */
 static UInt16 gOrderCount;
+static Int16  gPgmSel = -1;   /* 5-way highlighted row */
 #define kPgmRowH 20
 static UInt16 gPgmFirst;   /* first row shown; page keys move it */
 #define kPgmTop 18
@@ -234,9 +235,12 @@ static void DrawProgrammes(void)
         return;
     }
     if (gPgmFirst >= gOrderCount) gPgmFirst = 0;
+    if (gPgmSel >= (Int16)gOrderCount) gPgmSel = -1;
     for (row = gPgmFirst; row < gOrderCount && y + kPgmRowH <= gPgmRows.topLeft.y + gPgmRows.extent.y; row++, y += kPgmRowH) {
         Int32 bal;
+        Boolean hi = (Int16)row == gPgmSel;
         if (PgmGetAt(gOrder[row], &gScanPgm) != errNone) continue;
+        if (hi) { RectangleType sr; sr.topLeft.x = 0; sr.topLeft.y = y; sr.extent.x = 160; sr.extent.y = kPgmRowH; AppRowHighlight(&sr); }
         FntSetFont(gScanPgm.archived ? stdFont : boldFont);
         WinDrawChars(gScanPgm.name, StrLen(gScanPgm.name), 4, y);
         bal = PgmBalance(gScanPgm.id, gScanPgm.openingBalance);
@@ -251,6 +255,7 @@ static void DrawProgrammes(void)
                 /* the warning that costs money comes first */
                 TextFixed(buf, exp, 0, gPoint, gThousands); StrCat(buf, " expire "); DateShortText(buf + StrLen(buf), when);
                 WinDrawChars(buf, StrLen(buf), 10, y + 10);
+                if (hi) AppRowPlain();
                 continue;
             }
         }
@@ -262,6 +267,7 @@ static void DrawProgrammes(void)
             TextFixed(buf + StrLen(buf), (Int32)cents, 2, gPoint, gThousands);
         }
         WinDrawChars(buf, StrLen(buf), 10, y + 10);
+        if (hi) AppRowPlain();
     }
     {
         UInt16 visible = (UInt16)(gPgmRows.extent.y / kPgmRowH);
@@ -296,7 +302,7 @@ Boolean ProgrammesFormHandleEvent(EventType *event)
     case penDownEvent:
         if (RctPtInRectangle(event->screenX, event->screenY, &gPgmRows)) {
             UInt16 row = (UInt16)((event->screenY - gPgmRows.topLeft.y) / kPgmRowH + gPgmFirst);
-            if (row < gOrderCount) { gEditProgrammeIndex = gOrder[row]; FrmGotoForm(EditProgrammeForm); return true; }
+            if (row < gOrderCount) { gPgmSel = (Int16)row; gEditProgrammeIndex = gOrder[row]; FrmGotoForm(EditProgrammeForm); return true; }
         }
         break;
     case sclRepeatEvent: case sclExitEvent: {
@@ -311,7 +317,10 @@ Boolean ProgrammesFormHandleEvent(EventType *event)
         Boolean page;
         Int16 dir = AppScrollDirection(event, &page);
         UInt16 step = page ? visible : 1;
+        Int16 rk = AppRowKey(event, &gPgmSel, &gPgmFirst, gOrderCount, visible);
         (void)c;
+        if (rk == 2) { gEditProgrammeIndex = gOrder[gPgmSel]; FrmGotoForm(EditProgrammeForm); return true; }
+        if (rk == 1) { DrawProgrammes(); return true; }
         if (dir > 0 && gPgmFirst + visible < gOrderCount) { gPgmFirst += step; DrawProgrammes(); return true; }
         if (dir < 0 && gPgmFirst > 0) { gPgmFirst = gPgmFirst > step ? gPgmFirst - step : 0; DrawProgrammes(); return true; }
         break;

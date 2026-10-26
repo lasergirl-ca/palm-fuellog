@@ -34,6 +34,11 @@ void    AppListScrollBar(FormType *form, UInt16 sbId, Int16 value, Int16 max, In
 Boolean AppListScrollEvent(const EventType *event, Int16 *value);
 /* -1 up, +1 down, 0 for any other key. Page keys set *page; the 5-way pad does not. */
 Int16   AppScrollDirection(const EventType *event, Boolean *page);
+/* 5-way row selection for the drawn lists: rocker up/down moves a highlight (scrolling when it
+ * leaves the window), centre opens it. Returns 0 (not a rocker key), 1 (moved: redraw) or 2 (open *sel). */
+Int16   AppRowKey(const EventType *event, Int16 *sel, UInt16 *first, UInt16 count, UInt16 visible);
+void    AppRowHighlight(const RectangleType *r);   /* fill r in the selection colours; text drawn next lands on it */
+void    AppRowPlain(void);                         /* back to the form colours */
 /* The modal lined note over the current form; edits notes (fillMaxNotes bytes) in place. */
 void   AppNoteDialog(char *notes);   /* the window height after AppFitForm: lay rows out to this, not the display */
 extern UInt16 gDisplayChanges;          /* winDisplayChangedEvents seen, for the About diagnostics */

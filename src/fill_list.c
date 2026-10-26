@@ -17,6 +17,7 @@ static Coord gTop = 26;
 static char gBanner[44];      /* "Oil and filter due in 640 km", or empty */
 static UInt8 gBannerStatus;
 static UInt16 gFirstRow;  /* index into the newest-first order */
+static Int16  gSel = -1;  /* 5-way highlighted row, or -1 */
 static FillRecord gRowFill, gScanFill;   /* static: keeps the big records off the stack */
 static char gVehNames[vehMaxVehicles + 1][vehNameLen];
 static char *gVehNamePtrs[vehMaxVehicles + 1];
@@ -135,6 +136,7 @@ static void DrawRows(void)
     DrawRight("Total", colTotal, kTop - 11);
     DrawRight(EcoHeader(electric), kColEco, kTop - 11);
     rows = (UInt16)((gRows.extent.y) / kRowH);
+    if (gSel >= (Int16)count) gSel = (Int16)count - 1;
     if (count == 0) {
         FntSetFont(stdFont);
         WinDrawChars("No fills yet. Tap New to log one.", 33, 8, y + 20);
@@ -144,8 +146,13 @@ static void DrawRows(void)
     for (i = 0; i < rows && gFirstRow + i < count; i++, y += kRowH) {
         UInt16 k = gVisible[gFirstRow + i];   /* newest first */
         UInt32 eco;
+        Boolean hi = (Int16)(gFirstRow + i) == gSel;
         if (DbGetFill(k, fp) != errNone) continue;
-        if (i & 1) {
+        if (hi) {
+            RectangleType sr;
+            sr.topLeft.x = 0; sr.topLeft.y = y; sr.extent.x = 160; sr.extent.y = kRowH;
+            AppRowHighlight(&sr);
+        } else if (i & 1) {
             RectangleType stripe;
             stripe.topLeft.x = 0; stripe.topLeft.y = y; stripe.extent.x = 160; stripe.extent.y = kRowH;
             WinSetBackColor(UIColorGetTableEntryIndex(UIFieldBackground));
@@ -178,6 +185,7 @@ static void DrawRows(void)
             FntSetFont(stdFont);
             DrawRight((fp->flags & fillFlagFullTank) ? "" : "partial", kColEco, y);
         }
+        if (hi) AppRowPlain();
     }
     AppListScrollBar(FrmGetActiveForm(), FillListScrollBar, (Int16)gFirstRow, (Int16)((Int16)count - (Int16)rows), (Int16)rows,
                      gRows.topLeft.y, (Coord)(gRows.topLeft.y + gRows.extent.y));
@@ -273,6 +281,7 @@ Boolean FillListHandleEvent(EventType *event)
         if (RctPtInRectangle(event->screenX, event->screenY, &gRows)) {
             UInt16 row = (UInt16)((event->screenY - gRows.topLeft.y) / kRowH) + gFirstRow;
             if (row < gVisibleCount) {
+                gSel = (Int16)row;
                 gEditIndex = gVisible[row];
                 FrmGotoForm(FillForm);
                 return true;
@@ -286,6 +295,11 @@ Boolean FillListHandleEvent(EventType *event)
     }
     case keyDownEvent: {
         UInt16 rows = (UInt16)(gRows.extent.y / kRowH), count = gVisibleCount;
+        {
+            Int16 rk = AppRowKey(event, &gSel, &gFirstRow, count, rows);
+            if (rk == 2) { gEditIndex = gVisible[gSel]; FrmGotoForm(FillForm); return true; }
+            if (rk == 1) { DrawRows(); return true; }
+        }
         {
             Boolean page;
             Int16 dir = AppScrollDirection(event, &page);
@@ -323,7 +337,7 @@ Boolean FillListHandleEvent(EventType *event)
         if (event->data.popSelect.listID == FillListVehicleList) {
             gPrefs.currentVehicle = gVehIds[event->data.popSelect.selection];
             PrefsSave(&gPrefs);
-            gFirstRow = 0;
+            gFirstRow = 0; gSel = -1;
             CtlSetLabel(FrmGetObjectPtr(form, FrmGetObjectIndex(form, FillListVehicleTrigger)), gVehNames[event->data.popSelect.selection]);
             DrawRows(); DrawFooter();
             return true;

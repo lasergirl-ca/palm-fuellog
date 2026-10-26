@@ -119,6 +119,9 @@ static void VisibleArea(Coord *top, Coord *bottom)
 #define vchrRockerUp   0x0132
 #define vchrRockerDown 0x0133
 #endif
+#ifndef vchrRockerCenter
+#define vchrRockerCenter 0x0136
+#endif
 
 Int16 AppScrollDirection(const EventType *event, Boolean *page)
 {
@@ -131,6 +134,42 @@ Int16 AppScrollDirection(const EventType *event, Boolean *page)
     if (c == vchrRockerDown) return 1;
     if (c == vchrRockerUp) return -1;
     return 0;
+}
+
+Int16 AppRowKey(const EventType *event, Int16 *sel, UInt16 *first, UInt16 count, UInt16 visible)
+{
+    WChar c;
+    if (event->eType != keyDownEvent || count == 0) return 0;
+    c = event->data.keyDown.chr;
+    if (*sel >= (Int16)count) *sel = (Int16)count - 1;
+    if (c == vchrRockerCenter) return *sel >= 0 ? 2 : 0;
+    if (c != vchrRockerUp && c != vchrRockerDown) return 0;
+    if (visible == 0) visible = 1;
+    if (*sel < 0) {
+        /* nothing picked yet: start at the top or bottom of what is on screen */
+        UInt16 last = (UInt16)(*first + visible - 1);
+        *sel = c == vchrRockerDown ? (Int16)*first : (Int16)(last < count ? last : count - 1);
+    } else if (c == vchrRockerDown) { if (*sel + 1 < (Int16)count) (*sel)++; }
+    else if (*sel > 0) (*sel)--;
+    if (*sel < (Int16)*first) *first = (UInt16)*sel;
+    else if (*sel >= (Int16)(*first + visible)) *first = (UInt16)(*sel - visible + 1);
+    return 1;
+}
+
+void AppRowHighlight(const RectangleType *r)
+{
+    WinSetBackColor(UIColorGetTableEntryIndex(UIObjectSelectedFill));
+    WinSetForeColor(UIColorGetTableEntryIndex(UIObjectSelectedFill));
+    WinFillRectangle(r, 0);
+    WinSetForeColor(UIColorGetTableEntryIndex(UIObjectSelectedForeground));
+    WinSetTextColor(UIColorGetTableEntryIndex(UIObjectSelectedForeground));
+}
+
+void AppRowPlain(void)
+{
+    WinSetBackColor(UIColorGetTableEntryIndex(UIFormFill));
+    WinSetForeColor(UIColorGetTableEntryIndex(UIObjectForeground));
+    WinSetTextColor(UIColorGetTableEntryIndex(UIObjectForeground));
 }
 
 Boolean AppScrollKey(FormType *form, const EventType *event, const UInt16 *pinnedIds, UInt16 n)

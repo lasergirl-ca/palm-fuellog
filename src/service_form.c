@@ -215,6 +215,8 @@ UInt8 SvcBanner(UInt8 vehicle, char *buf)
 static UInt16 gSvcRows[svtMaxPerVehicle];
 static UInt8 gSvcStatus[svtMaxPerVehicle];
 static UInt8 gSvcRowCount, gSvcFirst;
+static Int16 gSvcSel = -1, gHistSel = -1;   /* 5-way highlighted rows */
+static void OpenServiceRow(UInt16 row) SVC_SEC;
 static RectangleType gSvcArea;
 static UInt32 gSvcOdoNow, gSvcPace;
 
@@ -322,6 +324,16 @@ static void DrawStatusBadge(UInt8 status, Coord x, Coord y)
     WinPopDrawState();
 }
 
+/* A row with a visit opens its History; one without goes straight to its Service Type. */
+static void OpenServiceRow(UInt16 row)
+{
+    UInt16 date; UInt32 odo;
+    gSvcSel = (Int16)row;
+    gEditSvtIndex = gSvcRows[row];
+    if (SvtGetAt(gEditSvtIndex, &gSvt) == errNone && LastVisit(gSvt.vehicle, gSvt.id, &date, &odo)) { gHistType = gEditSvtIndex; FrmGotoForm(HistoryForm); }
+    else FrmGotoForm(EditServiceForm);
+}
+
 static void DrawService(void)
 {
     char b[48], n[20];
@@ -343,10 +355,13 @@ static void DrawService(void)
         WinDrawChars("No services for this vehicle.", 29, 6, y + 20);
     }
     if (gSvcFirst >= gSvcRowCount) gSvcFirst = 0;
+    if (gSvcSel >= (Int16)gSvcRowCount) gSvcSel = -1;
     for (row = gSvcFirst; row < gSvcRowCount && y + kSvcRowH <= gSvcArea.topLeft.y + gSvcArea.extent.y; row++, y += kSvcRowH) {
         SvcDue d;
         const char *status;
+        Boolean hi = (Int16)row == gSvcSel;
         if (SvtGetAt(gSvcRows[row], &gSvt) != errNone) continue;
+        if (hi) { RectangleType sr; sr.topLeft.x = 0; sr.topLeft.y = y; sr.extent.x = 160; sr.extent.y = kSvcRowH; AppRowHighlight(&sr); }
         DueFor(&gSvt, gSvcOdoNow, gSvcPace, &d);
         FntSetFont(boldFont);
         WinDrawChars(gSvt.name, StrLen(gSvt.name), 4, y);
@@ -377,6 +392,7 @@ static void DrawService(void)
             if (LastVisit(gSvt.vehicle, gSvt.id, &date, &odo)) DateShortText(b + StrLen(b), date);
         }
         WinDrawChars(b, StrLen(b), 10, y + 10);
+        if (hi) AppRowPlain();
     }
     /* Footer: the latest visit of any kind. */
     FntSetFont(stdFont);
@@ -430,13 +446,7 @@ Boolean ServiceFormHandleEvent(EventType *event)
     case penDownEvent:
         if (RctPtInRectangle(event->screenX, event->screenY, &gSvcArea)) {
             UInt16 row = (UInt16)((event->screenY - gSvcArea.topLeft.y) / kSvcRowH + gSvcFirst);
-            if (row < gSvcRowCount) {
-                UInt16 date; UInt32 odo;
-                gEditSvtIndex = gSvcRows[row];
-                if (SvtGetAt(gEditSvtIndex, &gSvt) == errNone && LastVisit(gSvt.vehicle, gSvt.id, &date, &odo)) { gHistType = gEditSvtIndex; FrmGotoForm(HistoryForm); }
-                else FrmGotoForm(EditServiceForm);
-                return true;
-            }
+            if (row < gSvcRowCount) { OpenServiceRow(row); return true; }
         }
         break;
     case sclRepeatEvent: case sclExitEvent: {
@@ -449,8 +459,12 @@ Boolean ServiceFormHandleEvent(EventType *event)
         WChar c = event->data.keyDown.chr;
         Boolean page;
         Int16 dir = AppScrollDirection(event, &page);
-        UInt16 step = page ? visible : 1;
+        UInt16 step = page ? visible : 1, f = gSvcFirst;
+        Int16 rk = AppRowKey(event, &gSvcSel, &f, gSvcRowCount, visible);
         (void)c;
+        gSvcFirst = (UInt8)f;
+        if (rk == 2) { OpenServiceRow((UInt16)gSvcSel); return true; }
+        if (rk == 1) { DrawService(); return true; }
         if (dir > 0 && gSvcFirst + visible < gSvcRowCount) { gSvcFirst = (UInt8)(gSvcFirst + step); DrawService(); return true; }
         if (dir < 0 && gSvcFirst > 0) { gSvcFirst = (UInt8)(gSvcFirst > step ? gSvcFirst - step : 0); DrawService(); return true; }
         break;
@@ -960,8 +974,11 @@ static void DrawHistory(void)
     y = kHistTop;
     if (gHistCount == 0) { WinDrawChars("No visits yet. Tap Log on Service.", 34, 6, y + 10); }
     if (gHistFirst >= gHistCount) gHistFirst = 0;
+    if (gHistSel >= (Int16)gHistCount) gHistSel = -1;
     for (row = gHistFirst; row < gHistCount && y + kHistRowH <= gHistArea.topLeft.y + gHistArea.extent.y; row++, y += kHistRowH) {
+        Boolean hi = (Int16)row == gHistSel;
         if (SvlGetAt(gHistIdx[row], &gScanSvl) != errNone) continue;
+        if (hi) { RectangleType sr; sr.topLeft.x = 0; sr.topLeft.y = y; sr.extent.x = 160; sr.extent.y = kHistRowH; AppRowHighlight(&sr); }
         FntSetFont(stdFont);
         DueDateText(b, gScanSvl.date);
         WinDrawChars(b, StrLen(b), 4, y);
@@ -988,6 +1005,7 @@ static void DrawHistory(void)
             FntSetFont(stdFont);
             DrawRightAt(n, 150, y + 10);
         }
+        if (hi) AppRowPlain();
     }
     {
         UInt16 visible = (UInt16)(gHistArea.extent.y / kHistRowH);
@@ -1025,7 +1043,7 @@ Boolean HistoryFormHandleEvent(EventType *event)
     case penDownEvent:
         if (RctPtInRectangle(event->screenX, event->screenY, &gHistArea)) {
             UInt16 row = (UInt16)((event->screenY - gHistArea.topLeft.y) / kHistRowH + gHistFirst);
-            if (row < gHistCount) { gEditSvlIndex = gHistIdx[row]; gSvlReturn = HistoryForm; FrmGotoForm(LogServiceForm); return true; }
+            if (row < gHistCount) { gHistSel = (Int16)row; gEditSvlIndex = gHistIdx[row]; gSvlReturn = HistoryForm; FrmGotoForm(LogServiceForm); return true; }
         }
         break;
     case sclRepeatEvent: case sclExitEvent: {
@@ -1038,6 +1056,13 @@ Boolean HistoryFormHandleEvent(EventType *event)
         Boolean page;
         Int16 dir = AppScrollDirection(event, &page);
         UInt16 step = page ? visible : 1;
+        {
+            UInt16 f = gHistFirst;
+            Int16 rk = AppRowKey(event, &gHistSel, &f, gHistCount, visible);
+            gHistFirst = (UInt8)f;
+            if (rk == 2) { gEditSvlIndex = gHistIdx[gHistSel]; gSvlReturn = HistoryForm; FrmGotoForm(LogServiceForm); return true; }
+            if (rk == 1) { DrawHistory(); return true; }
+        }
         if (dir > 0 && gHistFirst + visible < gHistCount) { gHistFirst = (UInt8)(gHistFirst + step); DrawHistory(); return true; }
         if (dir < 0 && gHistFirst > 0) { gHistFirst = (UInt8)(gHistFirst > step ? gHistFirst - step : 0); DrawHistory(); return true; }
         break;
