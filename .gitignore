@@ -3,3 +3,4 @@ build/
 dist/
 *.o
 *.prc
+!releases/*.prc
