@@ -357,7 +357,8 @@ Boolean FillListHandleEvent(EventType *event)
             StrCopy(diag, "display "); StrIToA(diag + StrLen(diag), h);
             StrCat(diag, ", window "); StrIToA(diag + StrLen(diag), AppFormHeight(form));
             StrCat(diag, ", changes "); StrIToA(diag + StrLen(diag), gDisplayChanges);
-            FrmCustomAlert(AboutAlert, FUELLOG_BUILD, diag, "");
+            /* \353 is e-diaeresis in the Palm character set */
+            FrmCustomAlert(AboutAlert, FUELLOG_BUILD, "Zo\353 Leto and Andrew Culwell", diag);
             return true;
         }
         break;

@@ -165,7 +165,7 @@ ALERT ID AboutAlert
 INFORMATION
 BEGIN
     TITLE "FuelLog"
-    MESSAGE "FuelLog 0.2 for Palm OS 5, build ^1. M2 in progress. Layout: ^2."
+    MESSAGE "FuelLog 1.0 rc1 for Palm OS 5, build ^1.\n\nBy ^2.\n\nFree software under the GNU GPLv3.\n^3"
     BUTTONS "OK"
 END
 
