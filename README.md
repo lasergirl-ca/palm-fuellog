@@ -51,8 +51,19 @@ build on cross-section calls that would misbehave.
 ## Contributing
 
 Pull requests are welcome! Run `make test` and `make docker` before opening one,
-and say which device or emulator you tried the change on, if any.
+and say which device or emulator you tried the change on, if any. By opening a
+pull request you agree that your change is licensed under the GPLv3 like the rest.
 
 ## Licence
 
-Not yet decided; ask before redistributing.
+FuelLog is free software: you can redistribute it and/or modify it under the
+terms of the GNU General Public License as published by the Free Software
+Foundation, either version 3 of the License, or (at your option) any later
+version. It is distributed in the hope that it will be useful, but WITHOUT ANY
+WARRANTY; see `LICENSE` for the full text.
+
+Copyright (C) 2026 Zoe Leto. Contributions are accepted under the same licence.
+
+The design documents, mock-ups and the paper form in `docs/` are also covered
+by this licence. prc-tools and the Palm OS SDK are not part of this repository
+and keep their own terms.
