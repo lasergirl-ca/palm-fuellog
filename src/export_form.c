@@ -10,11 +10,15 @@
 #include "vehicles.h"
 #include "resources.h"
 #include "beam.h"
+#include "programmes.h"
 
 static char gEVNames[vehMaxVehicles + 1][vehNameLen];
 static char *gEVPtrs[vehMaxVehicles + 1];
 static UInt8 gEVIds[vehMaxVehicles + 1];
 static UInt8 gExpVehicle = 255;
+static char (*gEPNames)[pgmNameLen];        /* heap, allocated on first use: the data segment is full */
+static char *gEPPtrs[pgmMaxProgrammes + 1];
+static UInt8 gEPIds[pgmMaxProgrammes + 1];
 static char gYearNames[13][10];
 static char *gYearPtrs[13];
 static UInt16 gYears[13];
@@ -131,6 +135,21 @@ Boolean ExportFormHandleEvent(EventType *event)
         CtlSetLabel(FrmGetObjectPtr(form, FrmGetObjectIndex(form, ExpVehicleTrigger)), gEVNames[sel]);
         FrmSetControlGroupSelection(form, 1, ExpCsvButton);
         FrmSetControlGroupSelection(form, 2, ExpCardButton);
+        {
+            /* "All programmes" first, then the live programmes; the filter narrows fills and columns */
+            ListType *pl = FrmGetObjectPtr(form, FrmGetObjectIndex(form, ExpPgmList));
+            UInt16 count, k;
+            gExportPgm = 255;
+            if (!gEPNames) gEPNames = MemPtrNew((UInt32)(pgmMaxProgrammes + 1) * pgmNameLen);
+            if (gEPNames) {
+                count = PgmBuildChoices(pl, gEPNames, gEPPtrs, gEPIds, true, 0, 0, &sel);
+                StrCopy(gEPNames[0], "All programmes"); gEPIds[0] = 255;
+                for (k = 0; k < count; k++) gEPPtrs[k] = gEPNames[k];
+                LstSetListChoices(pl, gEPPtrs, (Int16)count);
+                LstSetSelection(pl, 0);
+                CtlSetLabel(FrmGetObjectPtr(form, FrmGetObjectIndex(form, ExpPgmTrigger)), gEPNames[0]);
+            }
+        }
         BuildYears(form);
         FileLabel(form);
         BackupLabel(form);
@@ -149,6 +168,11 @@ Boolean ExportFormHandleEvent(EventType *event)
         if (event->data.popSelect.listID == ExpVehicleList) {
             gExpVehicle = gEVIds[event->data.popSelect.selection];
             CtlSetLabel(FrmGetObjectPtr(form, FrmGetObjectIndex(form, ExpVehicleTrigger)), gEVNames[event->data.popSelect.selection]);
+            return true;
+        }
+        if (event->data.popSelect.listID == ExpPgmList) {
+            gExportPgm = gEPIds[event->data.popSelect.selection];
+            CtlSetLabel(FrmGetObjectPtr(form, FrmGetObjectIndex(form, ExpPgmTrigger)), gEPNames[event->data.popSelect.selection]);
             return true;
         }
         if (event->data.popSelect.listID == ExpRangeList) {

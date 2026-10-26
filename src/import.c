@@ -115,6 +115,10 @@ static VehicleRecord gImpVeh;
 static ProgrammeRecord gImpPgm;
 static UInt8 gPgmIdFor[csvMaxPgms];       /* header programme index -> programme id (0 = none yet) */
 static UInt8 gKbId;
+static UInt8 gKbOverride;                 /* programme picked on the preview for the KB Points column, 0 = the alias */
+static char (*gKbNames)[pgmNameLen];        /* heap, allocated on first use: the data segment is full */
+static char *gKbPtrs[pgmMaxProgrammes + 1];
+static UInt8 gKbIds[pgmMaxProgrammes + 1];
 static char gLastVehName[impMaxNewVeh + 12][24];   /* vehicles seen in the file, for odometer checks */
 static UInt32 gLastOdo[impMaxNewVeh + 12];
 static UInt32 gLastLine[impMaxNewVeh + 12];
@@ -245,7 +249,8 @@ static void ResolveProgrammes(Boolean write)
     gImport.newProgrammes = 0;
     for (j = 0; j < gMap.pgmCount; j++) gPgmIdFor[j] = ResolveProgramme(gMap.pgmNames[j], write);
     gKbId = 0;
-    if (gMap.kbPoints >= 0) {
+    if (gMap.kbPoints >= 0 && gKbOverride) { gKbId = gKbOverride; PgmGet(gKbId, &gImpPgm); StrCopy(gImport.kbTarget, gImpPgm.name); gImport.kbPoints = true; }
+    else if (gMap.kbPoints >= 0) {
         gKbId = PgmIdByName("KB Points");
         if (!gKbId) gKbId = PgmIdByName("76 / Phillips 66");
         if (gKbId) { PgmGet(gKbId, &gImpPgm); StrCopy(gImport.kbTarget, gImpPgm.name); }
@@ -321,8 +326,30 @@ static Err Pass(UInt16 vol, Boolean write)
     return errNone;
 }
 
+/* The "KB Points to:" popup sits just above the buttons; it picks which programme that column counts for. */
+/* Section placement: see sections.h. */
+static void PlaceKbPopup(FormType *form, Coord h) IO_SEC;
+
+static void PlaceKbPopup(FormType *form, Coord h)
+{
+    ListType *lst = FrmGetObjectPtr(form, FrmGetObjectIndex(form, ImpKbList));
+    Int16 sel; RectangleType r; UInt16 idx;
+    UInt8 current;
+    if (!gKbNames) gKbNames = MemPtrNew((UInt32)(pgmMaxProgrammes + 1) * pgmNameLen);
+    if (!gKbNames) return;
+    current = gKbOverride ? gKbOverride : PgmIdByName("KB Points");
+    if (!current) current = PgmIdByName("76 / Phillips 66");
+    PgmBuildChoices(lst, gKbNames, gKbPtrs, gKbIds, false, 0, current, &sel);
+    if (sel < 0) sel = 0;
+    CtlSetLabel(FrmGetObjectPtr(form, FrmGetObjectIndex(form, ImpKbTrigger)), gKbNames[sel]);
+    idx = FrmGetObjectIndex(form, ImpKbLabel); FrmGetObjectBounds(form, idx, &r); r.topLeft.y = (Coord)(h - 30); FrmSetObjectBounds(form, idx, &r); FrmShowObject(form, idx);
+    idx = FrmGetObjectIndex(form, ImpKbTrigger); FrmGetObjectBounds(form, idx, &r); r.topLeft.y = (Coord)(h - 30); FrmSetObjectBounds(form, idx, &r); FrmShowObject(form, idx);
+    idx = FrmGetObjectIndex(form, ImpKbList); FrmGetObjectBounds(form, idx, &r); r.topLeft.y = (Coord)(h - 30 - r.extent.y); FrmSetObjectBounds(form, idx, &r);
+}
+
 Err ImportScan(UInt16 vol, const char *file)
 {
+    gKbOverride = 0;
     MemSet(&gImport, sizeof gImport, 0);
     StrNCopy(gImport.file, file, cardNameLen - 1);
     return Pass(vol, false);
@@ -446,8 +473,9 @@ Boolean ImportFormHandleEvent(EventType *event)
         Coord w, h;
         AppFitForm(form, bottom, 2);
         WinGetDisplayExtent(&w, &h); h = AppFormHeight(form);
-        gImpArea.topLeft.x = 0; gImpArea.topLeft.y = 15; gImpArea.extent.x = w; gImpArea.extent.y = (Coord)(h - 17 - 15);
+        gImpArea.topLeft.x = 0; gImpArea.topLeft.y = 15; gImpArea.extent.x = w; gImpArea.extent.y = (Coord)(h - 17 - 15 - (gImport.kbPoints ? 14 : 0));
         gImpScroll = 0;
+        if (gImport.kbPoints) PlaceKbPopup(form, h);
         StrCopy(label, "Import "); StrIToA(label + 7, (Int32)gImport.ready);
         CtlSetLabel(FrmGetObjectPtr(form, FrmGetObjectIndex(form, ImpImportButton)), label);
         if (gImport.ready == 0) FrmHideObject(form, FrmGetObjectIndex(form, ImpImportButton));
@@ -460,7 +488,8 @@ Boolean ImportFormHandleEvent(EventType *event)
         Coord w, h;
         AppFitForm(form, bottom, 2);
         WinGetDisplayExtent(&w, &h); h = AppFormHeight(form);
-        gImpArea.extent.y = (Coord)(h - 17 - 15); gImpScroll = 0;
+        gImpArea.extent.y = (Coord)(h - 17 - 15 - (gImport.kbPoints ? 14 : 0)); gImpScroll = 0;
+        if (gImport.kbPoints) PlaceKbPopup(form, h);
         WinEraseWindow(); FrmDrawForm(form); DrawImport(); return true;
     }
     case sclRepeatEvent: case sclExitEvent: {
@@ -475,6 +504,15 @@ Boolean ImportFormHandleEvent(EventType *event)
         if (dir < 0 && gImpScroll > 0) { gImpScroll -= gImpScroll < step ? gImpScroll : step; DrawImport(); return true; }
         break;
     }
+    case popSelectEvent:
+        if (event->data.popSelect.listID == ImpKbList) {
+            gKbOverride = gKbIds[event->data.popSelect.selection];
+            CtlSetLabel(FrmGetObjectPtr(form, FrmGetObjectIndex(form, ImpKbTrigger)), gKbNames[event->data.popSelect.selection]);
+            PgmGet(gKbOverride, &gImpPgm); StrCopy(gImport.kbTarget, gImpPgm.name);
+            DrawImport();
+            return true;
+        }
+        break;
     case ctlSelectEvent:
         if (event->data.ctlSelect.controlID == ImpCancelButton) { FrmGotoForm(ExportForm); return true; }
         if (event->data.ctlSelect.controlID == ImpImportButton) {

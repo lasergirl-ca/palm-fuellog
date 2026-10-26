@@ -197,7 +197,11 @@ static void DrawStats(void)
                 bal = PgmBalance(id, gStatsPgm.openingBalance);
                 PgmValueText(n1, &gStatsPgm, bal);
                 StrCopy(b, n1);
-                if (!PgmIsMoney(&gStatsPgm) && gStatsPgm.valuePerPoint && bal > 0) {
+                {
+                    UInt16 when; Int32 exp = PgmExpiring(&gStatsPgm, &when);
+                    if (exp > 0) { StrCat(b, " ("); TextFixed(b + StrLen(b), exp, 0, gPoint, gThousands); StrCat(b, " expire "); DateShortText(b + StrLen(b), when); StrCat(b, ")"); }
+                }
+                if (!PgmIsMoney(&gStatsPgm) && gStatsPgm.valuePerPoint && bal > 0 && !StrStr(b, "expire")) {
                     StrCat(b, " (about $");
                     TextFixed(b + StrLen(b), (Int32)CalcMulDiv((UInt32)bal, gStatsPgm.valuePerPoint, 1000), 2, gPoint, gThousands);
                     StrCat(b, ")");

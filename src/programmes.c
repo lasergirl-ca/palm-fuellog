@@ -9,6 +9,8 @@
 #include "currency.h"
 #include "text.h"
 #include "resources.h"
+#include "points.h"
+#include "datecalc.h"
 
 UInt16 gEditProgrammeIndex = dmMaxRecordIndex;
 static ProgrammeRecord gPgm;            /* the one being edited */
@@ -81,6 +83,30 @@ Int32 PgmBalance(UInt8 id, Int32 opening)
             if (gScanFillP.points[k].programme == id) bal += gScanFillP.points[k].earned - gScanFillP.points[k].redeemed;
     }
     return bal;
+}
+
+Int32 PgmExpiring(const ProgrammeRecord *p, UInt16 *when)
+{
+    UInt16 n, i, today, until, y; UInt8 m, d, k; Int32 out;
+    PointsAge *age;   /* ~600 bytes: too big for the data segment, so it lives on the heap for the call */
+    *when = 0;
+    if (p->expiryRule == pgmExpiryNone) return 0;
+    age = MemPtrNew(sizeof *age);
+    if (!age) return 0;
+    n = DbCount(dbFills);
+    PointsBegin(age, p->expiryRule, p->expiryMonths);
+    if (p->openingBalance > 0) PointsAdd(age, 0, p->openingBalance, 0);   /* the opening balance ages like an old lot */
+    for (i = 0; i < n; i++) {
+        if (DbGetFill(i, &gScanFillP) != errNone) continue;
+        for (k = 0; k < gScanFillP.pointCount; k++)
+            if (gScanFillP.points[k].programme == p->id) PointsAdd(age, gScanFillP.date, gScanFillP.points[k].earned, gScanFillP.points[k].redeemed);
+    }
+    today = AppToday();
+    DateDaysToYmd(DateAddMonths(today, 1), &y, &m, &d);
+    until = DateYmdToDays(y, m, DateDaysInMonth(y, m));   /* end of next month */
+    out = PointsExpiringBy(age, today, until, when);
+    MemPtrFree(age);
+    return out;
 }
 
 Boolean PgmIsMoney(const ProgrammeRecord *p) { return p->valuePerPoint == 1000; }
@@ -218,6 +244,16 @@ static void DrawProgrammes(void)
         PgmValueText(val, &gScanPgm, bal);
         WinDrawChars(val, StrLen(val), 150 - FntCharsWidth(val, StrLen(val)), y);
         FntSetFont(stdFont);
+        {
+            UInt16 when; Int32 exp = PgmExpiring(&gScanPgm, &when);
+            PgmGetAt(gOrder[row], &gScanPgm);
+            if (exp > 0) {
+                /* the warning that costs money comes first */
+                TextFixed(buf, exp, 0, gPoint, gThousands); StrCat(buf, " expire "); DateShortText(buf + StrLen(buf), when);
+                WinDrawChars(buf, StrLen(buf), 10, y + 10);
+                continue;
+            }
+        }
         RuleText(buf, &gScanPgm);
         if (!PgmIsMoney(&gScanPgm) && gScanPgm.valuePerPoint && bal > 0) {
             /* "about $3.40": points x thousandths of a cent / 100000 = dollars */

@@ -705,19 +705,23 @@ BEGIN
     POPUPTRIGGER "All years" ID ExpRangeTrigger AT (58 43 60 12) LEFTANCHOR
     LIST "All years" ID ExpRangeList AT (58 43 60 60) NONUSABLE VISIBLEITEMS 6
     POPUPLIST ID ExpRangeTrigger ExpRangeList
-    LABEL "Send to:" AUTOID AT (16 56) FONT 0
-    PUSHBUTTON "SD card" ID ExpCardButton AT (58 56 44 12) GROUP 2
-    PUSHBUTTON "Other Palm" ID ExpPalmButton AT (PREVRIGHT 56 54 12) GROUP 2
-    LABEL "                                        " ID ExpFileLabel AT (4 72) FONT 0
-    BUTTON "Export" ID ExpExportButton AT (4 85 44 12)
-    LABEL "Backup" AUTOID AT (4 103) FONT 1
-    LABEL "                                        " ID ExpBackupLabel AT (4 115) FONT 0
-    BUTTON "Back up now" ID ExpBackupButton AT (4 128 64 12)
-    BUTTON "Restore..." ID ExpRestoreButton AT (74 128 52 12)
-    LABEL "Import" AUTOID AT (4 146) FONT 1
-    LABEL "CSV or XLSX from Import/ on the card" AUTOID AT (4 158) FONT 0
-    BUTTON "Choose a file..." ID ExpImportButton AT (4 171 76 12)
-    BUTTON "Done" ID ExpDoneButton AT (4 190 36 12)
+    LABEL "Points:" AUTOID AT (24 56) FONT 0
+    POPUPTRIGGER "All programmes" ID ExpPgmTrigger AT (58 56 94 12) LEFTANCHOR
+    LIST "All programmes" ID ExpPgmList AT (58 56 94 60) NONUSABLE VISIBLEITEMS 6
+    POPUPLIST ID ExpPgmTrigger ExpPgmList
+    LABEL "Send to:" AUTOID AT (16 69) FONT 0
+    PUSHBUTTON "SD card" ID ExpCardButton AT (58 69 44 12) GROUP 2
+    PUSHBUTTON "Other Palm" ID ExpPalmButton AT (PREVRIGHT 69 54 12) GROUP 2
+    LABEL "                                        " ID ExpFileLabel AT (4 85) FONT 0
+    BUTTON "Export" ID ExpExportButton AT (4 98 44 12)
+    LABEL "Backup" AUTOID AT (4 116) FONT 1
+    LABEL "                                        " ID ExpBackupLabel AT (4 128) FONT 0
+    BUTTON "Back up now" ID ExpBackupButton AT (4 141 64 12)
+    BUTTON "Restore..." ID ExpRestoreButton AT (74 141 52 12)
+    LABEL "Import" AUTOID AT (4 159) FONT 1
+    LABEL "CSV or XLSX from Import/ on the card" AUTOID AT (4 171) FONT 0
+    BUTTON "Choose a file..." ID ExpImportButton AT (4 184 76 12)
+    BUTTON "Done" ID ExpDoneButton AT (4 203 36 12)
     SCROLLBAR ID ExpScrollBar AT (153 15 7 130) VALUE 0 MIN 0 MAX 0 PAGESIZE 100
 END
 
@@ -806,6 +810,10 @@ NOFRAME
 USABLE
 BEGIN
     TITLE "Import"
+    LABEL "KB Points to:" ID ImpKbLabel AT (4 133) FONT 0 NONUSABLE
+    POPUPTRIGGER "76 / Phillips 66" ID ImpKbTrigger AT (62 133 94 12) LEFTANCHOR NONUSABLE
+    LIST "76 / Phillips 66" ID ImpKbList AT (62 90 94 55) NONUSABLE VISIBLEITEMS 5
+    POPUPLIST ID ImpKbTrigger ImpKbList
     BUTTON "Import" ID ImpImportButton AT (4 146 60 12)
     BUTTON "Cancel" ID ImpCancelButton AT (70 146 40 12)
     SCROLLBAR ID ImpScrollBar AT (152 15 7 120) VALUE 0 MIN 0 MAX 0 PAGESIZE 100
@@ -866,4 +874,13 @@ BEGIN
     TITLE "Received"
     MESSAGE "^1 records added from the other Palm."
     BUTTONS "OK"
+END
+
+ALERT ID TrackOtherAlert
+CONFIRMATION
+DEFAULTBUTTON 0
+BEGIN
+    TITLE "Track this service?"
+    MESSAGE "Make \"^1\" a service type for this vehicle, so it can have an interval and a history?"
+    BUTTONS "Track it" "Just this once"
 END

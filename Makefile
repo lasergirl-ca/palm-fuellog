@@ -18,7 +18,7 @@ BUILD    := build
 SRCS := src/main.c src/hello2.c src/calc.c src/device.c src/graph.c src/vfstest.c src/sp6test.c \
         src/m1test.c src/db.c src/prefs.c src/records.c src/units.c src/currency.c \
         src/app.c src/fill_list.c src/fill_form.c src/text.c src/datecalc.c \
-        src/vehicles.c src/prefs_form.c src/programmes.c src/presets.c src/setup.c src/stats.c src/stats_form.c src/service.c src/service_form.c src/report.c src/reports_form.c src/graphs_form.c src/csv.c src/card.c src/export.c src/backup.c src/export_form.c src/import.c src/export2.c src/xlsxread.c src/beam.c \
+        src/vehicles.c src/prefs_form.c src/programmes.c src/presets.c src/setup.c src/stats.c src/stats_form.c src/service.c src/service_form.c src/report.c src/reports_form.c src/graphs_form.c src/csv.c src/card.c src/export.c src/backup.c src/export_form.c src/import.c src/export2.c src/xlsxread.c src/beam.c src/points.c \
         src/outstream.c src/xlsx.c src/pdf.c src/crc32.c src/inflate.c src/zipread.c
 OBJS := $(patsubst src/%.c,$(BUILD)/%.o,$(SRCS))
 SECT := $(BUILD)/fuellog-sections
@@ -78,6 +78,8 @@ test: $(BUILD)
 	$(BUILD)/test_service
 	$(HOSTCC) -Wall -Wextra -o $(BUILD)/test_report tests/test_report.c src/report.c src/calc.c src/datecalc.c
 	$(BUILD)/test_report
+	$(HOSTCC) -Wall -Wextra -o $(BUILD)/test_points tests/test_points.c src/points.c src/datecalc.c
+	$(BUILD)/test_points
 	$(HOSTCC) -Wall -Wextra -o $(BUILD)/test_csv tests/test_csv.c src/csv.c src/units.c src/currency.c src/calc.c src/datecalc.c src/outstream.c src/records.c
 	$(BUILD)/test_csv
 	$(HOSTCC) -Wall -Wextra -o $(BUILD)/test_xlsxread tests/test_xlsxread.c src/xlsxread.c src/zipread.c src/inflate.c src/crc32.c src/csv.c src/units.c src/currency.c src/calc.c src/datecalc.c src/outstream.c src/records.c

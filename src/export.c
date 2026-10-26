@@ -12,6 +12,7 @@ static FillRecord gExpFill;
 static VehicleRecord gExpVeh;
 static ProgrammeRecord gExpPgm;
 static CardOut gOut;
+UInt8 gExportPgm = 255;
 
 /* Section placement: see sections.h. */
 static void BuildCtx(void) IO_SEC;
@@ -24,6 +25,7 @@ static void BuildCtx(void)
     gCsv.priceCents = gPrefs.priceFormat == 1; gCsv.homeCurrency = gPrefs.homeCurrency;
     for (i = 0; i < n && gCsv.pgmCount < csvMaxPgms; i++) {
         if (PgmGetAt(i, &gExpPgm) != errNone) continue;
+        if (gExportPgm != 255 && gExpPgm.id != gExportPgm) continue;
         gCsv.pgmIds[gCsv.pgmCount] = gExpPgm.id;
         StrCopy(gCsv.pgmNames[gCsv.pgmCount], gExpPgm.name);
         gCsv.pgmCount++;
@@ -48,6 +50,11 @@ void ExportCsvTo(OutStream *out, UInt8 vehicle, UInt16 year)
 Boolean ExportWants(const FillRecord *f, UInt8 vehicle, UInt16 year)
 {
     if (vehicle != 255 && f->vehicle != vehicle) return false;
+    if (gExportPgm != 255) {
+        UInt8 k; Boolean has = false;
+        for (k = 0; k < f->pointCount; k++) if (f->points[k].programme == gExportPgm) has = true;
+        if (!has) return false;
+    }
     if (year) { UInt16 y; UInt8 m, d; DateDaysToYmd(f->date, &y, &m, &d); if (y != year) return false; }
     return true;
 }

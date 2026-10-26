@@ -131,6 +131,23 @@ static UInt8 NextTypeId(UInt8 vehicle)
     return 255;
 }
 
+/* A live service type of this vehicle by name: its id, or 255; *usedOut gets the id bits in use. */
+/* Section placement: see sections.h. */
+static UInt8 TypeIdByNameHere(UInt8 vehicle, const char *name, UInt32 *usedOut) SVC_SEC;
+
+static UInt8 TypeIdByNameHere(UInt8 vehicle, const char *name, UInt32 *usedOut)
+{
+    UInt16 n = DbCount(dbServiceTypes), i;
+    UInt8 found = 255;
+    *usedOut = 0;
+    for (i = 0; i < n; i++) {
+        if (SvtGetAt(i, &gScanSvt) != errNone || gScanSvt.vehicle != vehicle) continue;
+        if (gScanSvt.id < 31) *usedOut |= 1UL << gScanSvt.id;
+        if (StrCaselessCompare(gScanSvt.name, name) == 0) found = gScanSvt.id;
+    }
+    return found;
+}
+
 static UInt16 VisitsCovering(UInt8 vehicle, UInt8 typeId)
 {
     UInt16 n = DbCount(dbServiceVisits), i, count = 0;
@@ -751,7 +768,19 @@ static Boolean SaveSvl(FormType *form)
     for (i = 0; i < gSvlCount; i++)
         if (CtlGetValue(FrmGetObjectPtr(form, FrmGetObjectIndex(form, SvlCheck0 + i)))) gSvl.services |= 1UL << gSvlTypeId[i];
     StrNCopy(gSvl.other, AppGetFieldText(form, SvlOtherField), svlOtherLen - 1); gSvl.other[svlOtherLen - 1] = 0;
-    if (other && gSvl.other[0]) gSvl.services |= svlOtherBit; else gSvl.other[0] = 0;
+    if (other && gSvl.other[0]) {
+        /* One tap turns a one-off item into a tracked service type. */
+        UInt32 used; UInt8 id = TypeIdByNameHere(gSvcVehicle, gSvl.other, &used);
+        Boolean promote = false;
+        if (id == 255 && NextTypeId(gSvcVehicle) != 255 && FrmCustomAlert(TrackOtherAlert, gSvl.other, "", "") == 0) {
+            MemSet(&gScanSvt, sizeof gScanSvt, 0);
+            gScanSvt.vehicle = gSvcVehicle; gScanSvt.id = NextTypeId(gSvcVehicle); gScanSvt.warnDays = 14;
+            StrNCopy(gScanSvt.name, gSvl.other, sizeof gScanSvt.name - 1);
+            if (DbAdd(dbServiceTypes, gSvcPacked, ServiceTypePack(&gScanSvt, gSvcPacked), NULL) == errNone) { id = gScanSvt.id; promote = true; }
+        } else if (id != 255) promote = true;      /* it already is a type: tick that instead */
+        if (promote) { gSvl.services |= 1UL << id; gSvl.other[0] = 0; }
+        else gSvl.services |= svlOtherBit;
+    } else gSvl.other[0] = 0;
     if (gSvl.services == 0) { FrmAlert(NothingDoneAlert); return false; }
     r = TextParseFixed(AppGetFieldText(form, SvlCostField), 2, gPoint, gThousands, &cents);
     if (r < 0) { FrmAlert(BadNumberAlert); return false; }

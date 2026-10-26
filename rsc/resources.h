@@ -378,3 +378,10 @@
 
 #define RptFromTrigger       3012
 #define RptToTrigger         3013
+
+#define TrackOtherAlert      1534
+#define ImpKbLabel           3404
+#define ImpKbTrigger         3405
+#define ImpKbList            3406
+#define ExpPgmTrigger        3219
+#define ExpPgmList           3220

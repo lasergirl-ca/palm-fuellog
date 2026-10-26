@@ -57,6 +57,7 @@ static void LoadProgrammes(void)
     gXPgmCount = 0;
     for (i = 0; i < n && gXPgmCount < 16; i++) {
         if (PgmGetAt(i, &gXPgm) != errNone) continue;
+        if (gExportPgm != 255 && gXPgm.id != gExportPgm) continue;
         gXPgmIds[gXPgmCount] = gXPgm.id; StrCopy(gXPgmNames[gXPgmCount], gXPgm.name); gXPgmCount++;
     }
 }
@@ -209,6 +210,7 @@ static void ProgrammesSheet(void)
     for (i = 0; i < n; i++) {
         Int32 bal;
         if (PgmGetAt(i, &gXPgm) != errNone) continue;
+        if (gExportPgm != 255 && gXPgm.id != gExportPgm) continue;
         bal = PgmBalance(gXPgm.id, gXPgm.openingBalance);
         PgmGetAt(i, &gXPgm);
         XlsxRowBegin(&gXw);

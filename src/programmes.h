@@ -11,7 +11,9 @@ Err     PgmGetAt(UInt16 index, ProgrammeRecord *p) FORMS_SEC;
 Boolean PgmGet(UInt8 id, ProgrammeRecord *p) FORMS_SEC;     /* false when none; a default is filled in */
 UInt8   PgmNextId(void) FORMS_SEC;                          /* lowest unused id 1..16, 0 when full */
 UInt16  PgmUseCount(UInt8 id) FORMS_SEC;                    /* fills with an entry for this programme */
-Int32   PgmBalance(UInt8 id, Int32 opening) FORMS_SEC;      /* opening + earned - redeemed over all fills */
+Int32   PgmBalance(UInt8 id, Int32 opening) FORMS_SEC;
+/* Points of this programme expiring by the end of next month (FIFO ageing); *when is the first such date. */
+Int32   PgmExpiring(const ProgrammeRecord *p, UInt16 *when) FORMS_SEC;      /* opening + earned - redeemed over all fills */
 Boolean PgmIsMoney(const ProgrammeRecord *p) FORMS_SEC;     /* counts in cents, shown as dollars */
 void    PgmValueText(char *buf, const ProgrammeRecord *p, Int32 points) FORMS_SEC;  /* "3,399 pts" or "$10.20" (buf 20) */
 void    PgmRateText(char *buf, UInt32 earnRate) FORMS_SEC;  /* "10" or "2.5" */
