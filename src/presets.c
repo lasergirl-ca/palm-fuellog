@@ -22,11 +22,12 @@ void PgmPreset(UInt8 i, ProgrammeRecord *r)
     r->id = (UInt8)(i + 1);
     r->premiumMult = 100;
     switch (i) {
-    case 0:  /* 76: 3 c/US gal on the card, Card fills only, balance in dollars */
+    case 0:  /* 76: KickBack Points, 3 pts per US gallon pumped (not per dollar spent),
+              * on any payment. The point value and redemption terms are not
+              * published, so they are left blank to be filled in from the card. */
         Cp(r->name, "76 / Phillips 66", pgmNameLen);
         r->currency = curUSD; r->earnBasis = pgmEarnPerUSGallon; r->earnRate = 300;
-        r->requiresPayment = pgmPaymentCard; r->autoApply = 1; r->valuePerPoint = 1000;
-        r->redeemKind = pgmRedeemMoneyOff; r->redeemBlock = 1; r->redeemValue = 10;
+        r->autoApply = 1;
         Cp(r->aliases, "KB Points,KB,Conoco", pgmAliasLen);
         break;
     case 1:  /* Petro-Points: 10 pts/L, 1,000 pts = $1 off */
