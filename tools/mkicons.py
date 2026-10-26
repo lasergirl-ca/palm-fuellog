@@ -48,12 +48,12 @@ class Canvas:
                 dx, dy = (x + 0.5) / s - cx, (y + 0.5) / s - cy
                 if (dx / rx) ** 2 + (dy / ry) ** 2 <= 1: self.px[y][x] = c
 
-    def outline(self, inside, c):
-        """Draw c on every transparent pixel touching a pixel for which inside() is true."""
+    def outline(self, inside, c, over=(T,)):
+        """Draw c on every pixel of a colour in `over` that touches a pixel for which inside() is true."""
         new = [row[:] for row in self.px]
         for y in range(self.h):
             for x in range(self.w):
-                if self.px[y][x] != T or not any(0 <= x + dx < self.w and 0 <= y + dy < self.h and inside(self.px[y + dy][x + dx])
+                if self.px[y][x] not in over or not any(0 <= x + dx < self.w and 0 <= y + dy < self.h and inside(self.px[y + dy][x + dx])
                                                 for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1))): continue
                 new[y][x] = c
         self.px = new
@@ -66,36 +66,81 @@ class Canvas:
 KEY = {'.': T, '#': K, 'w': W, 'r': R, 'l': RL, 'd': RD, 'g': G, 'h': GL, 'k': GD, 'b': B, 'o': BL, 'c': LB}
 
 
+import math
+
+ANGLE = 16   # degrees: the stock launcher icons are turned about this much (top edge rising to the right)
+
+
+def pump_scene(hi):
+    """The pump drawn flat on a fine grid (hi pixels per 22-unit), as a box seen from the
+    front-left: front face, a darker right side, a top, the base and the hose."""
+    cv = Canvas(22, 22, hi)
+    # base: front and right side
+    cv.rect(3, 16, 13, 18, G); cv.rect(3, 16, 13, 16, GL)
+    for i in range(hi * 2):                        # side of the base, one unit deep, slanting up-right
+        x = 14 + i / hi
+        cv.rect(x, 16 - (i + 1) / hi, x + 1 / hi - 1e-6, 18 - (i + 1) / hi, GD)
+    # body front
+    cv.rect(4, 3, 12, 15, R); cv.rect(4, 3, 5, 15, RL); cv.rect(11, 4, 12, 15, RD)
+    # body right side and top (oblique, two units deep)
+    for i in range(hi * 2):
+        x = 13 + i / hi
+        cv.rect(x, 3 - (i + 1) / hi, x + 1 / hi - 1e-6, 15 - (i + 1) / hi, RD)
+        cv.rect(4 + (i + 1) / hi, 3 - (i + 1) / hi, 12 + (i + 1) / hi, 3 - i / hi - 1e-6, RL)
+    # window and door line on the front
+    cv.rect(5.5, 5, 10.5, 8, LB); cv.rect(5.5, 5, 10.5, 5.5, W); cv.rect(5.5, 5, 6, 8, W)
+    cv.rect(7, 11, 9.5, 11.5, RD)
+    # hose: out of the side, up, and a nozzle hanging to the right
+    cv.rect(15, 9, 16.5, 9.8, G); cv.rect(16.5, 4, 17.3, 9.8, G); cv.rect(16.5, 3.2, 19.2, 4, G)
+    cv.rect(18.4, 4, 19.2, 6.5, GD); cv.rect(17.8, 6.5, 20, 7.5, GD)
+    return cv
+
+
+def rotated(scene, s, angle, cx, cy):
+    """Sample the fine scene into a 22*s grid, turned `angle` degrees about (cx, cy),
+    taking the most common colour of a 4x4 sample grid so edges stay hard."""
+    cv = Canvas(22, 22, s)
+    hi = scene.s
+    th = math.radians(angle)
+    c, sn = math.cos(th), math.sin(th)
+    for v in range(cv.h):
+        for u in range(cv.w):
+            votes = {}
+            for j in range(4):
+                for i in range(4):
+                    ux, vy = (u + (i + 0.5) / 4) / s, (v + (j + 0.5) / 4) / s
+                    x = cx + (ux - cx) * c - (vy - cy) * sn
+                    y = cy + (ux - cx) * sn + (vy - cy) * c
+                    xi, yi = int(x * hi), int(y * hi)
+                    col = scene.px[yi][xi] if 0 <= xi < scene.w and 0 <= yi < scene.h else T
+                    votes[col] = votes.get(col, 0) + 1
+            best = max(votes.items(), key=lambda kv: kv[1])[0]
+            if best != T: cv.px[v][u] = best
+    return cv
+
+
 def draw_large(s):
-    """The launcher icon: a red pump on the Palm blue oval, lit from the top left."""
+    """The launcher icon: a red pump on the Palm blue oval, turned like the stock icons."""
     cv = Canvas(22, 22, s)
     cv.ellipse(11, 17.5, 10.5, 4.3, B)                 # the pedestal
     cv.ellipse(11, 17.0, 9.0, 3.0, BL)
     cv.ellipse(11, 17.3, 7.5, 2.4, B)
-    # base
-    cv.rect(3, 16, 14, 18, G); cv.rect(3, 16, 14, 16, GL)
-    # body with highlight and shade
-    cv.rect(4, 3, 13, 15, R); cv.rect(5, 3, 6, 15, RL); cv.rect(12, 4, 13, 15, RD); cv.rect(4, 15, 13, 15, RD)
-    # window
-    cv.rect(6, 5, 11, 8, LB); cv.rect(6, 5, 11, 5, W); cv.rect(6, 5, 6, 8, W)
-    # door line
-    cv.rect(8, 11, 10, 11, RD)
-    # hose: up the right side, over the top, to a nozzle
-    cv.rect(14, 10, 15, 10, G); cv.rect(16, 5, 16, 10, G); cv.rect(16, 4, 18, 4, G); cv.rect(18, 5, 18, 7, GD); cv.rect(17, 7, 19, 8, GD)
-    for x in (14, 15): cv.rect(x, 11, x, 11, GD)
-    # outline everything but the oval
-    cv.outline(lambda c: c not in (T, B, BL), K)
+    pump = rotated(pump_scene(8), s, -ANGLE, 9.5, 11)
+    for y in range(cv.h):
+        for x in range(cv.w):
+            if pump.px[y][x] != T: cv.px[y][x] = pump.px[y][x]
+    cv.outline(lambda col: col not in (T, B, BL), K, over=(T, B, BL))
     return cv.rows()
 
 
 def draw_small(s):
-    """The list icon, 15x9: the pump alone."""
+    """The list icon, 15x9: the pump alone, upright (too small to lean)."""
     cv = Canvas(15, 9, s)
     cv.rect(2, 7, 9, 8, G); cv.rect(2, 7, 9, 7, GL)
     cv.rect(3, 1, 8, 6, R); cv.rect(3, 1, 3, 6, RL); cv.rect(8, 1, 8, 6, RD)
     cv.rect(4, 2, 7, 3, LB); cv.rect(4, 2, 7, 2, W)
     cv.rect(9, 4, 10, 4, G); cv.rect(11, 1, 11, 4, G); cv.rect(11, 1, 12, 1, G); cv.rect(12, 2, 12, 3, GD)
-    cv.outline(lambda c: c != T, K)
+    cv.outline(lambda col: col != T, K)
     return cv.rows()
 
 
