@@ -18,7 +18,7 @@ BUILD    := build
 SRCS := src/main.c src/hello2.c src/calc.c src/device.c src/graph.c src/vfstest.c src/sp6test.c \
         src/m1test.c src/db.c src/prefs.c src/records.c src/units.c src/currency.c \
         src/app.c src/fill_list.c src/fill_form.c src/text.c src/datecalc.c \
-        src/vehicles.c src/prefs_form.c src/programmes.c src/presets.c src/setup.c src/stats.c src/stats_form.c src/service.c src/service_form.c src/report.c src/reports_form.c src/graphs_form.c src/csv.c src/card.c src/export.c src/backup.c src/export_form.c src/import.c src/export2.c src/xlsxread.c src/beam.c src/points.c \
+        src/vehicles.c src/prefs_form.c src/programmes.c src/presets.c src/setup.c src/stats.c src/stats_form.c src/service.c src/service_form.c src/report.c src/reports_form.c src/graphs_form.c src/csv.c src/card.c src/export.c src/backup.c src/export_form.c src/import.c src/export2.c src/xlsxread.c src/xlsread.c src/beam.c src/points.c \
         src/outstream.c src/xlsx.c src/pdf.c src/crc32.c src/inflate.c src/zipread.c
 OBJS := $(patsubst src/%.c,$(BUILD)/%.o,$(SRCS))
 SECT := $(BUILD)/fuellog-sections
@@ -84,6 +84,9 @@ test: $(BUILD)
 	$(BUILD)/test_csv
 	$(HOSTCC) -Wall -Wextra -o $(BUILD)/test_xlsxread tests/test_xlsxread.c src/xlsxread.c src/zipread.c src/inflate.c src/crc32.c src/csv.c src/units.c src/currency.c src/calc.c src/datecalc.c src/outstream.c src/records.c
 	$(BUILD)/test_xlsxread docs/spikes/samples/fuellog-seek.xlsx docs/spikes/samples/sp6.xlsx
+	python3 -I tools/mkxls.py $(BUILD)/fills-mini.xls $(BUILD)/fills-fat.xls
+	$(HOSTCC) -Wall -Wextra -o $(BUILD)/test_xlsread tests/test_xlsread.c src/xlsread.c src/csv.c src/units.c src/currency.c src/calc.c src/datecalc.c src/outstream.c src/records.c
+	$(BUILD)/test_xlsread $(BUILD)/fills-mini.xls $(BUILD)/fills-fat.xls
 	$(HOSTCC) -Wall -o $(BUILD)/mkpdb tools/mkpdb/mkpdb.c src/records.c src/datecalc.c
 	mkdir -p $(BUILD)/pdb && $(BUILD)/mkpdb $(BUILD)/pdb
 	@if command -v go >/dev/null; then (cd tools/fuellogdump && go build -o ../../$(BUILD)/fuellogdump .) && $(BUILD)/fuellogdump dump $(BUILD)/pdb | diff - tests/expected_dump.csv && echo "ok   Go reader matches the C fixture"; else echo "skip Go reader (go not installed)"; fi
@@ -95,7 +98,7 @@ test: $(BUILD)
 	python3 -I tools/check_inflate.py $(BUILD)/test_inflate $(BUILD)/inflate $(INFLATE_EXTRA)
 
 check: $(APP).prc
-	python3 -I tools/prcinfo.py $(APP).prc --expect-code 10
+	python3 -I tools/prcinfo.py $(APP).prc --expect-code 11
 
 docker:
 	docker run --rm --platform linux/amd64 -v "$(CURDIR)":/src fuellog-toolchain make

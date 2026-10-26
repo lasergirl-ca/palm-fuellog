@@ -735,7 +735,7 @@ BEGIN
     BUTTON "Back up now" ID ExpBackupButton AT (4 141 64 12)
     BUTTON "Restore..." ID ExpRestoreButton AT (74 141 52 12)
     LABEL "Import" AUTOID AT (4 159) FONT 1
-    LABEL "CSV or XLSX from Import/ on the card" AUTOID AT (4 171) FONT 0
+    LABEL "CSV, XLSX or XLS from Import/ on the card" AUTOID AT (4 171) FONT 0
     BUTTON "Choose a file..." ID ExpImportButton AT (4 184 76 12)
     BUTTON "Done" ID ExpDoneButton AT (4 203 36 12)
     SCROLLBAR ID ExpScrollBar AT (153 15 7 130) VALUE 0 MIN 0 MAX 0 PAGESIZE 100
@@ -847,7 +847,7 @@ ALERT ID NoImportFilesAlert
 INFORMATION
 BEGIN
     TITLE "Nothing to import"
-    MESSAGE "Put a CSV or XLSX file in /PALM/Programs/FuelLog/Import on the card first."
+    MESSAGE "Put a CSV, XLSX or XLS file in /PALM/Programs/FuelLog/Import on the card first."
     BUTTONS "OK"
 END
 

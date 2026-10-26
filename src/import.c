@@ -1,6 +1,7 @@
 #include "import.h"
 #include "csv.h"
 #include "xlsxread.h"
+#include "xlsread.h"
 #include "units.h"
 #include "app.h"
 #include "db.h"
@@ -15,9 +16,10 @@ static Int16 Getc(void *ctx) { return CardInGetc((CardIn *)ctx); }
 static char *gRecord;                     /* csvMaxRecord bytes, heap during a pass */
 static char *gFields[csvMaxFields];
 
-/* ---- the row source: a CSV through the card reader, or an XLSX through the reader
- * with its parts inflated to temporary files in Import/ ---- */
-static Boolean gIsXlsx;
+/* ---- the row source: a CSV through the card reader, an XLSX through the reader
+ * with its parts inflated to temporary files in Import/, or a BIFF8 XLS ---- */
+static Boolean gIsXlsx, gIsXls;
+static XlsReader *gXs;                    /* heap while an .xls is open */
 static XlsxReader gXr;
 static FileRef gXlsxFile, gTmpW, gTmpR[3];
 static UInt16 gSrcVol;
@@ -76,6 +78,11 @@ static void SrcClose(void)
         if (gXr.window) MemPtrFree(gXr.window); if (gXr.inBuf) MemPtrFree(gXr.inBuf);
         if (gXr.crcTable) MemPtrFree(gXr.crcTable); if (gXr.sstOffsets) MemPtrFree(gXr.sstOffsets);
         MemSet(&gXr, sizeof gXr, 0);
+    } else if (gIsXls) {
+        if (gXlsxFile) { VFSFileClose(gXlsxFile); gXlsxFile = 0; }
+        if (gTmpW) { VFSFileClose(gTmpW); gTmpW = 0; }
+        for (i = 0; i < 3; i++) { if (gTmpR[i]) { VFSFileClose(gTmpR[i]); gTmpR[i] = 0; } VFSFileDelete(gSrcVol, TmpPath(i)); }
+        if (gXs) { if (gXs->sstOffsets) MemPtrFree(gXs->sstOffsets); MemPtrFree(gXs); gXs = NULL; }
     } else CardInClose(&gIn);
 }
 
@@ -84,6 +91,20 @@ static Err SrcOpen(UInt16 vol, const char *path)
     UInt16 l = StrLen(path);
     gSrcVol = vol;
     gIsXlsx = l > 5 && StrCaselessCompare(path + l - 5, ".xlsx") == 0;
+    gIsXls = !gIsXlsx && l > 4 && StrCaselessCompare(path + l - 4, ".xls") == 0;
+    if (gIsXls) {
+        if (VFSFileOpen(vol, path, vfsModeRead, &gXlsxFile) != errNone) return vfsErrFileNotFound;
+        gXs = MemPtrNew(sizeof *gXs);
+        if (!gXs) { SrcClose(); return memErrNotEnoughSpace; }
+        MemSet(gXs, sizeof *gXs, 0);
+        VFSFileSize(gXlsxFile, &gXs->fileSize);
+        gXs->readAt = XrReadAt; gXs->tmpBegin = XrTmpBegin; gXs->tmpWrite = XrTmpWrite; gXs->tmpEnd = XrTmpEnd; gXs->tmpReadAt = XrTmpReadAt;
+        gXs->tmpPart = xrTmpSst;
+        gXs->sstOffsets = MemPtrNew(4096 * sizeof(UInt32)); gXs->sstCap = 4096;
+        if (!gXs->sstOffsets) { SrcClose(); return memErrNotEnoughSpace; }
+        if (XlsrOpen(gXs) != 0) { SrcClose(); return dmErrCorruptDatabase; }
+        return errNone;
+    }
     if (!gIsXlsx) return CardInOpen(&gIn, vol, path);
     MemSet(&gXr, sizeof gXr, 0);
     if (VFSFileOpen(vol, path, vfsModeRead, &gXlsxFile) != errNone) return vfsErrFileNotFound;
@@ -102,6 +123,10 @@ static Int32 SrcNext(UInt32 *line)
     if (gIsXlsx) {
         Int32 n = XlsxrNextRow(&gXr, gFields, csvMaxFields, gRecord, csvMaxRecord);
         *line = gXr.rowNo;
+        return n;
+    } else if (gIsXls) {
+        Int32 n = XlsrNextRow(gXs, gFields, csvMaxFields, gRecord, csvMaxRecord);
+        *line = gXs->rowNo;
         return n;
     } else {
         Int32 len = CsvNextRecord(Getc, &gIn, gRecord, csvMaxRecord, line);
@@ -278,12 +303,13 @@ static Err Pass(UInt16 vol, Boolean write)
     if (len < 0) { SrcClose(); MemPtrFree(gRecord); gRecord = NULL; gImport.badHeader = 1; return errNone; }
     if (CsvMapHeader(gFields, n, &gMap) == 0) { SrcClose(); MemPtrFree(gRecord); gRecord = NULL; gImport.badHeader = 1; return errNone; }
     if (gIsXlsx) XlsxrSetDateColumns(&gXr, gMap.date, gMap.time);
+    if (gIsXls) XlsrSetDateColumns(gXs, gMap.date, gMap.time);
     ResolveProgrammes(write);
     for (;;) {
         UInt8 k, vid;
         recLine = line + 1;
         len = SrcNext(&line);
-        if (gIsXlsx) recLine = line;
+        if (gIsXlsx || gIsXls) recLine = line;
         if (len < 0) break;
         if (len == 0) continue;
         n = (Int16)len;
@@ -381,9 +407,9 @@ Boolean ChooseFileFormHandleEvent(EventType *event)
         gFileCount = 0;
         for (i = 0; i < n; i++) {
             UInt16 l = StrLen(gFiles[i]);
-            if ((l > 4 && StrCaselessCompare(gFiles[i] + l - 4, ".csv") == 0) || (l > 5 && StrCaselessCompare(gFiles[i] + l - 5, ".xlsx") == 0)) { if (gFileCount != i) StrCopy(gFiles[gFileCount], gFiles[i]); gFileCount++; }
+            if ((l > 4 && StrCaselessCompare(gFiles[i] + l - 4, ".csv") == 0) || (l > 5 && StrCaselessCompare(gFiles[i] + l - 5, ".xlsx") == 0) || (l > 4 && StrCaselessCompare(gFiles[i] + l - 4, ".xls") == 0)) { if (gFileCount != i) StrCopy(gFiles[gFileCount], gFiles[i]); gFileCount++; }
         }
-        if (gFileCount == 0) { StrCopy(gFiles[0], "(no CSV or XLSX files)"); gFileCount = 1; }
+        if (gFileCount == 0) { StrCopy(gFiles[0], "(no CSV, XLSX or XLS files)"); gFileCount = 1; }
         for (i = 0; i < gFileCount; i++) gFilePtrs[i] = gFiles[i];
         LstSetListChoices(lst, gFilePtrs, (Int16)gFileCount);
         LstSetSelection(lst, 0);
