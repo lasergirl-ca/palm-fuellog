@@ -357,7 +357,7 @@ Boolean FillListHandleEvent(EventType *event)
             StrCopy(diag, "display "); StrIToA(diag + StrLen(diag), h);
             StrCat(diag, ", window "); StrIToA(diag + StrLen(diag), AppFormHeight(form));
             StrCat(diag, ", changes "); StrIToA(diag + StrLen(diag), gDisplayChanges);
-            if (AppClockShift()) StrCat(diag, ", clock -28y");
+            if (AppClockShift()) { StrCat(diag, AppClockIsDateFix() ? ", DateFix +" : ", clock +"); StrIToA(diag + StrLen(diag), AppClockShift() / 365); StrCat(diag, "y"); }
             /* \353 is e-diaeresis in the Palm character set */
             FrmCustomAlert(AboutAlert, FUELLOG_BUILD, "Zo\353 Leto and Andrew Culwell", diag);
             return true;

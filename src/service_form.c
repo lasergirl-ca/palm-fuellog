@@ -846,11 +846,7 @@ Boolean LogServiceFormHandleEvent(EventType *event)
         if (id >= SvlCheck0 && id < SvlCheck0 + kSvlChecks) { NextLine(form); break; }
         switch (id) {
         case SvlDateTrigger: {
-            UInt16 y; UInt8 m, d; Int16 yy, mm, dd;
-            DateDaysToYmd(gSvlDate, &y, &m, &d);
-            yy = (Int16)y; mm = m; dd = d;
-            if (SelectDay(selectDayByDay, &mm, &dd, &yy, "Service date")) {
-                gSvlDate = AppPickedDate(DateYmdToDays((UInt16)yy, (UInt8)mm, (UInt8)dd));
+            if (AppSelectDay(&gSvlDate, "Service date")) {
                 DateShortText(gSvlDateText, gSvlDate);
                 CtlSetLabel(FrmGetObjectPtr(form, FrmGetObjectIndex(form, SvlDateTrigger)), gSvlDateText);
                 NextLine(form);

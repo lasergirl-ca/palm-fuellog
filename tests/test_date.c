@@ -24,6 +24,8 @@ int main(void)
     check("1998 clock on a 2026 build is shifted", DateClockShift(1998, 2026), dateClockShiftDays);
     check("2026 clock is not", DateClockShift(2026, 2026), 0);
     check("2011 clock is shifted, 2012 is not", DateClockShift(2011, 2026) != 0 && DateClockShift(2012, 2026) == 0, 1);
+    check("DateFix epoch 1932 is 28 years, 10227 days", DateEpochOffsetDays(28), 10227);
+    check("DateFix epoch 1960 is 56 years", DateEpochOffsetDays(56), DateYmdToDays(2026, 1, 1) - DateYmdToDays(1970, 1, 1));
     check("28 years is 10227 days", DateYmdToDays(2026, 10, 27) - DateYmdToDays(1998, 10, 27), dateClockShiftDays);
     {
         UInt16 dev = DateYmdToDays(1998, 10, 27), s = dateClockShiftDays;

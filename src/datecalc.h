@@ -24,6 +24,10 @@ UInt16 DateAddMonths(UInt16 days, UInt16 months) EXPORT_SEC;
 #define dateClockShiftYears 28
 #define dateClockShiftDays  10227     /* 28 years with seven leap days (good until 2072) */
 UInt16 DateClockShift(UInt16 deviceYear, UInt16 buildYear) EXPORT_SEC;
+/* DateFix (github.com/User7142/palm-datefix) moves the epoch from 1904 to a
+ * start year S and publishes S - 1904 (a multiple of 4) as a feature; this
+ * is the clock shift in days for that: (years / 4) x 1461. */
+UInt32 DateEpochOffsetDays(UInt16 offsetYears) EXPORT_SEC;
 /* A date within three years before or one year after the device's own today
  * was made from the shifted clock (a record saved by an older build, the
  * date picker's Today): it is moved forward by shift. Any other date, and

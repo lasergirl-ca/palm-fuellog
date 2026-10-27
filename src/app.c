@@ -41,28 +41,59 @@ UInt16 AppDeviceToday(void)
     return DateYmdToDays((UInt16)now.year, (UInt8)now.month, (UInt8)now.day);
 }
 
-UInt16 AppClockShift(void)
+/* The clock may run decades behind: DateFix moves the epoch from 1904 to a
+ * start year S and publishes S - 1904 as feature 1 of creator 'DtFx'
+ * (TimSecondsToDateTime then returns internal years, S..S+127 in reality).
+ * Without DateFix, a clock more than 14 years behind the build year is taken
+ * as set back 28 years by hand. Either way the app works in real dates. */
+static UInt16  gShiftDays;
+static UInt16  gShiftYears;
+static Boolean gDateFix;
+
+void AppClockInit(void)
 {
+    UInt32 years;
     DateTimeType now;
+    if (FtrGet('DtFx', 1, &years) == errNone && years >= 4 && years <= 68 && (years % 4) == 0) {
+        gDateFix = true;
+        gShiftYears = (UInt16)years;
+        gShiftDays = (UInt16)DateEpochOffsetDays((UInt16)years);
+        return;
+    }
+    gDateFix = false;
     TimSecondsToDateTime(TimGetSeconds(), &now);
-    return DateClockShift((UInt16)now.year, FUELLOG_BUILD_YEAR);
+    gShiftDays = DateClockShift((UInt16)now.year, FUELLOG_BUILD_YEAR);
+    gShiftYears = gShiftDays ? dateClockShiftYears : 0;
 }
+
+UInt16 AppClockShift(void) { return gShiftDays; }
+Boolean AppClockIsDateFix(void) { return gDateFix; }
 
 UInt16 AppToday(void)
 {
-    return (UInt16)(AppDeviceToday() + AppClockShift());
+    return (UInt16)(AppDeviceToday() + gShiftDays);
 }
 
-UInt16 AppPickedDate(UInt16 days)
+Boolean AppSelectDay(UInt16 *days, const char *title)
 {
-    return DateUnshift(days, AppDeviceToday(), AppClockShift());
+    UInt16 y; UInt8 m, d; Int16 yy, mm, dd;
+    DateDaysToYmd(*days, &y, &m, &d);
+    /* DateFix's picker takes and returns internal years and shows the real
+     * ones; the plain system picker shows what it is given. */
+    if (gDateFix) y = y >= 1904 + gShiftYears ? (UInt16)(y - gShiftYears) : 1904;
+    yy = (Int16)y; mm = m; dd = d;
+    if (!SelectDay(selectDayByDay, &mm, &dd, &yy, title)) return false;
+    if (gDateFix) yy = (Int16)(yy + gShiftYears);
+    /* the picker's Today is the clock's own date: moved like any clock date */
+    *days = DateUnshift(DateYmdToDays((UInt16)yy, (UInt8)mm, (UInt8)dd), AppDeviceToday(), gShiftDays);
+    return true;
 }
 
 UInt32 AppAlarmSeconds(UInt16 days, UInt8 hour)
 {
     DateTimeType dt;
     UInt16 y; UInt8 m, d;
-    DateDaysToYmd((UInt16)(days - AppClockShift()), &y, &m, &d);
+    DateDaysToYmd((UInt16)(days - gShiftDays), &y, &m, &d);
     MemSet(&dt, sizeof dt, 0);
     dt.year = (Int16)y; dt.month = m; dt.day = d; dt.hour = hour;
     return TimDateTimeToSeconds(&dt);

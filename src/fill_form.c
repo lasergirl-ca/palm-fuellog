@@ -857,11 +857,7 @@ Boolean FillFormHandleEvent(EventType *event)
     case ctlSelectEvent:
         switch (event->data.ctlSelect.controlID) {
         case FillDateTrigger: {
-            UInt16 y; UInt8 m, d; Int16 yy, mm, dd;
-            DateDaysToYmd(gDate, &y, &m, &d);
-            yy = (Int16)y; mm = m; dd = d;
-            if (SelectDay(selectDayByDay, &mm, &dd, &yy, "Fill date")) {
-                gDate = AppPickedDate(DateYmdToDays((UInt16)yy, (UInt8)mm, (UInt8)dd));
+            if (AppSelectDay(&gDate, "Fill date")) {
                 DateShortText(gDateText, gDate);
                 CtlSetLabel(FrmGetObjectPtr(form, FrmGetObjectIndex(form, FillDateTrigger)), gDateText);
             }

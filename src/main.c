@@ -477,6 +477,7 @@ UInt32 PilotMain(UInt16 cmd, MemPtr cmdPBP, UInt16 launchFlags)
         if (RomVersionCompatible(kMinRomVersion, launchFlags) != errNone)
             return sysErrRomIncompatible;
         DeviceInit();
+        AppClockInit();
         PrefsLoad(&gPrefs);
         LocGetNumberSeparators((NumberFormatType)PrefGetPreference(prefNumberFormat), &gThousands, &gPoint);
         if (DbOpenAll() != errNone) {

@@ -8,10 +8,11 @@ Palms and in CloudpilotEmu.
 
 Proudly made in 🇨🇦 Canada!
 
-Palms with the clock set 28 years back (the usual workaround for the 2031 clock limit)
-are detected: when the device year is more than 14 years behind the year the app was
-built, FuelLog adds the 28 years back, so fills, service visits, backups and exports
-carry real dates and move cleanly to a Palm whose clock is right.
+Palms running [DateFix](https://github.com/User7142/palm-datefix), which moves the clock's
+epoch to keep a Palm working past 2031, are detected: FuelLog reads DateFix's offset and
+works in real dates, so fills, service visits, backups and exports read the same on a Palm
+with DateFix, one without, and on the Mac. A clock set back 28 years by hand (more than 14
+years behind the year the app was built) is treated the same way.
 
 Download the latest release candidate from the [Releases](https://github.com/lasergirl-ca/palm-fuellog/releases)
 page. FuelLog is also listed on [PalmDB](https://palmdb.net/app/fuellog-for-palmos-5x), where the

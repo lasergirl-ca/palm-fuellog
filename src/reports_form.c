@@ -184,12 +184,8 @@ static void YearLabel(FormType *form)
 /* A date picker for one end of the range; keeps from <= to. */
 static void PickRangeDate(FormType *form, Boolean from)
 {
-    UInt16 y; UInt8 m, d; Int16 yy, mm, dd;
     UInt16 *target = from ? &gRptFrom : &gRptTo;
-    DateDaysToYmd(*target, &y, &m, &d);
-    yy = (Int16)y; mm = m; dd = d;
-    if (SelectDay(selectDayByDay, &mm, &dd, &yy, from ? "Range from" : "Range to")) {
-        *target = AppPickedDate(DateYmdToDays((UInt16)yy, (UInt8)mm, (UInt8)dd));
+    if (AppSelectDay(target, from ? "Range from" : "Range to")) {
         if (gRptFrom > gRptTo) { if (from) gRptTo = gRptFrom; else gRptFrom = gRptTo; }
         YearLabel(form);
         gRptScroll = 0; ComputeReport(); DrawReport();

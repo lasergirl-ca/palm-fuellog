@@ -83,3 +83,8 @@ UInt16 DateUnshift(UInt16 days, UInt16 deviceToday, UInt16 shift)
     if (days >= from && days <= deviceToday + 366 && (UInt32)days + shift <= 65535UL) return (UInt16)(days + shift);
     return days;
 }
+
+UInt32 DateEpochOffsetDays(UInt16 offsetYears)
+{
+    return (UInt32)(offsetYears / 4) * 1461UL;
+}
