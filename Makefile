@@ -12,7 +12,8 @@ HOSTCC   := cc
 
 # The build stamp shows in About, so a device can be matched to a build.
 BUILD_STAMP := $(shell date +%m%d-%H%M)
-CFLAGS   := -O2 -Wall -palmos5r3 -Irsc -Isrc -MMD -DFUELLOG_BUILD='"$(BUILD_STAMP)"'
+BUILD_YEAR  := $(shell date +%Y)
+CFLAGS   := -O2 -Wall -palmos5r3 -Irsc -Isrc -MMD -DFUELLOG_BUILD='"$(BUILD_STAMP)"' -DFUELLOG_BUILD_YEAR=$(BUILD_YEAR)
 BUILD    := build
 
 SRCS := src/main.c src/hello2.c src/calc.c src/device.c src/graph.c src/vfstest.c src/sp6test.c \

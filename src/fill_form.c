@@ -861,7 +861,7 @@ Boolean FillFormHandleEvent(EventType *event)
             DateDaysToYmd(gDate, &y, &m, &d);
             yy = (Int16)y; mm = m; dd = d;
             if (SelectDay(selectDayByDay, &mm, &dd, &yy, "Fill date")) {
-                gDate = DateYmdToDays((UInt16)yy, (UInt8)mm, (UInt8)dd);
+                gDate = AppPickedDate(DateYmdToDays((UInt16)yy, (UInt8)mm, (UInt8)dd));
                 DateShortText(gDateText, gDate);
                 CtlSetLabel(FrmGetObjectPtr(form, FrmGetObjectIndex(form, FillDateTrigger)), gDateText);
             }

@@ -70,3 +70,16 @@ UInt16 DateAddMonths(UInt16 days, UInt16 months)
     if (d > dim) d = dim;
     return DateYmdToDays(y, m, d);
 }
+
+UInt16 DateClockShift(UInt16 deviceYear, UInt16 buildYear)
+{
+    return (UInt16)(deviceYear + 14 < buildYear ? dateClockShiftDays : 0);
+}
+
+UInt16 DateUnshift(UInt16 days, UInt16 deviceToday, UInt16 shift)
+{
+    UInt16 from = deviceToday > 1098 ? deviceToday - 1098 : 0;   /* three years back */
+    if (!shift) return days;
+    if (days >= from && days <= deviceToday + 366 && (UInt32)days + shift <= 65535UL) return (UInt16)(days + shift);
+    return days;
+}

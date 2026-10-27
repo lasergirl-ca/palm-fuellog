@@ -36,4 +36,9 @@ Err DbGetFill(UInt16 index, FillRecord *r);
 Err DbAddVehicle(const VehicleRecord *r, UInt16 *indexOut);
 Err DbGetVehicle(UInt16 index, VehicleRecord *r);
 
+/* Fills and service visits dated by a clock set 28 years back (see
+ * DateUnshift) are moved to their real dates and the databases re-sorted.
+ * A no-op when shift is 0. Returns how many records moved. */
+UInt16 DbShiftClockDates(UInt16 deviceToday, UInt16 shift);
+
 #endif

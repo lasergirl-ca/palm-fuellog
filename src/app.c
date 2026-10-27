@@ -34,11 +34,38 @@ void AppSetLabel(FormType *form, UInt16 labelId, const char *text)
     FrmCopyLabel(form, labelId, text);
 }
 
-UInt16 AppToday(void)
+UInt16 AppDeviceToday(void)
 {
     DateTimeType now;
     TimSecondsToDateTime(TimGetSeconds(), &now);
     return DateYmdToDays((UInt16)now.year, (UInt8)now.month, (UInt8)now.day);
+}
+
+UInt16 AppClockShift(void)
+{
+    DateTimeType now;
+    TimSecondsToDateTime(TimGetSeconds(), &now);
+    return DateClockShift((UInt16)now.year, FUELLOG_BUILD_YEAR);
+}
+
+UInt16 AppToday(void)
+{
+    return (UInt16)(AppDeviceToday() + AppClockShift());
+}
+
+UInt16 AppPickedDate(UInt16 days)
+{
+    return DateUnshift(days, AppDeviceToday(), AppClockShift());
+}
+
+UInt32 AppAlarmSeconds(UInt16 days, UInt8 hour)
+{
+    DateTimeType dt;
+    UInt16 y; UInt8 m, d;
+    DateDaysToYmd((UInt16)(days - AppClockShift()), &y, &m, &d);
+    MemSet(&dt, sizeof dt, 0);
+    dt.year = (Int16)y; dt.month = m; dt.day = d; dt.hour = hour;
+    return TimDateTimeToSeconds(&dt);
 }
 
 UInt16 AppNowMinutes(void)

@@ -850,7 +850,7 @@ Boolean LogServiceFormHandleEvent(EventType *event)
             DateDaysToYmd(gSvlDate, &y, &m, &d);
             yy = (Int16)y; mm = m; dd = d;
             if (SelectDay(selectDayByDay, &mm, &dd, &yy, "Service date")) {
-                gSvlDate = DateYmdToDays((UInt16)yy, (UInt8)mm, (UInt8)dd);
+                gSvlDate = AppPickedDate(DateYmdToDays((UInt16)yy, (UInt8)mm, (UInt8)dd));
                 DateShortText(gSvlDateText, gSvlDate);
                 CtlSetLabel(FrmGetObjectPtr(form, FrmGetObjectIndex(form, SvlDateTrigger)), gSvlDateText);
                 NextLine(form);
@@ -1099,14 +1099,7 @@ void SvcScheduleAlarm(void)
         if (!d.due || d.due <= today) continue;      /* today or past: the list already says so */
         if (!best || d.due < best) best = d.due;
     }
-    if (best) {
-        DateTimeType dt;
-        UInt16 y; UInt8 m, dd;
-        DateDaysToYmd(best, &y, &m, &dd);
-        MemSet(&dt, sizeof dt, 0);
-        dt.year = (Int16)y; dt.month = m; dt.day = dd; dt.hour = 9;
-        seconds = TimDateTimeToSeconds(&dt);
-    }
+    if (best) seconds = AppAlarmSeconds(best, 9);   /* 9 am, in the device's own clock */
     if (SysCurAppDatabase(&card, &dbId) == errNone) AlmSetAlarm(card, dbId, 0, seconds, true);
     if (gPrefs.nextAlarm != seconds) { gPrefs.nextAlarm = seconds; PrefsSave(&gPrefs); }
 }

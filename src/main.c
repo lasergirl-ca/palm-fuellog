@@ -14,6 +14,7 @@
 #include "sp6test.h"
 #include "m1test.h"
 #include "app.h"
+#include "datecalc.h"
 #include "db.h"
 #include "fill_list.h"
 #include "fill_form.h"
@@ -485,6 +486,11 @@ UInt32 PilotMain(UInt16 cmd, MemPtr cmdPBP, UInt16 launchFlags)
         PgmInstallPresets();
         BeamRegister();
         BeamProcessInbox();
+        /* A clock set 28 years back: records saved by an older build, and the
+         * last backup date, move to their real dates. Nothing happens on a
+         * Palm whose clock is right. */
+        DbShiftClockDates(AppDeviceToday(), AppClockShift());
+        gPrefs.lastBackupDate = DateUnshift(gPrefs.lastBackupDate, AppDeviceToday(), AppClockShift());
         SvcScheduleAlarm();
         /* First launch: no vehicle yet means the Welcome steps, never an empty table. */
         if (DbCount(dbVehicles) == 0) { gSetupStep = 1; FrmGotoForm(WelcomeForm); }

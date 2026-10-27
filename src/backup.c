@@ -109,6 +109,7 @@ Err BackupRestore(UInt16 vol, const char *set)
         Err open = DbOpenAll();   /* also migrates an older schema */
         if (!err) err = open;
     }
+    if (!err) DbShiftClockDates(AppDeviceToday(), AppClockShift());   /* a set written under a shifted clock by an older build */
     return err;
 }
 

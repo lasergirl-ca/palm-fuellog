@@ -11,7 +11,11 @@ extern char gThousands, gPoint;    /* from the Formats panel */
 void   AppSetFieldText(FormType *form, UInt16 fieldId, const char *text);
 const char *AppGetFieldText(FormType *form, UInt16 fieldId);
 void   AppSetLabel(FormType *form, UInt16 labelId, const char *text);
-UInt16 AppToday(void);                           /* days since 1904 */
+UInt16 AppToday(void);                           /* days since 1904, corrected for a clock set 28 years back */
+UInt16 AppDeviceToday(void);                     /* what the clock itself says */
+UInt16 AppClockShift(void);                      /* dateClockShiftDays on a shifted clock, else 0 */
+UInt16 AppPickedDate(UInt16 days);               /* a date from SelectDay, corrected if it came from the clock */
+UInt32 AppAlarmSeconds(UInt16 days, UInt8 hour); /* device seconds for a real date, for AlmSetAlarm */
 UInt16 AppNowMinutes(void);                      /* minutes since midnight */
 void   AppTimeText(char *buf, UInt16 minutes);   /* per the Formats panel, buf >= timeStringLength */
 void   AppSetupDIA(FormType *form);              /* custom policy, 160 to 225 rows */

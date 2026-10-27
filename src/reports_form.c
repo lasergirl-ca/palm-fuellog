@@ -189,7 +189,7 @@ static void PickRangeDate(FormType *form, Boolean from)
     DateDaysToYmd(*target, &y, &m, &d);
     yy = (Int16)y; mm = m; dd = d;
     if (SelectDay(selectDayByDay, &mm, &dd, &yy, from ? "Range from" : "Range to")) {
-        *target = DateYmdToDays((UInt16)yy, (UInt8)mm, (UInt8)dd);
+        *target = AppPickedDate(DateYmdToDays((UInt16)yy, (UInt8)mm, (UInt8)dd));
         if (gRptFrom > gRptTo) { if (from) gRptTo = gRptFrom; else gRptFrom = gRptTo; }
         YearLabel(form);
         gRptScroll = 0; ComputeReport(); DrawReport();

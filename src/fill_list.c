@@ -351,12 +351,13 @@ Boolean FillListHandleEvent(EventType *event)
         if (event->data.menu.itemID == MenuDiagnostics) { FrmGotoForm(DiagForm); return true; }
         if (event->data.menu.itemID == MenuAbout) {
             /* Diagnostics for the layout: display vs window height and DIA changes seen. */
-            char diag[40];
+            char diag[56];
             Coord w, h;
             WinGetDisplayExtent(&w, &h);
             StrCopy(diag, "display "); StrIToA(diag + StrLen(diag), h);
             StrCat(diag, ", window "); StrIToA(diag + StrLen(diag), AppFormHeight(form));
             StrCat(diag, ", changes "); StrIToA(diag + StrLen(diag), gDisplayChanges);
+            if (AppClockShift()) StrCat(diag, ", clock -28y");
             /* \353 is e-diaeresis in the Palm character set */
             FrmCustomAlert(AboutAlert, FUELLOG_BUILD, "Zo\353 Leto and Andrew Culwell", diag);
             return true;
