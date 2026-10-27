@@ -181,7 +181,7 @@ int main(void)
         check("76 earns on any payment", p.requiresPayment, pgmPaymentAny);
         check("76 counts in points, no value set", p.valuePerPoint, 0);
         check("76 earns per gallon, not per dollar", p.earnBasis, pgmEarnPerUSGallon);
-        check("76 earns 37 pts on 12.495 gal", CalcEarnedPoints(p.earnRate, p.earnBasis, 47300, 8462, 100), 37);
+        check("76 earns 42 pts on 21.215 gal (a real receipt)", CalcEarnedPoints(p.earnRate, p.earnBasis, 80308, 10499, 100), 42);
         check("76 has no redemption rule", p.redeemKind, pgmRedeemNone);
         checkStr("76 keeps the KB Points alias", p.aliases, "KB Points,KB,Conoco");
         PgmPreset(1, &p);

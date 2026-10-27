@@ -48,7 +48,7 @@ int main(void)
      * Triangle 3 c/L x 47.30 L = $1.42. */
     check("Petro-Points 10/L", CalcEarnedPoints(1000, calcEarnPerLitre, 47300, 8462, 100), 473);
     check("Triangle 3c/L", CalcEarnedPoints(300, calcEarnPerLitre, 47300, 8462, 100), 142);
-    check("76 3 pts/US gal", CalcEarnedPoints(300, calcEarnPerUSGallon, 47300, 8462, 100), 37);
+    check("76 2 pts/US gal", CalcEarnedPoints(200, calcEarnPerUSGallon, 80308, 10499, 100), 42);
     check("1 pt per $", CalcEarnedPoints(100, calcEarnPerCurrency, 47300, 8462, 100), 85);
     check("premium 150%", CalcEarnedPoints(1000, calcEarnPerLitre, 47300, 8462, 150), 710);
     check("basis none", CalcEarnedPoints(1000, calcEarnNone, 47300, 8462, 100), 0);

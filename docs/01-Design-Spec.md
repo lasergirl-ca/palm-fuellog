@@ -295,7 +295,7 @@ The paper form's single KB Points cell becomes a ledger across any number of pro
 
 | Preset | Currency | Default earn | Default redemption | Expiry |
 | --- | --- | --- | --- | --- |
-| [76 / Phillips 66 / Conoco](https://phillips66gas.com/?p=36) (KickBack Points, alias KB Points) | USD | 3 pts per US gallon pumped, on any payment (the paper log's 37 points for 12.495 gal) | not set: KickBack does not publish a point value, so type yours on the programme | none set |
+| [76 / Phillips 66 / Conoco](https://phillips66gas.com/?p=36) (KickBack Points, alias KB Points) | USD | 2 pts per US gallon pumped, on any payment (a 76 receipt: 21.215 gal earned 42) | not set: KickBack does not publish a point value, so type yours on the programme | none set |
 | [Petro-Points](https://milesopedia.com/en/loyalty-program/petro-points/) | CAD | 10 pts/L of fuel; 20% more when linked to Triangle | 1,000 pts = $1 off | none set |
 | [Triangle Rewards](https://blog.rewardscanada.ca/news/petro-points-triangle-rewards-partnership/) (CT Money, money-valued) | CAD | up to 3 c/L cash or debit, 5 c/L Triangle credit card, at Petro-Canada | face value in store | none set |
 | [PC Optimum](https://www.esso.ca/en-CA/pc-optimum-faq) | CAD | 10 pts/L at Esso; +10 pts/L premium with a PC Mastercard | 4,000 pts = 10 c/L off, up to 40 L, Esso only | none set |
