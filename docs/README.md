@@ -12,6 +12,7 @@ Live doc (always the newest version): https://claude.ai/artifact/JNvza1rzN7Y9MFk
 | `02-Screen-Designs.md` / `.pdf` | Every form mocked at real T\|X size (320 x 480) with design notes |
 | `03-Backlog.md` / `.pdf` | Roadmap, milestones M0 to M8, spikes SP1 to SP8, 36 user stories, definition of done |
 | `mockups/` | All mock-ups and diagrams as PNGs; the Markdown files link to these |
+| `Palm-Clocks-and-DateFix.md` | Guide for any Palm app: keeping real dates on a device whose clock is set back 28 years, with or without DateFix |
 | `source/` | The original paper form the app is based on |
 
 ## Notes
