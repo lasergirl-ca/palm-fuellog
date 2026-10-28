@@ -1,6 +1,6 @@
 #include "resources.h"
 
-VERSION "1.0rc4"
+VERSION "1.0rc5"
 
 APPLICATIONICONNAME ID 1000 "FuelLog"
 
@@ -165,7 +165,7 @@ ALERT ID AboutAlert
 INFORMATION
 BEGIN
     TITLE "FuelLog"
-    MESSAGE "FuelLog 1.0 rc4 for Palm OS 5, build ^1.\n\nBy ^2.\n\nFree software under the GNU GPLv3.\n^3"
+    MESSAGE "FuelLog 1.0 rc5 for Palm OS 5, build ^1.\n\nBy ^2.\n\nFree software under the GNU GPLv3.\n^3"
     BUTTONS "OK"
 END
 

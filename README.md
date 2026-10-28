@@ -22,7 +22,7 @@ The design lives in the live doc (link in `docs/README.md`); `docs/` holds the
 export, the mock-ups, the paper form, the spike write-ups and one file per
 milestone (`M1.md` to `M8.md`) with what was built and what to check on the device.
 
-Current state: `v1.0-rc4`. Everything builds and passes the host tests; the M5 to M8
+Current state: `v1.0-rc5`. Everything builds and passes the host tests; the M5 to M8
 features are waiting on their device pass (see the end of `docs/M8.md`).
 
 ## Build
