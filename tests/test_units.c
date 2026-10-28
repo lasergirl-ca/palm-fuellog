@@ -91,6 +91,10 @@ int main(void)
         check("built-in rate is a real number", CurrencyBuiltInRate(curNZD, curCAD) > 100000 && CurrencyBuiltInRate(curNZD, curCAD) < 10000000, 1);
         check("built-in rate is symmetric to 1 in 1e4", labs((long)(CalcMulDiv(CurrencyBuiltInRate(curNZD, curCAD), CurrencyBuiltInRate(curCAD, curNZD), 1000000) - 1000000)) < 100, 1);
         check("NZD code", strcmp(CurrencyCode(curNZD), "NZD"), 0);
+        check("GBP code", strcmp(CurrencyCode(curGBP), "GBP"), 0);
+        check("GBP symbol is the Palm Latin pound", (unsigned char)CurrencySymbol(curGBP)[0], 0xA3);
+        check("GBP built-in rate is a real number", CurrencyBuiltInRate(curGBP, curCAD) > 1000000 && CurrencyBuiltInRate(curGBP, curCAD) < 3000000, 1);
+        check("GBP excel format", strcmp(CurrencyExcelFormat(curGBP), "[$GBP] #,##0.00"), 0);
     }
     /* Totals never move when a rate is edited later: the stored fxRate is what converts. */
     check("stored rate converts $84.62 -> $115.08", CalcHomeCents(8462, 1360000), 11508);

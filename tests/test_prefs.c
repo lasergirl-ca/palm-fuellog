@@ -45,6 +45,7 @@ int main(void)
         check("untouched AUD 1.0 becomes built-in", (long)q.fxRate[curAUD], 0);
         check("home currency slot kept", (long)q.fxRate[curCAD], 1000000);
         check("new NZD slot is built-in", (long)q.fxRate[curNZD], 0);
+        check("new GBP slot is built-in", (long)q.fxRate[curGBP], 0);
         v2.nextAlarm = 0;
         for (k = 0; k < sizeof v2; k++) ((unsigned char *)&q)[k] = ((unsigned char *)&v2)[k];
         check("v1 image upgrades", PrefsUpgrade(&q, 1, sizeof v2 - sizeof(UInt32)), 1);

@@ -84,7 +84,7 @@ BEGIN
     LABEL "            " ID FillCalcHint AT (111 82) FONT 0
     LABEL "Currency:" AUTOID AT (13 95) FONT 0
     POPUPTRIGGER "CAD" ID FillCurrencyTrigger AT (58 95 40 12) LEFTANCHOR
-    LIST "USD" "CAD" "EUR" "AUD" "NZD" ID FillCurrencyList AT (58 95 40 55) NONUSABLE VISIBLEITEMS 5
+    LIST "USD" "CAD" "EUR" "AUD" "NZD" "GBP" ID FillCurrencyList AT (58 95 40 66) NONUSABLE VISIBLEITEMS 6
     POPUPLIST ID FillCurrencyTrigger FillCurrencyList
     LABEL "@" ID FillRateLabel AT (101 95) FONT 0
     FIELD ID FillRateField AT (108 95 48 12) UNDERLINED MAXCHARS 9 NUMERIC
@@ -197,11 +197,11 @@ BEGIN
     LABEL "Money" AUTOID AT (4 92) FONT 1
     LABEL "Home currency:" AUTOID AT (4 104) FONT 0
     POPUPTRIGGER "CAD" ID PrefsHomeTrigger AT (70 104 50 12) LEFTANCHOR
-    LIST "USD" "CAD" "EUR" "AUD" "NZD" ID PrefsHomeList AT (70 104 50 55) NONUSABLE VISIBLEITEMS 5
+    LIST "USD" "CAD" "EUR" "AUD" "NZD" "GBP" ID PrefsHomeList AT (70 104 50 66) NONUSABLE VISIBLEITEMS 6
     POPUPLIST ID PrefsHomeTrigger PrefsHomeList
     LABEL "New entries in:" AUTOID AT (2 116) FONT 0
     POPUPTRIGGER "Last used" ID PrefsNewTrigger AT (70 116 60 12) LEFTANCHOR
-    LIST "Last used" "USD" "CAD" "EUR" "AUD" "NZD" ID PrefsNewList AT (70 116 60 66) NONUSABLE VISIBLEITEMS 6
+    LIST "Last used" "USD" "CAD" "EUR" "AUD" "NZD" "GBP" ID PrefsNewList AT (70 116 60 77) NONUSABLE VISIBLEITEMS 7
     POPUPLIST ID PrefsNewTrigger PrefsNewList
     CHECKBOX "Weekly card backup, keep" ID PrefsBackupCheckbox AT (4 130 112 12)
     POPUPTRIGGER "5" ID PrefsKeepTrigger AT (118 130 30 12) LEFTANCHOR
@@ -250,7 +250,7 @@ BEGIN
     POPUPLIST ID VehGradeTrigger VehGradeList
     LABEL "Currency:" AUTOID AT (20 108) FONT 0
     POPUPTRIGGER "Use Prefs" ID VehCurrencyTrigger AT (66 108 60 12) LEFTANCHOR
-    LIST "Use Prefs" "USD" "CAD" "EUR" "AUD" "NZD" ID VehCurrencyList AT (66 108 60 66) NONUSABLE VISIBLEITEMS 6
+    LIST "Use Prefs" "USD" "CAD" "EUR" "AUD" "NZD" "GBP" ID VehCurrencyList AT (66 108 60 77) NONUSABLE VISIBLEITEMS 7
     POPUPLIST ID VehCurrencyTrigger VehCurrencyList
     LABEL "Trip meter:" AUTOID AT (14 121) FONT 0
     POPUPTRIGGER "Reset each fill" ID VehTripTrigger AT (66 121 90 12) LEFTANCHOR
@@ -309,7 +309,7 @@ BEGIN
     FIELD ID PgmNameField AT (58 17 98 12) UNDERLINED MAXCHARS 23
     LABEL "Currency:" AUTOID AT (13 30) FONT 0
     POPUPTRIGGER "CAD" ID PgmCurrencyTrigger AT (58 30 40 12) LEFTANCHOR
-    LIST "USD" "CAD" "EUR" "AUD" "NZD" ID PgmCurrencyList AT (58 30 40 55) NONUSABLE VISIBLEITEMS 5
+    LIST "USD" "CAD" "EUR" "AUD" "NZD" "GBP" ID PgmCurrencyList AT (58 30 40 66) NONUSABLE VISIBLEITEMS 6
     POPUPLIST ID PgmCurrencyTrigger PgmCurrencyList
     LABEL "Counts in:" AUTOID AT (9 43) FONT 0
     PUSHBUTTON "Points" ID PgmPointsButton AT (58 43 36 12) GROUP 1
@@ -472,17 +472,19 @@ BEGIN
     LABEL "                                    " ID RatesNoteLabel AT (4 17) FONT 0
     LABEL "1 USD =  " ID 2410 AT (8 32) FONT 0
     FIELD ID 2420 AT (52 32 50 12) UNDERLINED MAXCHARS 9 NUMERIC
-    LABEL "1 CAD =  " ID 2411 AT (8 45) FONT 0
-    FIELD ID 2421 AT (52 45 50 12) UNDERLINED MAXCHARS 9 NUMERIC
-    LABEL "1 EUR =  " ID 2412 AT (8 58) FONT 0
-    FIELD ID 2422 AT (52 58 50 12) UNDERLINED MAXCHARS 9 NUMERIC
-    LABEL "1 AUD =  " ID 2413 AT (8 71) FONT 0
-    FIELD ID 2423 AT (52 71 50 12) UNDERLINED MAXCHARS 9 NUMERIC
-    LABEL "1 NZD =  " ID 2414 AT (8 84) FONT 0
-    FIELD ID 2424 AT (52 84 50 12) UNDERLINED MAXCHARS 9 NUMERIC
-    LABEL "A new fill starts with the rate here;" AUTOID AT (4 103) FONT 0
-    LABEL "the one typed on the fill is kept." AUTOID AT (4 113) FONT 0
-    LABEL "                                        " ID RatesDateLabel AT (4 126) FONT 0
+    LABEL "1 CAD =  " ID 2411 AT (8 44) FONT 0
+    FIELD ID 2421 AT (52 44 50 12) UNDERLINED MAXCHARS 9 NUMERIC
+    LABEL "1 EUR =  " ID 2412 AT (8 56) FONT 0
+    FIELD ID 2422 AT (52 56 50 12) UNDERLINED MAXCHARS 9 NUMERIC
+    LABEL "1 AUD =  " ID 2413 AT (8 68) FONT 0
+    FIELD ID 2423 AT (52 68 50 12) UNDERLINED MAXCHARS 9 NUMERIC
+    LABEL "1 NZD =  " ID 2414 AT (8 80) FONT 0
+    FIELD ID 2424 AT (52 80 50 12) UNDERLINED MAXCHARS 9 NUMERIC
+    LABEL "1 GBP =  " ID 2415 AT (8 92) FONT 0
+    FIELD ID 2425 AT (52 92 50 12) UNDERLINED MAXCHARS 9 NUMERIC
+    LABEL "A new fill starts with the rate here;" AUTOID AT (4 108) FONT 0
+    LABEL "the one typed on the fill is kept." AUTOID AT (4 118) FONT 0
+    LABEL "                                        " ID RatesDateLabel AT (4 131) FONT 0
     BUTTON "Done" ID RatesDoneButton AT (4 146 36 12)
     BUTTON "Cancel" ID RatesCancelButton AT (46 146 40 12)
 END
@@ -584,7 +586,7 @@ BEGIN
     LABEL "Cost:" ID SvlCostLabel AT (32 213) FONT 0
     FIELD ID SvlCostField AT (58 213 44 12) UNDERLINED MAXCHARS 9 NUMERIC
     POPUPTRIGGER "CAD" ID SvlCurrencyTrigger AT (106 213 44 12) LEFTANCHOR
-    LIST "USD" "CAD" "EUR" "AUD" "NZD" ID SvlCurrencyList AT (106 213 44 55) NONUSABLE VISIBLEITEMS 5
+    LIST "USD" "CAD" "EUR" "AUD" "NZD" "GBP" ID SvlCurrencyList AT (106 213 44 66) NONUSABLE VISIBLEITEMS 6
     POPUPLIST ID SvlCurrencyTrigger SvlCurrencyList
     LABEL "Paid:" ID SvlPaidLabel AT (33 226) FONT 0
     PUSHBUTTON "Cash" ID SvlCashButton AT (58 226 30 12) GROUP 1

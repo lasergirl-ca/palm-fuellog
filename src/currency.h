@@ -11,7 +11,8 @@
 #define curEUR 2
 #define curAUD 3
 #define curNZD 4
-#define curCount 5
+#define curGBP 5
+#define curCount 6
 #define curLastUsed 255      /* Prefs: default currency follows the last entry */
 
 #define fxOne 1000000UL      /* a rate of 1.000000 */

@@ -72,7 +72,7 @@ Trip is stored in km x 10 and entered in the vehicle's odometer unit, the same a
 | Volume | litres, US gallons, Imperial gallons | 3.785411784 L; 4.54609 L |
 | Economy | L/100km, km/L, MPG (US), MPG (Imp) | derived from L/100km |
 | Price | per litre, per US gallon, per Imperial gallon, or per kWh; shown as dollars ($1.789/L, $3.459/gal) or cents (178.9 c/L, 345.9 c/gal), a separate Price format setting that also controls how price is typed | follows volume unless overridden |
-| Currency | USD, CAD, EUR, AUD, NZD per fill; home currency in Prefs (see Currencies) | converted to home currency with the fill's stored rate |
+| Currency | USD, CAD, EUR, AUD, NZD, GBP per fill; home currency in Prefs (see Currencies) | converted to home currency with the fill's stored rate |
 
 **Per-vehicle odometer unit.** A car's odometer is physically in km or miles, so each vehicle stores its own odometer unit for entry. A US-market car with a miles odometer is typed in miles, stored in km and shown in whatever the display distance is. The Imperial gallon matters too: Canadian and UK drivers often quote MPG in Imperial gallons, which reads about 20% higher than US MPG for the same car.
 
@@ -80,7 +80,7 @@ Trip is stored in km x 10 and entered in the vehicle's odometer unit, the same a
 
 | Field | C type | Stored as |
 | --- | --- | --- |
-| currency | `UInt8` | 0 USD, 1 CAD, 2 EUR, 3 AUD, 4 NZD (room for more) |
+| currency | `UInt8` | 0 USD, 1 CAD, 2 EUR, 3 AUD, 4 NZD, 5 GBP (room for more) |
 | fxRate | `UInt32` | home units per fill unit x 1,000,000 (1.000000 when it matches home) |
 
 | Code | Shown as | Excel number format | Notes |
@@ -90,6 +90,7 @@ Trip is stored in km x 10 and entered in the vehicle's odometer unit, the same a
 | EUR | `€` | `[$EUR] #,##0.00` | 0x80 in both Palm Latin and PDF WinAnsi, so it passes straight through |
 | AUD | `A$` | `[$AUD] #,##0.00` |  |
 | NZD | `NZ$` | `[$NZD] #,##0.00` |  |
+| GBP | `£` | `[$GBP] #,##0.00` | 0xA3 in both Palm Latin and PDF WinAnsi, like the euro |
 
 - **Home currency** is set in Prefs, and all stats, reports, graphs and cost-per-100 km figures are in home currency.
 - **Default currency** for new fills and service visits is also set in Prefs, separately from home currency. It can be a fixed currency or "last used". Each vehicle can override it (`defaultCurrency`, `UInt8`, 255 = use Prefs), so a car kept in Washington defaults to USD while reports stay in CAD. The order is vehicle override, then Prefs default, then last used.

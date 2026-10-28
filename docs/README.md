@@ -25,7 +25,7 @@ Live doc (always the newest version): https://claude.ai/artifact/JNvza1rzN7Y9MFk
 
 - Creator ID `ZFlg`; 68k app under PACE, built with prc-tools + PilRC from the jichu4n Homebrew tap
 - Metric fixed-point storage; units, price format ($ or cents) and currency switchable for display
-- USD, CAD, EUR, AUD per fill, with a home currency for reports and a default currency for new entries
+- USD, CAD, EUR, AUD, NZD, GBP per fill, with a home currency for reports and a default currency for new entries
 - Multiple vehicles (fuel, hybrid, plug-in, electric), multiple rewards programmes, Cash or Card
 - Trip meter reset at every fill, used to cross-check the odometer
 - Service tracking by distance and time, with Palm system alarms
