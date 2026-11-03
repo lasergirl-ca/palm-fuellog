@@ -367,8 +367,10 @@ static void SetMode(FormType *form, Boolean charge)
         FrmHideObject(form, FrmGetObjectIndex(form, FillVolumeUnitTrigger));
     } else {
         AppSetLabel(form, FillVolumeLabel, "Volume:");
-        StrCopy(b, gPrefs.priceFormat == unitPriceFormatCents ? "Price (c" : "Price ($");
-        StrCat(b, UnitPriceLabel(gEntryVol)); StrCat(b, "):");
+        /* "Price (c/US gal):" is 71 px in the standard font and the label column is 56,
+         * so the gallon variants say "gal"; the Volume unit above says which gallon. */
+        StrCopy(b, gPrefs.priceFormat == unitPriceFormatCents ? "Price c" : "Price $");
+        StrCat(b, gEntryVol == unitVolLitres ? "/L:" : "/gal:");
         AppSetLabel(form, FillPriceLabel, b);
         FrmShowObject(form, FrmGetObjectIndex(form, FillVolumeUnitTrigger));
         AppSetLabel(form, FillGradeLabel, "Grade:");

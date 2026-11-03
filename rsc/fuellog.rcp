@@ -77,7 +77,7 @@ BEGIN
     POPUPTRIGGER "L" ID FillVolumeUnitTrigger AT (111 56 46 12) LEFTANCHOR
     LIST "L" "US gal" "Imp gal" ID FillVolumeUnitList AT (111 56 46 33) NONUSABLE VISIBLEITEMS 3
     POPUPLIST ID FillVolumeUnitTrigger FillVolumeUnitList
-    LABEL "Price (c/L):     " ID FillPriceLabel AT (2 69) FONT 0
+    LABEL "Price c/L:       " ID FillPriceLabel AT (2 69) FONT 0
     FIELD ID FillPriceField AT (58 69 50 12) UNDERLINED MAXCHARS 8 NUMERIC
     LABEL "Total:" AUTOID AT (30 82) FONT 0
     FIELD ID FillTotalField AT (58 82 50 12) UNDERLINED MAXCHARS 9 NUMERIC
