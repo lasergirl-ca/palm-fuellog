@@ -413,7 +413,7 @@ Everything is written to the SD card with the VFS Manager under `/PALM/Programs/
 | The app itself | `.prc` via the Launcher's Beam | another Palm | install FuelLog |
 
 - FuelLog registers the `.fuel` extension and a MIME type with `ExgRegisterDatatype`, and it handles `sysAppLaunchCmdExgReceiveData`, so incoming data lands even when the app is not running.
-- On receive, the user picks **Merge** or **Replace**. Merge matches fills on vehicle, date and odometer, so a duplicate beam does nothing. Vehicles and programmes match on name, and their ids are remapped when they clash.
+- On receive, the user picks **Merge** or **Replace**. Merge matches fills and visits by uid when both sides have one, else on vehicle, date and odometer, so a duplicate beam does nothing. Vehicles and programmes match on name, and their ids are remapped when they clash.
 - The bundle starts with a 4-byte magic, the schema version and the record count. A newer schema is refused with an alert instead of silently mangled.
 - Exports sent to another Palm stream straight from the same writers used for SD, using `ExgSend` instead of `VFSFileWrite`, so the sender needs no card. Each file travels inside a `.fuel` envelope (a file-payload type with the original name and MIME type), so the receiving FuelLog takes it whatever the extension. That Palm writes it to its own `/PALM/Programs/FuelLog/Export/` and offers to open CSV and XLSX for import.
 

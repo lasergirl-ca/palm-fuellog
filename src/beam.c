@@ -282,12 +282,16 @@ static UInt8 TypeIdByName(UInt8 vehicle, const char *name, UInt32 *usedOut)
     return found;
 }
 
+/* A record is already here when it carries the same uid (two Palms that have synced share
+   uids, and an edit may have moved its date or odometer) or the same natural key. The date
+   scan can stop early only when there is no uid to look for. */
 static Boolean FillExists(const FillRecord *f)
 {
     UInt16 n = DbCount(dbFills), i;
     for (i = 0; i < n; i++) {
         if (DbGetFill(i, &gBFill) != errNone) continue;
-        if (gBFill.date > f->date) break;
+        if (f->uid && gBFill.uid == f->uid) return true;
+        if (gBFill.date > f->date) { if (!f->uid) break; continue; }
         if (gBFill.date == f->date && gBFill.vehicle == f->vehicle && gBFill.odometer == f->odometer) return true;
     }
     return false;
@@ -299,6 +303,7 @@ static Boolean VisitExists(const ServiceVisitRecord *v)
     UInt32 len;
     for (i = 0; i < n; i++) {
         if (DbGet(dbServiceVisits, i, gBuf, sizeof gBuf, &len) != errNone || ServiceVisitUnpack(gBuf, len, &gBVisit) != 0) continue;
+        if (v->uid && gBVisit.uid == v->uid) return true;
         if (gBVisit.date == v->date && gBVisit.vehicle == v->vehicle && gBVisit.odometer == v->odometer) return true;
     }
     return false;
