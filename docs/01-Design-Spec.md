@@ -286,7 +286,7 @@ The paper form's single KB Points cell becomes a ledger across any number of pro
 | autoApply | `UInt8` | adds this programme to every new fill by default |
 | archived | `UInt8` | hides an old programme and keeps its history |
 
-**On the fill form.** A Points button opens a small dialog that lists the programmes applied to this fill. Auto-apply programmes are pre-filled with their calculated points, and you can add, remove or type over any line.
+**On the fill form.** A Points button opens a small dialog that lists the programmes applied to this fill. Auto-apply programmes in the fill's currency that fit its payment are pre-filled with their calculated points (changing the currency or payment re-applies them until you open the dialog), and you can add, remove or type over any line.
 
 **Adjustments.** A statement correction or bonus is a fill with zero volume and only point entries, and it is excluded from every fuel stat.
 

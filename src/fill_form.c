@@ -95,13 +95,15 @@ static Boolean PgmPaymentOk(const ProgrammeRecord *p)
     return true;
 }
 
-/* A new fill starts with every auto-apply programme that fits its payment. */
+/* A new fill starts with every auto-apply programme that fits its payment and is run in
+ * the currency it is paid in: a Canadian fill earns no 76 points and a US one no Petro-Points. */
 static void PointsAutoApply(void)
 {
     UInt16 n = DbCount(dbProgrammes), i;
     gPtsCount = 0;
     for (i = 0; i < n && gPtsCount < fillMaxPoints; i++) {
         if (PgmGetAt(i, &gPgm) != errNone || gPgm.archived || !gPgm.autoApply || !PgmPaymentOk(&gPgm)) continue;
+        if (gPgm.currency != gFill.currency) continue;
         gPts[gPtsCount].pgm = gPgm.id; gPts[gPtsCount].earned = 0; gPts[gPtsCount].redeemed = 0; gPts[gPtsCount].autoEarned = true;
         gPtsCount++;
     }
@@ -824,7 +826,10 @@ Boolean FillFormHandleEvent(EventType *event)
             gFill.currency = (UInt8)event->data.popSelect.selection;
             gFill.fxRate = CurrencyDefaultRate(gFill.currency, gPrefs.homeCurrency, gPrefs.fxRate);
             ShowRate(form);
-            if (EntryUnitFor(gFill.currency) != gEntryVol) { SetEntryUnit(form, EntryUnitFor(gFill.currency)); Recompute(form); }
+            /* The programmes of the other currency come and go with it, like card-only ones with the payment. */
+            if (gEditIndex == dmMaxRecordIndex && !gPtsTouched) PointsAutoApply();
+            if (EntryUnitFor(gFill.currency) != gEntryVol) SetEntryUnit(form, EntryUnitFor(gFill.currency));
+            Recompute(form);
         }
         if (event->data.popSelect.listID == FillVolumeUnitList) {
             SetEntryUnit(form, (UInt8)event->data.popSelect.selection);
