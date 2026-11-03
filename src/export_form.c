@@ -90,7 +90,8 @@ static void DoExport(FormType *form)
         UInt8 fmt = sel == ExpXlsxButton ? 1 : sel == ExpPdfButton ? 2 : 0;
         AppSetLabel(form, ExpFileLabel, "Sending...");
         err = sel == ExpLogButton ? BeamSendLog(gExpVehicle) : BeamSendExport(fmt, gExpVehicle, gExpYear);
-        if (err) { StrIToA(kb, err); FrmCustomAlert(BeamFailedAlert, sel == ExpLogButton ? "The log" : "The export", kb, ""); }
+        if (err == exgErrUserCancel) ;   /* the system's own Send Results dialog already said so */
+        else if (err) { StrIToA(kb, err); FrmCustomAlert(BeamFailedAlert, sel == ExpLogButton ? "The log" : "The export", kb, ""); }
         else FrmCustomAlert(BeamDoneAlert, sel == ExpLogButton ? "The log" : "The export", "", "");
         FileLabel(form);
         return;

@@ -57,7 +57,7 @@ static Err OpenSocket(ExgSocketType *s, const char *name, const char *desc)
     MemSet(s, sizeof *s, 0);
     s->description = (Char *)desc;
     s->type = (Char *)"application/x-fuellog";
-    s->name = (Char *)name;        /* "?_send:..." lets the user pick IR or Bluetooth */
+    s->name = (Char *)name;        /* exgSendBeamPrefix: the chooser lists Beam (IR) as well as Bluetooth */
     s->target = kCreator;
     return ExgPut(s);
 }
@@ -87,7 +87,7 @@ Err BeamSendLog(UInt8 vehicle)
     ExgSocketType s;
     UInt16 n, i, count = 0;
     UInt8 db;
-    Err err = OpenSocket(&s, "?_send:fuellog.fuel", "FuelLog log");
+    Err err = OpenSocket(&s, exgSendBeamPrefix "fuellog.fuel", "FuelLog log");
     if (err) return err;
     MemSet(&gEo, sizeof gEo, 0);
     gEo.out.write = ExgWrite; gEo.out.ctx = &gEo; gEo.sock = &s;
@@ -128,8 +128,9 @@ Err BeamSendLog(UInt8 vehicle)
         if (vehicle != 255 && gBuf[6] != vehicle) continue;
         PutRecord(&gEo.out, dbFills, gBuf, len);
     }
+    /* The libraries finish the transfer at disconnect, so its error is the one that counts. */
     err = gEo.err;
-    ExgDisconnect(&s, err);
+    { Err e2 = ExgDisconnect(&s, err); if (!err) err = e2; }
     return err;
 }
 
@@ -140,7 +141,7 @@ Err BeamSendExport(UInt8 fmt, UInt8 vehicle, UInt16 year)
     UInt8 h[2];
     Err err;
     CardExportName(name, fmt == 1 ? ".xlsx" : fmt == 2 ? ".pdf" : ".csv");
-    err = OpenSocket(&s, "?_send:fuellog.fuel", name);
+    err = OpenSocket(&s, exgSendBeamPrefix "fuellog.fuel", name);
     if (err) return err;
     MemSet(&gEo, sizeof gEo, 0);
     gEo.out.write = ExgWrite; gEo.out.ctx = &gEo; gEo.sock = &s;
@@ -150,7 +151,7 @@ Err BeamSendExport(UInt8 fmt, UInt8 vehicle, UInt16 year)
     OutWrite(&gEo.out, name, StrLen(name));
     ExportToStream(&gEo.out, fmt, vehicle, year);
     err = gEo.err ? gEo.err : (Err)gEo.out.err;
-    ExgDisconnect(&s, err);
+    { Err e2 = ExgDisconnect(&s, err); if (!err) err = e2; }
     return err;
 }
 
