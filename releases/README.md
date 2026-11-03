@@ -5,6 +5,7 @@ and tap it in the Launcher's card view, or install it with `pilot-xfer -i`.
 
 | File | Tag | Notes |
 |---|---|---|
+| FuelLog-1.0rc9.prc | v1.0-rc9 | Auto-apply adds only programmes in the fill's currency. Each fill and visit carries the clock shift its date was established under, so a restore or sync onto a DateFix Palm never moves a real old record and the migration only touches unmarked ones. |
 | FuelLog-1.0rc8.prc | v1.0-rc8 | The fill form's price label reads "Price c/gal:" with gallons, so it no longer runs into its field. |
 | FuelLog-1.0rc7.prc | v1.0-rc7 | Merge treats a record with a known uid as already present, so a Log bundle between synced Palms adds no duplicate; the fill list header no longer runs Total into MPG (reported by a LifeDrive user). |
 | FuelLog-1.0rc6.prc | v1.0-rc6 | Sync between Palms (Beam, Bluetooth or a file on the card): edits and deletions travel both ways. Upgrade every Palm before syncing; do not restore an rc6 backup onto an older build. Also Beam in the send chooser. |
