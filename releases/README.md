@@ -5,6 +5,7 @@ and tap it in the Launcher's card view, or install it with `pilot-xfer -i`.
 
 | File | Tag | Notes |
 |---|---|---|
+| FuelLog-1.0rc6.prc | v1.0-rc6 | Sync between Palms (Beam, Bluetooth or a file on the card): edits and deletions travel both ways. Upgrade every Palm before syncing; do not restore an rc6 backup onto an older build. Also Beam in the send chooser. |
 | FuelLog-1.0rc5.prc | v1.0-rc5 | British pound as a sixth currency (£, Exchange rates row, exports); built-in ECB rates of 2026-10-27. |
 | FuelLog-1.0rc4.prc | v1.0-rc4 | Real dates on a Palm whose clock is set back 28 years, with DateFix (its offset is read) or by hand (detected); the date pickers, service alarm and existing records follow. |
 | FuelLog-1.0rc3.prc | v1.0-rc3 | New Zealand dollar; built-in ECB exchange rates fetched at build time; Palm-style launcher icon; the 76 preset earns 2 KickBack points per US gallon on any payment. |
