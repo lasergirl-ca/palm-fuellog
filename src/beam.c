@@ -10,6 +10,7 @@
 #include "vehicles.h"
 #include "programmes.h"
 #include "resources.h"
+#include "sync.h"
 #include <ExgMgr.h>
 
 #define kCreator 'ZFlg'
@@ -38,6 +39,8 @@ static Boolean FillExists(const FillRecord *f) XP_SEC;
 static Boolean VisitExists(const ServiceVisitRecord *v) XP_SEC;
 static void ApplyRecord(UInt8 db, const UInt8 *packed, UInt32 len, Boolean merge, UInt16 *added) XP_SEC;
 static void ClearLog(void) XP_SEC;
+static void WriteBundle(OutStream *out, UInt8 vehicle, UInt16 kind) XP_SEC;
+static void ApplySync(const UInt8 *whole, UInt32 size, Boolean fromCard) XP_SEC;
 
 static Int32 ExgWrite(OutStream *s, const void *buf, UInt32 len)
 {
@@ -82,16 +85,14 @@ static void PutRecord(OutStream *out, UInt8 db, const UInt8 *packed, UInt32 len)
     OutWrite(out, packed, len);
 }
 
-Err BeamSendLog(UInt8 vehicle)
+/* The bundle: header, count, then vehicles, programmes, types, visits and
+ * fills as [db][len][bytes]; a sync bundle adds the deletion log as db 5. */
+static void WriteBundle(OutStream *out, UInt8 vehicle, UInt16 kind)
 {
-    ExgSocketType s;
     UInt16 n, i, count = 0;
     UInt8 db;
-    Err err = OpenSocket(&s, exgSendBeamPrefix "fuellog.fuel", "FuelLog log");
-    if (err) return err;
-    MemSet(&gEo, sizeof gEo, 0);
-    gEo.out.write = ExgWrite; gEo.out.ctx = &gEo; gEo.sock = &s;
-    Header(&gEo.out, beamKindRecords);
+    if (kind == beamKindSync) vehicle = 255;
+    Header(out, kind);
     /* count first so the receiver can size its buffer */
     for (db = 0; db < dbCount; db++) {
         n = DbCount(db);
@@ -107,10 +108,11 @@ Err BeamSendLog(UInt8 vehicle)
             count++;
         }
     }
-    { UInt8 c[2]; Put16(c, count); OutWrite(&gEo.out, c, 2); }
-    for (db = dbVehicles; db <= dbServiceVisits && !gEo.err; db++) {
+    if (kind == beamKindSync) count = (UInt16)(count + DbCount(dbDeleted));
+    { UInt8 c[2]; Put16(c, count); OutWrite(out, c, 2); }
+    for (db = dbVehicles; db <= dbServiceVisits && !out->err; db++) {
         n = DbCount(db);
-        for (i = 0; i < n && !gEo.err; i++) {
+        for (i = 0; i < n && !out->err; i++) {
             UInt32 len;
             if (DbGet(db, i, gBuf, sizeof gBuf, &len) != errNone) continue;
             if (vehicle != 255) {
@@ -118,19 +120,104 @@ Err BeamSendLog(UInt8 vehicle)
                 if (db == dbServiceTypes && gBuf[1] != vehicle) continue;
                 if (db == dbServiceVisits && gBuf[2] != vehicle) continue;
             }
-            PutRecord(&gEo.out, db, gBuf, len);
+            PutRecord(out, db, gBuf, len);
         }
     }
     n = DbCount(dbFills);
-    for (i = 0; i < n && !gEo.err; i++) {
+    for (i = 0; i < n && !out->err; i++) {
         UInt32 len;
         if (DbGet(dbFills, i, gBuf, sizeof gBuf, &len) != errNone) continue;
         if (vehicle != 255 && gBuf[6] != vehicle) continue;
-        PutRecord(&gEo.out, dbFills, gBuf, len);
+        PutRecord(out, dbFills, gBuf, len);
     }
+    if (kind == beamKindSync) {
+        n = DbCount(dbDeleted);
+        for (i = 0; i < n && !out->err; i++) {
+            UInt32 len;
+            if (DbGet(dbDeleted, i, gBuf, sizeof gBuf, &len) != errNone) continue;
+            PutRecord(out, dbDeleted, gBuf, len);
+        }
+    }
+}
+
+Err BeamSendLog(UInt8 vehicle, UInt16 kind)
+{
+    ExgSocketType s;
+    Err err = OpenSocket(&s, exgSendBeamPrefix "fuellog.fuel", kind == beamKindSync ? "FuelLog sync" : "FuelLog log");
+    if (err) return err;
+    MemSet(&gEo, sizeof gEo, 0);
+    gEo.out.write = ExgWrite; gEo.out.ctx = &gEo; gEo.sock = &s;
+    WriteBundle(&gEo.out, vehicle, kind);
     /* The libraries finish the transfer at disconnect, so its error is the one that counts. */
     err = gEo.err;
     { Err e2 = ExgDisconnect(&s, err); if (!err) err = e2; }
+    return err;
+}
+
+Err BeamWriteSyncFile(UInt16 vol, char *nameOut)
+{
+    CardOut *co = MemPtrNew(sizeof *co);
+    char path[80];
+    Err err;
+    if (!co) return memErrNotEnoughSpace;
+    err = CardEnsureDirs(vol);
+    if (!err) {
+        CardExportName(nameOut, ".fuel");
+        StrCopy(path, cardSync); StrCat(path, "/"); StrCat(path, nameOut);
+        err = CardOutOpen(co, vol, path);
+        if (!err) {
+            WriteBundle(&co->out, 255, beamKindSync);
+            err = CardOutClose(co);
+        }
+    }
+    MemPtrFree(co);
+    return err;
+}
+
+/* A sync bundle, wherever it came from: apply it, say what changed, offer
+ * to send this Palm's side back the same way. */
+static void ApplySync(const UInt8 *whole, UInt32 size, Boolean fromCard)
+{
+    SyncStats st;
+    char a[8], u[8], d[8], name[40], kb[12];
+    Err err = SyncApply(whole, size, &st);
+    if (err == dbErrNewerSchema) { FrmAlert(NewerBackupAlert); return; }
+    if (err) { StrIToA(kb, err); FrmCustomAlert(ExportFailedAlert, "Sync", kb, ""); return; }
+    StrIToA(a, st.added); StrIToA(u, st.updated); StrIToA(d, st.deleted);
+    if (FrmCustomAlert(SyncDoneAlert, a, u, d) != 0) return;
+    if (fromCard) {
+        UInt16 vol;
+        if (CardFind(&vol) != errNone) { FrmAlert(NoCardAlert); return; }
+        err = BeamWriteSyncFile(vol, name);
+        if (err) { StrIToA(kb, err); FrmCustomAlert(ExportFailedAlert, "Sync", kb, ""); }
+        else FrmCustomAlert(SyncFileAlert, name, "", "");
+        return;
+    }
+    err = BeamSendLog(255, beamKindSync);
+    if (err == exgErrUserCancel) return;
+    if (err) { StrIToA(kb, err); FrmCustomAlert(BeamFailedAlert, "The sync", kb, ""); }
+    else FrmCustomAlert(BeamDoneAlert, "The sync", "", "");
+}
+
+Err BeamImportSyncFile(UInt16 vol, const char *name)
+{
+    char path[80];
+    FileRef f;
+    UInt32 size, got;
+    UInt8 *whole;
+    Err err;
+    StrCopy(path, cardSync); StrCat(path, "/"); StrCat(path, name);
+    err = VFSFileOpen(vol, path, vfsModeRead, &f);
+    if (err) return err;
+    err = VFSFileSize(f, &size);
+    if (err || size < 10 || size > 0xFFFF0UL) { VFSFileClose(f); return err ? err : dbErrCorrupt; }
+    whole = MemPtrNew(size);
+    if (!whole) { VFSFileClose(f); return memErrNotEnoughSpace; }
+    err = VFSFileRead(f, size, whole, &got);
+    VFSFileClose(f);
+    if (!err && got == size) ApplySync(whole, size, true);
+    else if (!err) err = dbErrCorrupt;
+    MemPtrFree(whole);
     return err;
 }
 
@@ -309,7 +396,7 @@ Boolean BeamProcessInbox(void)
     LocalID id = DmFindDatabase(0, beamInboxName);
     DmOpenRef inbox;
     UInt16 n, i, added = 0;
-    Boolean changed = false;
+    Boolean changed = false, gotRecords = false;
     if (!id) return false;
     inbox = DmOpenDatabase(0, id, dmModeReadWrite);
     if (!inbox) return false;
@@ -347,6 +434,7 @@ Boolean BeamProcessInbox(void)
         if (end - p < 10 || p[0] != 'F' || p[1] != 'U' || p[2] != 'E' || p[3] != 'L') { MemPtrFree(whole); continue; }
         if (Get16(p + 4) > recSchemaVersion) { MemPtrFree(whole); FrmAlert(NewerBackupAlert); continue; }
         kind = Get16(p + 6);
+        if (kind == beamKindSync) { ApplySync(whole, size, false); MemPtrFree(whole); changed = true; continue; }
         if (kind != beamKindRecords) { MemPtrFree(whole); continue; }
         count = Get16(p + 8);
         StrIToA(what, count); StrCat(what, count == 1 ? " record" : " records");
@@ -369,11 +457,11 @@ Boolean BeamProcessInbox(void)
         }
         MemPtrFree(whole);
         (void)h;
-        changed = true;
+        changed = true; gotRecords = true;
     }
     DmCloseDatabase(inbox);
     DmDeleteDatabase(0, id);
-    if (changed) {
+    if (gotRecords) {
         char a[12];
         StrIToA(a, added);
         FrmCustomAlert(ReceivedDoneAlert, a, "", "");

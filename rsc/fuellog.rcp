@@ -735,6 +735,7 @@ BEGIN
     PUSHBUTTON "Other Palm" ID ExpPalmButton AT (PREVRIGHT 69 54 12) GROUP 2
     LABEL "                                        " ID ExpFileLabel AT (4 85) FONT 0
     BUTTON "Export" ID ExpExportButton AT (4 98 44 12)
+    BUTTON "Sync" ID ExpSyncButton AT (54 98 36 12)
     LABEL "Backup" ID ExpBackupTitle AT (4 116) FONT 1
     LABEL "                                        " ID ExpBackupLabel AT (4 128) FONT 0
     BUTTON "Back up now" ID ExpBackupButton AT (4 141 64 12)
@@ -894,6 +895,23 @@ INFORMATION
 BEGIN
     TITLE "Received"
     MESSAGE "^1 records added from the other Palm."
+    BUTTONS "OK"
+END
+
+ALERT ID SyncDoneAlert
+CONFIRMATION
+DEFAULTBUTTON 0
+BEGIN
+    TITLE "Synced"
+    MESSAGE "From the other Palm: ^1 added, ^2 updated, ^3 deleted. Send this Palm's changes back?"
+    BUTTONS "Send back" "Done"
+END
+
+ALERT ID SyncFileAlert
+INFORMATION
+BEGIN
+    TITLE "Sync file written"
+    MESSAGE "^1 is in Sync/ on the card. Put the card in the other Palm and pick it under Choose a file."
     BUTTONS "OK"
 END
 

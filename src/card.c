@@ -13,9 +13,9 @@ Err CardFind(UInt16 *vol)
 
 Err CardEnsureDirs(UInt16 vol)
 {
-    static const char *dirs[] = { "/PALM", "/PALM/Programs", cardRoot, cardExport, cardBackup, cardImport };
+    static const char *dirs[] = { "/PALM", "/PALM/Programs", cardRoot, cardExport, cardBackup, cardImport, cardSync };
     UInt16 i;
-    for (i = 0; i < 6; i++) {
+    for (i = 0; i < 7; i++) {
         Err err = VFSDirCreate(vol, dirs[i]);
         if (err != errNone && err != vfsErrFileAlreadyExists) return err;
     }

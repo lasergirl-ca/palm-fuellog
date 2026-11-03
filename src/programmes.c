@@ -16,7 +16,7 @@ UInt16 gEditProgrammeIndex = dmMaxRecordIndex;
 static ProgrammeRecord gPgm;            /* the one being edited */
 static ProgrammeRecord gScanPgm;
 static FillRecord gScanFillP;
-static UInt8 gPacked[pgmFixedSize + pgmAliasLen + 4];
+static UInt8 gPacked[pgmFixedSize + pgmAliasLen + 4 + recTrailerSize];
 static RectangleType gPgmRows;
 static UInt16 gOrder[pgmMaxProgrammes];  /* list rows -> database index */
 static UInt16 gOrderCount;
@@ -581,7 +581,7 @@ Boolean EditProgrammeFormHandleEvent(EventType *event)
             else if (PgmUseCount(gPgm.id)) { gPgm.archived = 1; }
             else {
                 if (FrmAlert(DeleteProgrammeAlert) != 0) return true;
-                DbRemove(dbProgrammes, gEditProgrammeIndex);
+                DbDelete(dbProgrammes, gEditProgrammeIndex);
                 FrmGotoForm(ProgrammesForm);
                 return true;
             }

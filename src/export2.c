@@ -243,14 +243,14 @@ static void ServicesSheet(UInt8 vehicle)
         UInt32 len;
         if (DbGet(dbServiceVisits, i, (UInt8 *)names, 0, &len) == errNone) { /* size probe only */ }
         {
-            static UInt8 packed[svlFixedSize + fillMaxNotes + 8];
+            static UInt8 packed[svlFixedSize + fillMaxNotes + 8 + recTrailerSize];
             if (DbGet(dbServiceVisits, i, packed, sizeof packed, &len) != errNone || ServiceVisitUnpack(packed, len, &gXVisit) != 0) continue;
         }
         if (vehicle != 255 && gXVisit.vehicle != vehicle) continue;
         VehGet(gXVisit.vehicle, &gXVeh);
         names[0] = 0;
         for (t = 0; t < nt; t++) {
-            static UInt8 tp[svtRecordSize + 4];
+            static UInt8 tp[svtRecordSize + 4 + recTrailerSize];
             if (DbGet(dbServiceTypes, t, tp, sizeof tp, &len) != errNone || ServiceTypeUnpack(tp, len, &gXType) != 0) continue;
             if (gXType.vehicle != gXVisit.vehicle || !(gXVisit.services & (1UL << gXType.id))) continue;
             if (StrLen(names) + StrLen(gXType.name) + 2 >= sizeof names) break;

@@ -892,7 +892,7 @@ Boolean FillFormHandleEvent(EventType *event)
             return true;
         case FillDeleteButton:
             if (gEditIndex != dmMaxRecordIndex && FrmAlert(DeleteFillAlert) == 0) {
-                DbRemove(dbFills, gEditIndex);
+                DbDelete(dbFills, gEditIndex);
                 SvcScheduleAlarm();
                 FrmGotoForm(FillListForm);
             }

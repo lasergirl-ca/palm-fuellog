@@ -43,7 +43,7 @@ Err BackupNow(UInt16 vol, char *setOut)
     StrCopy(dir, cardBackup); StrCat(dir, "/"); StrCat(dir, setOut);
     err = VFSDirCreate(vol, dir);
     if (err && err != vfsErrFileAlreadyExists) return err;
-    for (i = 0; i < dbCount; i++) {
+    for (i = 0; i < dbAll; i++) {
         LocalID id = DmFindDatabase(0, DbName(i));
         if (!id) continue;
         StrCopy(path, dir); StrCat(path, "/"); StrCat(path, DbName(i)); StrCat(path, ".pdb");
@@ -84,22 +84,24 @@ Err BackupRestore(UInt16 vol, const char *set)
 {
     char dir[80], path[120];
     UInt8 i;
-    Err err;
+    Err err = errNone;
     StrCopy(dir, cardBackup); StrCat(dir, "/"); StrCat(dir, set);
-    /* Refuse a newer schema before anything is touched. */
-    for (i = 0; i < dbCount; i++) {
+    /* Refuse a newer schema before anything is touched. A set from before
+     * sync has no deletion log; the local one is kept then. */
+    for (i = 0; i < dbAll; i++) {
         UInt16 v;
         StrCopy(path, dir); StrCat(path, "/"); StrCat(path, DbName(i)); StrCat(path, ".pdb");
         v = PdbSchema(vol, path);
-        if (v == 0xFFFF) return vfsErrFileNotFound;
+        if (v == 0xFFFF) { if (i == dbDeleted) continue; return vfsErrFileNotFound; }
         if (v > recSchemaVersion) return dmErrAlreadyExists;
     }
     DbCloseAll();
-    for (i = 0; i < dbCount; i++) {
+    for (i = 0; i < dbAll; i++) {
         LocalID id = DmFindDatabase(0, DbName(i));
         UInt16 card = 0;
-        if (id) DmDeleteDatabase(0, id);
         StrCopy(path, dir); StrCat(path, "/"); StrCat(path, DbName(i)); StrCat(path, ".pdb");
+        if (i == dbDeleted && PdbSchema(vol, path) == 0xFFFF) continue;
+        if (id) DmDeleteDatabase(0, id);
         err = VFSImportDatabaseFromFile(vol, path, &card, &id);
         if (err) break;
     }

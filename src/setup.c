@@ -90,7 +90,7 @@ static void LoadWelcome(FormType *form)
 static Boolean SaveFirstVehicle(FormType *form)
 {
     VehicleRecord v;
-    UInt8 buf[vehRecordSize];
+    UInt8 buf[vehRecordSize + recTrailerSize];
     UInt32 odo;
     Int32 r;
     const char *name = AppGetFieldText(form, WelcomeNameField);
@@ -108,8 +108,7 @@ static Boolean SaveFirstVehicle(FormType *form)
     v.defaultCurrency = vehCurrencyUsePrefs;
     v.tankSize = 60000;
     if (v.powertrain == vehPowerElectric) v.batteryWh = 60000;
-    VehiclePack(&v, buf);
-    if (DbAdd(dbVehicles, buf, vehRecordSize, NULL)) { FrmAlert(SaveFailedAlert); return false; }
+    if (DbAdd(dbVehicles, buf, VehiclePack(&v, buf), NULL)) { FrmAlert(SaveFailedAlert); return false; }
     gPrefs.currentVehicle = v.id;
     /* The odometer unit chosen here is the most likely display unit too. */
     gPrefs.distanceUnit = v.odoUnit == vehOdoMiles ? unitDistMiles : unitDistKm;

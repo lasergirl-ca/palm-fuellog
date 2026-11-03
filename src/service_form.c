@@ -14,7 +14,7 @@ static ServiceTypeRecord gSvt, gScanSvt;
 static ServiceVisitRecord gSvl, gScanSvl;      /* 400 bytes each: static, off the stack */
 static FillRecord gScanFillS;
 static VehicleRecord gSvcVeh;
-static UInt8 gSvcPacked[svlFixedSize + fillMaxNotes + 8];
+static UInt8 gSvcPacked[svlFixedSize + fillMaxNotes + 8 + recTrailerSize];
 static UInt16 gEditSvtIndex = dmMaxRecordIndex;
 static UInt16 gEditSvlIndex = dmMaxRecordIndex;   /* visit being edited, or new */
 static UInt16 gHistType = dmMaxRecordIndex;        /* service type the History shows; all visits when dmMaxRecordIndex */
@@ -623,7 +623,7 @@ Boolean EditServiceFormHandleEvent(EventType *event)
             else if (VisitsCovering(gSvt.vehicle, gSvt.id)) gSvt.archived = 1;
             else {
                 if (FrmAlert(DeleteServiceAlert) != 0) return true;
-                DbRemove(dbServiceTypes, gEditSvtIndex);
+                DbDelete(dbServiceTypes, gEditSvtIndex);
                 FrmGotoForm(ServiceForm);
                 return true;
             }
@@ -857,7 +857,7 @@ Boolean LogServiceFormHandleEvent(EventType *event)
         case SvlCancelButton: FrmGotoForm(gSvlReturn); return true;
         case SvlDeleteButton:
             if (gEditSvlIndex != dmMaxRecordIndex && FrmAlert(DeleteVisitAlert) == 0) {
-                DbRemove(dbServiceVisits, gEditSvlIndex);
+                DbDelete(dbServiceVisits, gEditSvlIndex);
                 SvcScheduleAlarm();
                 FrmGotoForm(gSvlReturn);
             }

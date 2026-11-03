@@ -1,6 +1,7 @@
 /* The fill list: home base. One row per fill, newest first, drawn by hand
  * so numbers line up on the decimal and the economy column is bold. */
 #include "fill_list.h"
+#include "beam.h"
 #include "app.h"
 #include "db.h"
 #include "calc.h"
@@ -266,6 +267,7 @@ Boolean FillListHandleEvent(EventType *event)
     switch (event->eType) {
     case frmOpenEvent:
         Layout(form);
+        BeamProcessInbox();      /* a bundle that arrived while an edit form was open */
         DrawAll(form);
         return true;
     case frmUpdateEvent:

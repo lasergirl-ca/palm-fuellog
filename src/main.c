@@ -453,7 +453,12 @@ static void ReceiveBeam(ExgSocketType *sock, Boolean running)
             }
         }
         MemHandleFree(h);
-        if (running) { if (BeamProcessInbox()) FrmUpdateForm(FrmGetActiveFormID(), frmRedrawUpdateCode); }
+        /* Apply at once only on a list form: an open edit form holds a record
+         * index that a merge or sync would move. Otherwise the fill list
+         * picks the inbox up when it next opens. */
+        if (running && (FrmGetActiveFormID() == FillListForm || FrmGetActiveFormID() == ExportForm || FrmGetActiveFormID() == ServiceForm)) {
+            if (BeamProcessInbox()) FrmUpdateForm(FrmGetActiveFormID(), frmRedrawUpdateCode);
+        }
     }
 }
 
@@ -486,11 +491,12 @@ UInt32 PilotMain(UInt16 cmd, MemPtr cmdPBP, UInt16 launchFlags)
         }
         PgmInstallPresets();
         BeamRegister();
-        BeamProcessInbox();
         /* A clock set 28 years back: records saved by an older build, and the
          * last backup date, move to their real dates. Nothing happens on a
          * Palm whose clock is right. */
         DbShiftClockDates(AppDeviceToday(), AppClockShift());
+        DbEnsureUids();          /* records from before sync get an identity */
+        BeamProcessInbox();      /* after the uids: a sync received while away, and its send-back */
         gPrefs.lastBackupDate = DateUnshift(gPrefs.lastBackupDate, AppDeviceToday(), AppClockShift());
         SvcScheduleAlarm();
         /* First launch: no vehicle yet means the Welcome steps, never an empty table. */

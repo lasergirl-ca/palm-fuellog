@@ -11,6 +11,7 @@
 #define cardExport  "/PALM/Programs/FuelLog/Export"
 #define cardBackup  "/PALM/Programs/FuelLog/Backup"
 #define cardImport  "/PALM/Programs/FuelLog/Import"
+#define cardSync    "/PALM/Programs/FuelLog/Sync"
 #define cardNameLen 32
 #define cardBufSize 32768UL
 

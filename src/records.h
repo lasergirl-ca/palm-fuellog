@@ -12,6 +12,18 @@
 
 #define recSchemaVersion 1
 
+/* Sync trailer: every record may end with 8 bytes, uid (random, never 0) and
+ * modified (real seconds since 1904, 0 = unknown). It follows the fixed part
+ * (vehicle, service type) or the terminating NUL (fill, programme, visit),
+ * so a reader from before sync stops at the NUL and never sees it. Pack
+ * always writes it; Unpack reads it when the bytes are there. */
+#define recTrailerSize 8
+#define recKindFill 0            /* the database order of db.h */
+#define recKindVehicle 1
+#define recKindProgramme 2
+#define recKindServiceType 3
+#define recKindServiceVisit 4
+
 /* ---- Fill-up (FuelLog-ZFlg, type Data) ---- */
 
 #define fillFlagFullTank     0x0001   /* or charged to full */
@@ -60,6 +72,8 @@ typedef struct {
     UInt8  pointCount;
     FillPoints points[fillMaxPoints];
     char   notes[fillMaxNotes];
+    UInt32 uid;
+    UInt32 modified;
 } FillRecord;
 
 /* ---- Vehicle (FuelVeh-ZFlg, type Vehi) ---- */
@@ -92,6 +106,8 @@ typedef struct {
     UInt8  fuelDefault;
     UInt8  defaultCurrency;
     UInt8  archived;
+    UInt32 uid;
+    UInt32 modified;
 } VehicleRecord;
 
 /* ---- Rewards programme (FuelPgm-ZFlg, type Pgms) ---- */
@@ -138,6 +154,8 @@ typedef struct {
     UInt8  expiryRule;
     UInt8  expiryMonths;
     char   aliases[pgmAliasLen];   /* comma-separated, for import headers */
+    UInt32 uid;
+    UInt32 modified;
 } ProgrammeRecord;
 
 /* ---- Service type (FuelSvT-ZFlg, type SvcT) ---- */
@@ -158,6 +176,8 @@ typedef struct {
     UInt8  alarm;
     UInt8  archived;
     char   defaultDetail[svtDetailLen];
+    UInt32 uid;
+    UInt32 modified;
 } ServiceTypeRecord;
 
 /* ---- Service visit (FuelSvL-ZFlg, type SvcL) ---- */
@@ -181,6 +201,8 @@ typedef struct {
     char   shop[svlShopLen];
     char   detail[svlDetailLen];
     char   notes[fillMaxNotes];
+    UInt32 uid;
+    UInt32 modified;
 } ServiceVisitRecord;
 
 /* ---- AppInfo block shared by all five databases ---- */
@@ -215,6 +237,15 @@ UInt32 ServiceVisitSize(const ServiceVisitRecord *r) EXPORT_SEC;
 UInt32 ServiceVisitPack(const ServiceVisitRecord *r, UInt8 *buf) EXPORT_SEC;
 Int32  ServiceVisitUnpack(const UInt8 *buf, UInt32 len, ServiceVisitRecord *r) EXPORT_SEC;
 Int32  ServiceVisitCompare(const UInt8 *a, const UInt8 *b) EXPORT_SEC;
+
+/* The trailer in packed bytes, found without unpacking: RecTrailerPos gives
+ * the offset where it starts (or would start) for a record of that kind, or
+ * -1 for malformed bytes. Read returns 0 when the record has none (uid and
+ * modified come back 0). Write replaces or appends it and returns the new
+ * length; buf must have recTrailerSize bytes spare. */
+Int32  RecTrailerPos(UInt8 kind, const UInt8 *buf, UInt32 len) EXPORT_SEC;
+Int32  RecTrailerRead(UInt8 kind, const UInt8 *buf, UInt32 len, UInt32 *uid, UInt32 *modified) EXPORT_SEC;
+UInt32 RecTrailerWrite(UInt8 kind, UInt8 *buf, UInt32 len, UInt32 uid, UInt32 modified) EXPORT_SEC;
 
 UInt32 AppInfoPack(const AppInfoBlock *a, UInt8 *buf) EXPORT_SEC;
 Int32  AppInfoUnpack(const UInt8 *buf, UInt32 len, AppInfoBlock *a) EXPORT_SEC;

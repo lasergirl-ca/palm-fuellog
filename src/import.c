@@ -4,6 +4,7 @@
 #include "xlsread.h"
 #include "units.h"
 #include "app.h"
+#include "beam.h"
 #include "db.h"
 #include "datecalc.h"
 #include "vehicles.h"
@@ -239,15 +240,14 @@ static UInt8 ResolveVehicle(const char *name, Boolean write)
     }
     if (!write) return 0;
     {
-        UInt8 buf[vehRecordSize];
+        UInt8 buf[vehRecordSize + recTrailerSize];
         MemSet(&gImpVeh, sizeof gImpVeh, 0);
         gImpVeh.id = VehNextId();
         if (gImpVeh.id == 0) return 0;
         StrNCopy(gImpVeh.name, name, vehNameLen - 1); gImpVeh.name[vehNameLen - 1] = 0;
         gImpVeh.defaultCurrency = vehCurrencyUsePrefs; gImpVeh.tankSize = 60000;
         gImpVeh.odoUnit = gMap.distUnit == unitDistMiles ? vehOdoMiles : vehOdoKm;
-        VehiclePack(&gImpVeh, buf);
-        if (DbAdd(dbVehicles, buf, vehRecordSize, NULL)) return 0;
+        if (DbAdd(dbVehicles, buf, VehiclePack(&gImpVeh, buf), NULL)) return 0;
         return gImpVeh.id;
     }
 }
@@ -257,7 +257,7 @@ static UInt8 ResolveProgramme(const char *name, Boolean write)
     UInt8 id = PgmIdByName(name);
     if (id || !write) { if (!id) gImport.newProgrammes++; return id; }
     {
-        static UInt8 buf[pgmFixedSize + pgmAliasLen + 4];
+        static UInt8 buf[pgmFixedSize + pgmAliasLen + 4 + recTrailerSize];
         MemSet(&gImpPgm, sizeof gImpPgm, 0);
         gImpPgm.id = PgmNextId();
         if (gImpPgm.id == 0) return 0;
@@ -402,14 +402,25 @@ Boolean ChooseFileFormHandleEvent(EventType *event)
     case frmOpenEvent: {
         ListType *lst = FrmGetObjectPtr(form, FrmGetObjectIndex(form, ChooseList));
         UInt16 vol, i, n = 0;
+        Boolean card;
         AppFitForm(form, bottom, 2);
-        if (CardFind(&vol) == errNone) { CardEnsureDirs(vol); n = CardList(vol, cardImport, false, gFiles, 16); }
+        card = CardFind(&vol) == errNone;
+        if (card) { CardEnsureDirs(vol); n = CardList(vol, cardImport, false, gFiles, 16); }
         gFileCount = 0;
         for (i = 0; i < n; i++) {
             UInt16 l = StrLen(gFiles[i]);
             if ((l > 4 && StrCaselessCompare(gFiles[i] + l - 4, ".csv") == 0) || (l > 5 && StrCaselessCompare(gFiles[i] + l - 5, ".xlsx") == 0) || (l > 4 && StrCaselessCompare(gFiles[i] + l - 4, ".xls") == 0)) { if (gFileCount != i) StrCopy(gFiles[gFileCount], gFiles[i]); gFileCount++; }
         }
-        if (gFileCount == 0) { StrCopy(gFiles[0], "(no CSV, XLSX or XLS files)"); gFileCount = 1; }
+        /* sync bundles written by another Palm, from Sync/ */
+        if (card && gFileCount < 16) {
+            UInt16 m = CardList(vol, cardSync, false, gFiles + gFileCount, (UInt16)(16 - gFileCount)), keep = gFileCount;
+            for (i = 0; i < m; i++) {
+                UInt16 l = StrLen(gFiles[gFileCount + i]);
+                if (l > 5 && StrCaselessCompare(gFiles[gFileCount + i] + l - 5, ".fuel") == 0) { if (keep != gFileCount + i) StrCopy(gFiles[keep], gFiles[gFileCount + i]); keep++; }
+            }
+            gFileCount = keep;
+        }
+        if (gFileCount == 0) { StrCopy(gFiles[0], "(no CSV, XLSX, XLS or sync files)"); gFileCount = 1; }
         for (i = 0; i < gFileCount; i++) gFilePtrs[i] = gFiles[i];
         LstSetListChoices(lst, gFilePtrs, (Int16)gFileCount);
         LstSetSelection(lst, 0);
@@ -427,6 +438,15 @@ Boolean ChooseFileFormHandleEvent(EventType *event)
             Err err;
             if (sel < 0 || gFiles[sel][0] == '(') { FrmAlert(NoImportFilesAlert); return true; }
             if (CardFind(&vol) != errNone) { FrmAlert(NoCardAlert); return true; }
+            {
+                UInt16 l = StrLen(gFiles[sel]);
+                if (l > 5 && StrCaselessCompare(gFiles[sel] + l - 5, ".fuel") == 0) {
+                    err = BeamImportSyncFile(vol, gFiles[sel]);
+                    if (err) { char n[8]; StrIToA(n, err); FrmCustomAlert(ExportFailedAlert, "Sync", n, ""); return true; }
+                    FrmGotoForm(FillListForm);
+                    return true;
+                }
+            }
             err = ImportScan(vol, gFiles[sel]);
             if (err) { char n[8]; StrIToA(n, err); FrmCustomAlert(ExportFailedAlert, "Import", n, ""); return true; }
             FrmGotoForm(ImportForm);

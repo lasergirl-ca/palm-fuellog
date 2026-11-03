@@ -33,6 +33,7 @@ static void FileLabel(FormType *form) IO_SEC;
 static void BackupLabel(FormType *form) IO_SEC;
 static void BuildYears(FormType *form) IO_SEC;
 static void DoExport(FormType *form) IO_SEC;
+static void DoSync(FormType *form) IO_SEC;
 static void DoBackup(FormType *form) IO_SEC;
 
 static void FileLabel(FormType *form)
@@ -89,7 +90,7 @@ static void DoExport(FormType *form)
         UInt16 sel = AppGroupSelection(form, 1);
         UInt8 fmt = sel == ExpXlsxButton ? 1 : sel == ExpPdfButton ? 2 : 0;
         AppSetLabel(form, ExpFileLabel, "Sending...");
-        err = sel == ExpLogButton ? BeamSendLog(gExpVehicle) : BeamSendExport(fmt, gExpVehicle, gExpYear);
+        err = sel == ExpLogButton ? BeamSendLog(gExpVehicle, beamKindRecords) : BeamSendExport(fmt, gExpVehicle, gExpYear);
         if (err == exgErrUserCancel) ;   /* the system's own Send Results dialog already said so */
         else if (err) { StrIToA(kb, err); FrmCustomAlert(BeamFailedAlert, sel == ExpLogButton ? "The log" : "The export", kb, ""); }
         else FrmCustomAlert(BeamDoneAlert, sel == ExpLogButton ? "The log" : "The export", "", "");
@@ -104,6 +105,29 @@ static void DoExport(FormType *form)
     if (err) { StrIToA(kb, err); FrmCustomAlert(ExportFailedAlert, name, kb, ""); FileLabel(form); return; }
     StrIToA(kb, (bytes + 512) / 1024);
     FrmCustomAlert(ExportDoneAlert, name, kb, "");
+    FileLabel(form);
+}
+
+/* Sync ignores the filters: both Palms end up with every record. */
+static void DoSync(FormType *form)
+{
+    UInt16 vol;
+    char name[40], kb[12];
+    Err err;
+    if (AppGroupSelection(form, 2) == ExpPalmButton) {
+        AppSetLabel(form, ExpFileLabel, "Syncing...");
+        err = BeamSendLog(255, beamKindSync);
+        if (err == exgErrUserCancel) ;
+        else if (err) { StrIToA(kb, err); FrmCustomAlert(BeamFailedAlert, "The sync", kb, ""); }
+        else FrmCustomAlert(BeamDoneAlert, "The sync", "", "");
+        FileLabel(form);
+        return;
+    }
+    if (CardFind(&vol) != errNone) { FrmAlert(NoCardAlert); return; }
+    AppSetLabel(form, ExpFileLabel, "Writing...");
+    err = BeamWriteSyncFile(vol, name);
+    if (err) { StrIToA(kb, err); FrmCustomAlert(ExportFailedAlert, "Sync", kb, ""); }
+    else FrmCustomAlert(SyncFileAlert, name, "", "");
     FileLabel(form);
 }
 
@@ -128,7 +152,7 @@ Boolean ExportFormHandleEvent(EventType *event)
     /* everything that scrolls: hidden while it sits under the title or the Done button */
     static UInt16 clamp[] = { ExpFormatLabel, ExpCsvButton, ExpXlsxButton, ExpPdfButton, ExpLogButton,
                               ExpVehicleLabel, ExpVehicleTrigger, ExpRangeLabel, ExpRangeTrigger, ExpPgmLabel, ExpPgmTrigger,
-                              ExpSendLabel, ExpCardButton, ExpPalmButton, ExpFileLabel, ExpExportButton,
+                              ExpSendLabel, ExpCardButton, ExpPalmButton, ExpFileLabel, ExpExportButton, ExpSyncButton,
                               ExpBackupTitle, ExpBackupLabel, ExpBackupButton, ExpRestoreButton,
                               ExpImportTitle, ExpImportHint, ExpImportButton };
 #define kExpClamp (sizeof clamp / sizeof clamp[0])
@@ -194,6 +218,7 @@ Boolean ExportFormHandleEvent(EventType *event)
         switch (event->data.ctlSelect.controlID) {
         case ExpCsvButton: case ExpXlsxButton: case ExpPdfButton: case ExpLogButton: case ExpCardButton: case ExpPalmButton: FileLabel(form); break;
         case ExpExportButton: DoExport(form); return true;
+        case ExpSyncButton: DoSync(form); return true;
         case ExpBackupButton: DoBackup(form); return true;
         case ExpRestoreButton: FrmGotoForm(RestoreForm); return true;
         case ExpImportButton: FrmGotoForm(ChooseFileForm); return true;

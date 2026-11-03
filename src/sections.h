@@ -13,6 +13,7 @@
 #define XP_SEC     __attribute__((section("exp2")))    /* XLSX and PDF export */
 #define FILL_SEC   __attribute__((section("fillf")))   /* the fill form */
 #define XLS_SEC    __attribute__((section("xlsr")))    /* the .xls reader */
+#define SYNC_SEC   __attribute__((section("sync")))    /* sync between Palms */
 #else
 #define SEC2
 #define EXPORT_SEC
@@ -23,5 +24,6 @@
 #define XP_SEC
 #define FILL_SEC
 #define XLS_SEC
+#define SYNC_SEC
 #endif
 #endif

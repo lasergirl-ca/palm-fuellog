@@ -393,4 +393,7 @@
 #define ExpBackupTitle       3226
 #define ExpImportTitle       3227
 #define ExpImportHint        3228
+#define ExpSyncButton        3229
+#define SyncDoneAlert        1535
+#define SyncFileAlert        1536
 #define RatesDateLabel       2404

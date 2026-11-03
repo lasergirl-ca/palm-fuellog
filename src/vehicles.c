@@ -335,7 +335,8 @@ static Boolean SaveVehicle(FormType *form)
     UInt32 v;
     Int32 r;
     const char *name = AppGetFieldText(form, VehNameField);
-    UInt8 buf[vehRecordSize];
+    UInt8 buf[vehRecordSize + recTrailerSize];
+    UInt32 n;
     Int16 sel;
     Err err;
 
@@ -363,9 +364,9 @@ static Boolean SaveVehicle(FormType *form)
     gVeh.defaultCurrency = sel == 0 ? vehCurrencyUsePrefs : (UInt8)(sel - 1);
     gVeh.tripMode = (UInt8)GetPopup(form, VehTripList);
     gVeh.archived = (UInt8)CtlGetValue(FrmGetObjectPtr(form, FrmGetObjectIndex(form, VehArchivedCheckbox)));
-    VehiclePack(&gVeh, buf);
-    if (gEditVehicleIndex == dmMaxRecordIndex) err = DbAdd(dbVehicles, buf, vehRecordSize, NULL);
-    else err = DbReplace(dbVehicles, gEditVehicleIndex, buf, vehRecordSize);
+    n = VehiclePack(&gVeh, buf);
+    if (gEditVehicleIndex == dmMaxRecordIndex) err = DbAdd(dbVehicles, buf, n, NULL);
+    else err = DbReplace(dbVehicles, gEditVehicleIndex, buf, n);
     if (err) { FrmAlert(SaveFailedAlert); return false; }
     if (gPrefs.currentVehicle == 255 && DbCount(dbVehicles) == 1) { gPrefs.currentVehicle = gVeh.id; PrefsSave(&gPrefs); }
     return true;
@@ -403,7 +404,7 @@ Boolean EditVehicleFormHandleEvent(EventType *event)
         case VehCancelButton: FrmGotoForm(VehiclesForm); return true;
         case VehDeleteButton:
             if (gEditVehicleIndex != dmMaxRecordIndex && VehFillCount(gVeh.id) == 0 && FrmAlert(DeleteVehicleAlert) == 0) {
-                DbRemove(dbVehicles, gEditVehicleIndex);
+                DbDelete(dbVehicles, gEditVehicleIndex);
                 if (gPrefs.currentVehicle == gVeh.id) { gPrefs.currentVehicle = 255; PrefsSave(&gPrefs); }
                 FrmGotoForm(VehiclesForm);
             }

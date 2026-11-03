@@ -3,7 +3,7 @@
 A native Palm OS 5 fuel log for the Palm T|X that replaces the paper Fuel Log v2:
 fills and charges for several vehicles, loyalty points, service reminders with
 alarms, stats, reports and graphs, CSV/XLSX/PDF export to the SD card, CSV/XLSX/XLS
-import, backups, and beaming between Palms. Pure 68K code, so it also runs on older
+import, backups, beaming, and sync between Palms. Pure 68K code, so it also runs on older
 Palms and in CloudpilotEmu.
 
 Proudly made in 🇨🇦 Canada!
@@ -20,7 +20,7 @@ announcement and its comments live.
 
 The design lives in the live doc (link in `docs/README.md`); `docs/` holds the
 export, the mock-ups, the paper form, the spike write-ups and one file per
-milestone (`M1.md` to `M8.md`) with what was built and what to check on the device.
+milestone (`M1.md` to `M9.md`) with what was built and what to check on the device.
 
 Current state: `v1.0-rc5`. Everything builds and passes the host tests; the M5 to M8
 features are waiting on their device pass (see the end of `docs/M8.md`).

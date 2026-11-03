@@ -86,6 +86,7 @@ There are 36 stories across M1 to M8, each small enough to finish inside its mil
 | US-34 | M3 | log a service visit covering several items at once | one shop visit is one entry | checklist of service types plus Other with free text (up to 24 characters, promotable to a tracked type); odometer pre-filled from latest fill; cost, currency, Cash/Card, shop, detail | M | To do |
 | US-35 | M3 | see what is due soon or overdue, and be reminded when FuelLog is closed | I never run past an oil change | Service list shows km and days left and projected date at 90-day pace; wrench on fill list; one alert when a fill tips into Due soon; `AlmSetAlarm` set and restored after reset | L | To do |
 | US-36 | M3 | see service history, the longest gap I actually reached, and running cost | I know how I really maintain each car | history per service with over-interval gaps flagged; running cost per 100 km (fuel plus service); Services sheet, CSV and PDF page in exports | M | To do |
+| US-37 | M9 | sync two Palms so both hold the same log, edits and deletions included | I can log on whichever Palm is in the car | sync trailer (uid, modified) on every record; deletion log; Sync button sends the whole log by Beam, Bluetooth or a file on the card; receiver merges newer-wins and offers to send back; Log with Merge/Replace unchanged | L | In progress |
 
 ## Definition of done
 
