@@ -134,8 +134,14 @@ static void DrawRows(void)
         WinDrawChars("Odo", 3, (Coord)(kColOdo - figures / 2 - title / 2), kTop - 11);
     }
     DrawRight(electric ? "kWh" : UnitVolLabel(gPrefs.volumeUnit), colVol, kTop - 11);
-    DrawRight("Total", colTotal, kTop - 11);
-    DrawRight(EcoHeader(electric), kColEco, kTop - 11);
+    {
+        /* "MPG" in bold is wider than the economy figures below it and would run into
+         * "Total" (seen on the LifeDrive), so Total's title moves left to leave a gap. */
+        const char *eco = EcoHeader(electric);
+        Coord ecoLeft = (Coord)(kColEco - FntCharsWidth(eco, StrLen(eco)));
+        DrawRight("Total", (Coord)(colTotal > ecoLeft - 3 ? ecoLeft - 3 : colTotal), kTop - 11);
+        WinDrawChars(eco, StrLen(eco), ecoLeft, kTop - 11);
+    }
     rows = (UInt16)((gRows.extent.y) / kRowH);
     if (gSel >= (Int16)count) gSel = (Int16)count - 1;
     if (count == 0) {
