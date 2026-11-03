@@ -494,7 +494,7 @@ UInt32 PilotMain(UInt16 cmd, MemPtr cmdPBP, UInt16 launchFlags)
         /* A clock set 28 years back: records saved by an older build, and the
          * last backup date, move to their real dates. Nothing happens on a
          * Palm whose clock is right. */
-        DbShiftClockDates(AppDeviceToday(), AppClockShift());
+        DbShiftClockDates(AppDeviceToday(), AppClockShift(), AppPlausibleFrom());
         DbEnsureUids();          /* records from before sync get an identity */
         BeamProcessInbox();      /* after the uids: a sync received while away, and its send-back */
         gPrefs.lastBackupDate = DateUnshift(gPrefs.lastBackupDate, AppDeviceToday(), AppClockShift());

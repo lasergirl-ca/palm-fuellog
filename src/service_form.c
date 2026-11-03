@@ -801,6 +801,7 @@ static Boolean SaveSvl(FormType *form)
     if (r < 0) { FrmAlert(BadNumberAlert); return false; }
     gSvl.cost = r == 1 ? cents : 0;
     gSvl.date = gSvlDate;
+    gSvl.clockShift = AppClockShift();
     gSvl.currency = (UInt8)LstGetSelection(FrmGetObjectPtr(form, FrmGetObjectIndex(form, SvlCurrencyList)));
     gSvl.fxRate = CurrencyDefaultRate(gSvl.currency, gPrefs.homeCurrency, gPrefs.fxRate);
     gSvl.payment = AppGroupSelection(form, 1) == SvlCardButton ? fillPaymentCard : fillPaymentCash;

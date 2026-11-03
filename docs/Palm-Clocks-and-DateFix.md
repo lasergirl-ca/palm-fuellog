@@ -148,6 +148,20 @@ Backups and beams between a shifted Palm and a normal one then carry real dates 
 directions. Only artefacts named from the clock before this change (a backup set called
 `1998-...`) stay old, and they simply sort as old.
 
+**Mark each record with the shift it was established under.** The window rule above has
+two holes, both found in FuelLog's own data. A record stored in device time whose Palm later
+lost its shift (DateFix switched off, the clock set right) is never migrated, because the
+pass finds no shift to apply; and a genuinely old record (a paper log from 1997 imported on a
+normal Palm) that is restored or synced onto a DateFix Palm sits inside the window and is
+moved forward, wrongly, at the next launch. The cure is a per-record field, FuelLog's
+`clockShift` in the trailer: the shift that was in effect when the record's date was last
+established (0 on a right clock, 10,227 under DateFix), with a sentinel for "never" on
+records written by earlier builds. Every save, import and edit writes it. The launch pass
+then only looks at records with the sentinel: one inside the window moves and is marked;
+one no older than the app can be (14 years before the build year) is marked as it is; one
+older than that is left for a human, since the app cannot tell a shifted test entry from a
+real old import. A marked record is never touched again, on any Palm it reaches.
+
 ## 8. Show it in About
 
 One short diagnostic saves a support exchange: FuelLog's About line ends in
@@ -178,6 +192,8 @@ itself has to be installed on the emulator image to cover the other.
 - [ ] Never call `DateToAscii`, `DayOfWeek`, `DateTemplateToAscii` with a real year; format
       dates yourself or pass internal years.
 - [ ] Idempotent migration of previously stored dates at launch and after restore.
+- [ ] Each dated record carries the shift it was established under; the migration only
+      touches records without one.
 - [ ] About shows the shift.
 - [ ] Nothing in prefs about it: no checkbox.
 

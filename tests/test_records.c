@@ -36,7 +36,7 @@ int main(void)
         strcpy(f.notes, "Petro-Canada on 152 St.");
         n = FillPack(&f, buf);
         check("fill size", n, FillSize(&f));
-        check("fill size value", n, 39 + 2 * 9 + 23 + 1 + 8);
+        check("fill size value", n, 39 + 2 * 9 + 23 + 1 + 10);
         /* Byte offsets from the design spec's canonical layout. */
         check("fill date at 0", (buf[0] << 8) | buf[1], 44852);
         check("fill time at 2", (buf[2] << 8) | buf[3], 696);
@@ -51,7 +51,7 @@ int main(void)
         check("fill point 1 pgm at 39", buf[39], 2);
         check("fill point 2 redeemed at 53 (odd offset)", (long)(Int32)(((UInt32)buf[53] << 24) | (buf[54] << 16) | (buf[55] << 8) | buf[56]), -7);
         check("fill notes at 57", buf[57], 'P');
-        check("fill terminator before the trailer", buf[n - 9], 0);
+        check("fill terminator before the trailer", buf[n - 11], 0);
         check("fill unpack", FillUnpack(buf, n, &g), 0);
         check("fill odometer back", g.odometer, 842120);
         check("fill time back", g.time, 696);
@@ -75,7 +75,7 @@ int main(void)
         /* Notes longer than the field are cut to 255 bytes plus the terminator. */
         memset(f.notes, 'x', sizeof f.notes); f.notes[sizeof f.notes - 1] = 0;
         n = FillPack(&f, buf);
-        check("fill long notes size", n, 39 + 18 + 255 + 1 + 8);
+        check("fill long notes size", n, 39 + 18 + 255 + 1 + 10);
     }
 
     /* Vehicle: fixed 47 bytes, name padded with zeros. */
@@ -86,7 +86,7 @@ int main(void)
         v.startOdo = 806500; v.tankSize = 60000; v.batteryWh = 0; v.homeRate = 0; v.fuelDefault = 0;
         v.defaultCurrency = vehCurrencyUsePrefs; v.archived = 0;
         n = VehiclePack(&v, buf);
-        check("vehicle size", n, vehRecordSize + 8);
+        check("vehicle size", n, vehRecordSize + 10);
         check("vehicle name padding", buf[1 + 7], 0);
         check("vehicle startOdo at 28", ((long)buf[28] << 24) | (buf[29] << 16) | (buf[30] << 8) | buf[31], 806500);
         check("vehicle defaultCurrency at 45", buf[45], 255);
@@ -111,7 +111,7 @@ int main(void)
         p.redeemValue = 10; p.redeemVolUnit = pgmVolUSGallon; p.redeemMaxVol = 132489; p.redeemMaxPerUnit = 1000;
         p.expiryRule = pgmExpiryNone; strcpy(p.aliases, "KB Points,KB");
         n = ProgrammePack(&p, buf);
-        check("programme size", n, pgmFixedSize + 12 + 1 + 8);
+        check("programme size", n, pgmFixedSize + 12 + 1 + 10);
         check("programme size fn", n, ProgrammeSize(&p));
         check("programme earnRate at 27", ((long)buf[27] << 24) | (buf[28] << 16) | (buf[29] << 8) | buf[30], 300);
         check("programme aliases at 64", buf[64], 'K');
@@ -129,7 +129,7 @@ int main(void)
         t.id = 0; t.vehicle = 1; strcpy(t.name, "Oil and filter"); t.intervalDist = 80000; t.intervalMonths = 6;
         t.warnDist = 8000; t.warnDays = 14; t.alarm = 1; strcpy(t.defaultDetail, "0W-20 synthetic, 4.8 L");
         n = ServiceTypePack(&t, buf);
-        check("service type size", n, svtRecordSize + 8);
+        check("service type size", n, svtRecordSize + 10);
         check("service type unpack", ServiceTypeUnpack(buf, n, &u), 0);
         check("service type interval back", u.intervalDist, 80000);
         checkStr("service type detail back", u.defaultDetail, "0W-20 synthetic, 4.8 L");
@@ -139,7 +139,7 @@ int main(void)
         s.payment = fillPaymentCard; strcpy(s.shop, "Corner Garage"); strcpy(s.detail, "0W-20 synthetic, 4.8 L");
         strcpy(s.notes, "Also topped up washer fluid.");
         n = ServiceVisitPack(&s, buf);
-        check("service visit size", n, svlFixedSize + 28 + 1 + 8);
+        check("service visit size", n, svlFixedSize + 28 + 1 + 10);
         check("service visit services at 7", ((long)buf[7] << 24) | (buf[8] << 16) | (buf[9] << 8) | buf[10], (long)(0x7UL | svlOtherBit));
         check("service visit unpack", ServiceVisitUnpack(buf, n, &r), 0);
         checkStr("service visit other cut to 23", r.other, "Battery terminals clean");
@@ -159,25 +159,45 @@ int main(void)
         memset(&f, 0, sizeof f); memset(&v, 0, sizeof v); memset(&p, 0, sizeof p); memset(&t, 0, sizeof t); memset(&s, 0, sizeof s);
         f.date = 44852; f.pointCount = 1; f.points[0].programme = 2; strcpy(f.notes, "note"); f.uid = 0xC0FFEE01UL; f.modified = 3870000000UL;
         n = FillPack(&f, buf);
-        check("fill trailer at the end", (long)(((UInt32)buf[n - 8] << 24) | ((UInt32)buf[n - 7] << 16) | (buf[n - 6] << 8) | buf[n - 5]), (long)0xC0FFEE01UL);
+        check("fill trailer at the end", (long)(((UInt32)buf[n - 10] << 24) | ((UInt32)buf[n - 9] << 16) | (buf[n - 8] << 8) | buf[n - 7]), (long)0xC0FFEE01UL);
         check("fill unpack with trailer", FillUnpack(buf, n, &g), 0);
         check("fill uid back", (long)g.uid, (long)0xC0FFEE01UL);
         check("fill modified back", (long)g.modified, (long)3870000000UL);
-        check("fill trailer pos", RecTrailerPos(recKindFill, buf, n), (long)(n - 8));
+        check("fill trailer pos", RecTrailerPos(recKindFill, buf, n), (long)(n - 10));
         check("fill trailer read", RecTrailerRead(recKindFill, buf, n, &uid, &mod), 1);
         check("fill trailer read uid", (long)uid, (long)0xC0FFEE01UL);
         /* the same bytes cut before the trailer: an rc5 record */
-        check("old fill unpacks", FillUnpack(buf, n - 8, &g), 0);
+        check("old fill unpacks", FillUnpack(buf, n - 10, &g), 0);
         check("old fill uid 0", (long)g.uid, 0);
         checkStr("old fill notes intact", g.notes, "note");
-        check("old fill trailer read", RecTrailerRead(recKindFill, buf, n - 8, &uid, &mod), 0);
-        check("old fill trailer pos is its end", RecTrailerPos(recKindFill, buf, n - 8), (long)(n - 8));
-        check("trailer write appends", (long)RecTrailerWrite(recKindFill, buf, n - 8, 7, 9), (long)n);
+        check("old fill trailer read", RecTrailerRead(recKindFill, buf, n - 10, &uid, &mod), 0);
+        check("old fill trailer pos is its end", RecTrailerPos(recKindFill, buf, n - 10), (long)(n - 10));
+        check("trailer write appends", (long)RecTrailerWrite(recKindFill, buf, n - 10, 7, 9), (long)n);
         FillUnpack(buf, n, &g);
         check("appended uid", (long)g.uid, 7);
         check("trailer write replaces", (long)RecTrailerWrite(recKindFill, buf, n, 8, 10), (long)n);
         FillUnpack(buf, n, &g);
         check("replaced modified", (long)g.modified, 10);
+        check("appended trailer has no clock shift", (long)g.clockShift, (long)recShiftUnknown);
+        /* the clock shift rides in the last two bytes; an rc6 to rc8 record stops two short */
+        f.clockShift = 10227;
+        n = FillPack(&f, buf);
+        FillUnpack(buf, n, &g);
+        check("clock shift back", (long)g.clockShift, 10227);
+        check("rc6 trailer unpacks", FillUnpack(buf, n - 2, &g), 0);
+        check("rc6 trailer uid back", (long)g.uid, (long)0xC0FFEE01UL);
+        check("rc6 trailer shift unknown", (long)g.clockShift, (long)recShiftUnknown);
+        check("rc6 trailer read", RecTrailerRead(recKindFill, buf, n - 2, &uid, &mod), 1);
+        check("rc6 trailer write stays short", (long)RecTrailerWrite(recKindFill, buf, n - 2, 11, 12), (long)(n - 2));
+        FillUnpack(buf, n - 2, &g);
+        check("rc6 trailer rewritten uid", (long)g.uid, 11);
+        memset(&s, 0, sizeof s); s.date = 44852; s.vehicle = 1; s.clockShift = 0;
+        n = ServiceVisitPack(&s, buf);
+        ServiceVisitUnpack(buf, n, &r);
+        check("visit shift 0 back", (long)r.clockShift, 0);
+        ServiceVisitUnpack(buf, n - 2, &r);
+        check("visit rc6 trailer shift unknown", (long)r.clockShift, (long)recShiftUnknown);
+        n = FillPack(&f, buf);     /* the fill bytes back, for the malformed check below */
         check("fill without its NUL is malformed", RecTrailerPos(recKindFill, buf, 39 + 9 + 2), -1);
 
         v.id = 1; strcpy(v.name, "Bolt"); v.uid = 11; v.modified = 22;

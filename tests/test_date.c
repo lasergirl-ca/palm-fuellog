@@ -35,6 +35,29 @@ int main(void)
         check("1994 is outside it", DateUnshift(DateYmdToDays(1994, 1, 1), dev, s), DateYmdToDays(1994, 1, 1));
         check("no shift, nothing moves", DateUnshift(DateYmdToDays(1998, 9, 1), dev, 0), DateYmdToDays(1998, 9, 1));
     }
+    /* The launch pass over records that do not yet carry a clock shift. */
+    {
+        UInt16 dev = DateYmdToDays(1998, 10, 27), s = dateClockShiftDays, from = DateYmdToDays(2012, 1, 1), d, out;
+        d = DateYmdToDays(1998, 9, 1); out = 1;
+        check("unmarked device-time date under DateFix moves", DateEstablish(dateShiftUnknown, &d, dev, s, from, &out), 1);
+        check("  to 2026", d, DateYmdToDays(2026, 9, 1));
+        check("  and records the shift", out, s);
+        d = DateYmdToDays(2026, 9, 1); out = 1;
+        check("unmarked real date under DateFix is marked", DateEstablish(dateShiftUnknown, &d, dev, s, from, &out), 1);
+        check("  unmoved", d, DateYmdToDays(2026, 9, 1));
+        d = DateYmdToDays(1998, 9, 1); out = 1;
+        check("marked 1998 date under DateFix is left alone", DateEstablish(0, &d, dev, s, from, &out), 0);
+        check("  unmoved", d, DateYmdToDays(1998, 9, 1));
+        check("marked real date is left alone", DateEstablish(s, &d, dev, s, from, &out), 0);
+        dev = DateYmdToDays(2026, 11, 3);
+        d = DateYmdToDays(2026, 9, 1); out = 1;
+        check("unmarked real date on a right clock is marked", DateEstablish(dateShiftUnknown, &d, dev, 0, from, &out), 1);
+        check("  with shift 0", out, 0);
+        d = DateYmdToDays(1998, 9, 1); out = 1;
+        check("unmarked 1998 date on a right clock is left for a human", DateEstablish(dateShiftUnknown, &d, dev, 0, from, &out), 0);
+        d = DateYmdToDays(2012, 1, 1);
+        check("the plausible bound is inclusive", DateEstablish(dateShiftUnknown, &d, dev, 0, from, &out), 1);
+    }
     printf("%d failure(s)\n", failures);
     return failures ? 1 : 0;
 }

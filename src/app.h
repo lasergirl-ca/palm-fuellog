@@ -15,6 +15,7 @@ UInt16 AppToday(void);                           /* days since 1904, corrected f
 UInt16 AppDeviceToday(void);                     /* what the clock itself says */
 void   AppClockInit(void);                       /* once at launch: DateFix's epoch, else the 28-year heuristic */
 UInt16 AppClockShift(void);                      /* days added to the clock's date, 0 when the clock is right */
+UInt16 AppPlausibleFrom(void);                   /* the first day a record of this app can really be dated: 14 years before the build year */
 Boolean AppClockIsDateFix(void);                 /* the shift is DateFix's epoch (its picker speaks internal years) */
 Boolean AppSelectDay(UInt16 *days, const char *title);   /* the date picker on a real date, in and out */
 UInt32 AppAlarmSeconds(UInt16 days, UInt8 hour); /* device seconds for a real date, for AlmSetAlarm */

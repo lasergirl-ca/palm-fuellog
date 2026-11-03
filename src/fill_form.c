@@ -697,6 +697,7 @@ static Boolean Save(FormType *form)
     gFill.trip = trip;
     gFill.volume = ml;
     gFill.price = price;
+    gFill.clockShift = AppClockShift();   /* the date was shown real and confirmed: established */
     gFill.total = cents;
     gFill.grade = SelectedGrade(form);
     gFill.flags = (UInt16)((gFill.flags & ~(fillFlagFullTank | fillFlagTripEntered | fillFlagCharge | fillFlagMissedPrev))

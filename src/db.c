@@ -320,37 +320,39 @@ Err DbGetVehicle(UInt16 index, VehicleRecord *r)
     return VehicleUnpack(buf, len, r) == 0 ? errNone : dbErrCorrupt;
 }
 
-UInt16 DbShiftClockDates(UInt16 deviceToday, UInt16 shift)
+UInt16 DbShiftClockDates(UInt16 deviceToday, UInt16 shift, UInt16 plausibleFrom)
 {
     UInt16 n, i, moved = 0, fillsMoved = 0, visitsMoved = 0;
     UInt32 len;
     FillRecord *f;
     ServiceVisitRecord *v;
     UInt8 *buf;
-    if (!shift || !gRef[dbFills] || !gRef[dbServiceVisits]) return 0;
+    if (!gRef[dbFills] || !gRef[dbServiceVisits]) return 0;
     f = MemPtrNew(sizeof *f); v = MemPtrNew(sizeof *v); buf = MemPtrNew(svlFixedSize + fillMaxNotes + 16);
     if (!f || !v || !buf) { if (f) MemPtrFree(f); if (v) MemPtrFree(v); if (buf) MemPtrFree(buf); return 0; }
-    DbSetStamping(false);          /* a moved date is not an edit */
+    DbSetStamping(false);          /* a moved or marked date is not an edit */
     n = DmNumRecords(gRef[dbFills]);
     for (i = 0; i < n; i++) {
         UInt16 d;
         if (DbGetFill(i, f) != errNone) continue;
-        d = DateUnshift(f->date, deviceToday, shift);
-        if (d == f->date) continue;
+        d = f->date;
+        if (!DateEstablish(f->clockShift, &d, deviceToday, shift, plausibleFrom, &f->clockShift)) continue;
+        if (d != f->date) fillsMoved++;
         f->date = d;
         len = FillPack(f, gPacked);
-        if (DbReplace(dbFills, i, gPacked, len) == errNone) fillsMoved++;
+        DbReplace(dbFills, i, gPacked, len);
     }
     n = DmNumRecords(gRef[dbServiceVisits]);
     for (i = 0; i < n; i++) {
         UInt16 d;
         if (DbGet(dbServiceVisits, i, buf, svlFixedSize + fillMaxNotes + 16, &len) != errNone) continue;
         if (ServiceVisitUnpack(buf, len, v) != 0) continue;
-        d = DateUnshift(v->date, deviceToday, shift);
-        if (d == v->date) continue;
+        d = v->date;
+        if (!DateEstablish(v->clockShift, &d, deviceToday, shift, plausibleFrom, &v->clockShift)) continue;
+        if (d != v->date) visitsMoved++;
         v->date = d;
         len = ServiceVisitPack(v, buf);
-        if (DbReplace(dbServiceVisits, i, buf, len) == errNone) visitsMoved++;
+        DbReplace(dbServiceVisits, i, buf, len);
     }
     if (fillsMoved) DmQuickSort(gRef[dbFills], CompareRecords, dbFills);
     if (visitsMoved) DmQuickSort(gRef[dbServiceVisits], CompareRecords, dbServiceVisits);

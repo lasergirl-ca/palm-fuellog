@@ -11,8 +11,8 @@ static const UInt8 *Get16(const UInt8 *p, UInt16 *v) EXPORT_SEC;
 static const UInt8 *Get32(const UInt8 *p, UInt32 *v) EXPORT_SEC;
 static const UInt8 *GetStr(const UInt8 *p, char *s, UInt32 n) EXPORT_SEC;
 static UInt32 CStrLen(const char *s, UInt32 max) EXPORT_SEC;
-static UInt8 *PutTrailer(UInt8 *p, UInt32 uid, UInt32 modified) EXPORT_SEC;
-static void GetTrailer(const UInt8 *p, const UInt8 *end, UInt32 *uid, UInt32 *modified) EXPORT_SEC;
+static UInt8 *PutTrailer(UInt8 *p, UInt32 uid, UInt32 modified, UInt16 shift) EXPORT_SEC;
+static void GetTrailer(const UInt8 *p, const UInt8 *end, UInt32 *uid, UInt32 *modified, UInt16 *shift) EXPORT_SEC;
 
 static UInt8 *Put8(UInt8 *p, UInt8 v) { *p++ = v; return p; }
 static UInt8 *Put16(UInt8 *p, UInt16 v) { *p++ = (UInt8)(v >> 8); *p++ = (UInt8)v; return p; }
@@ -50,16 +50,22 @@ static UInt32 CStrLen(const char *s, UInt32 max)
     return n;
 }
 
-static UInt8 *PutTrailer(UInt8 *p, UInt32 uid, UInt32 modified)
+static UInt8 *PutTrailer(UInt8 *p, UInt32 uid, UInt32 modified, UInt16 shift)
 {
     p = Put32(p, uid);
-    return Put32(p, modified);
+    p = Put32(p, modified);
+    return Put16(p, shift);
 }
-/* p points just past the record's own bytes; the trailer is there when 8 remain. */
-static void GetTrailer(const UInt8 *p, const UInt8 *end, UInt32 *uid, UInt32 *modified)
+/* p points just past the record's own bytes; uid and modified are there when 8
+ * remain, the clock shift when 10 (an rc6 to rc8 record has the first 8 only). */
+static void GetTrailer(const UInt8 *p, const UInt8 *end, UInt32 *uid, UInt32 *modified, UInt16 *shift)
 {
-    if (end - p >= recTrailerSize) { p = Get32(p, uid); Get32(p, modified); }
-    else { *uid = 0; *modified = 0; }
+    UInt16 s = recShiftUnknown;
+    if (end - p >= recTrailerCore) {
+        p = Get32(p, uid); p = Get32(p, modified);
+        if (end - p >= 2) Get16(p, &s);
+    } else { *uid = 0; *modified = 0; }
+    if (shift) *shift = s;
 }
 
 /* ---- fill ---- */
@@ -97,7 +103,7 @@ UInt32 FillPack(const FillRecord *r, UInt8 *buf)
     n = CStrLen(r->notes, fillMaxNotes);
     for (i = 0; i < n; i++) *p++ = (UInt8)r->notes[i];
     *p++ = 0;
-    p = PutTrailer(p, r->uid, r->modified);
+    p = PutTrailer(p, r->uid, r->modified, r->clockShift);
     return (UInt32)(p - buf);
 }
 
@@ -135,7 +141,7 @@ Int32 FillUnpack(const UInt8 *buf, UInt32 len, FillRecord *r)
     while (p < end && *p && n < fillMaxNotes - 1) r->notes[n++] = (char)*p++;
     r->notes[n] = 0;
     if (p < end && *p == 0) p++;
-    GetTrailer(p, end, &r->uid, &r->modified);
+    GetTrailer(p, end, &r->uid, &r->modified, &r->clockShift);
     return 0;
 }
 
@@ -167,7 +173,7 @@ UInt32 VehiclePack(const VehicleRecord *r, UInt8 *buf)
     p = Put8(p, r->fuelDefault);
     p = Put8(p, r->defaultCurrency);
     p = Put8(p, r->archived);
-    p = PutTrailer(p, r->uid, r->modified);
+    p = PutTrailer(p, r->uid, r->modified, recShiftUnknown);
     return (UInt32)(p - buf);
 }
 
@@ -187,7 +193,7 @@ Int32 VehicleUnpack(const UInt8 *buf, UInt32 len, VehicleRecord *r)
     p = Get8(p, &r->fuelDefault);
     p = Get8(p, &r->defaultCurrency);
     p = Get8(p, &r->archived);
-    GetTrailer(p, buf + len, &r->uid, &r->modified);
+    GetTrailer(p, buf + len, &r->uid, &r->modified, (UInt16 *)0);
     return 0;
 }
 
@@ -224,7 +230,7 @@ UInt32 ProgrammePack(const ProgrammeRecord *r, UInt8 *buf)
     n = CStrLen(r->aliases, pgmAliasLen);
     for (i = 0; i < n; i++) *p++ = (UInt8)r->aliases[i];
     *p++ = 0;
-    p = PutTrailer(p, r->uid, r->modified);
+    p = PutTrailer(p, r->uid, r->modified, recShiftUnknown);
     return (UInt32)(p - buf);
 }
 
@@ -256,7 +262,7 @@ Int32 ProgrammeUnpack(const UInt8 *buf, UInt32 len, ProgrammeRecord *r)
     while (p < end && *p && n < pgmAliasLen - 1) r->aliases[n++] = (char)*p++;
     r->aliases[n] = 0;
     if (p < end && *p == 0) p++;
-    GetTrailer(p, end, &r->uid, &r->modified);
+    GetTrailer(p, end, &r->uid, &r->modified, (UInt16 *)0);
     return 0;
 }
 
@@ -275,7 +281,7 @@ UInt32 ServiceTypePack(const ServiceTypeRecord *r, UInt8 *buf)
     p = Put8(p, r->alarm);
     p = Put8(p, r->archived);
     p = PutStr(p, r->defaultDetail, svtDetailLen);
-    p = PutTrailer(p, r->uid, r->modified);
+    p = PutTrailer(p, r->uid, r->modified, recShiftUnknown);
     return (UInt32)(p - buf);
 }
 
@@ -293,7 +299,7 @@ Int32 ServiceTypeUnpack(const UInt8 *buf, UInt32 len, ServiceTypeRecord *r)
     p = Get8(p, &r->alarm);
     p = Get8(p, &r->archived);
     p = GetStr(p, r->defaultDetail, svtDetailLen);
-    GetTrailer(p, buf + len, &r->uid, &r->modified);
+    GetTrailer(p, buf + len, &r->uid, &r->modified, (UInt16 *)0);
     return 0;
 }
 
@@ -322,7 +328,7 @@ UInt32 ServiceVisitPack(const ServiceVisitRecord *r, UInt8 *buf)
     n = CStrLen(r->notes, fillMaxNotes);
     for (i = 0; i < n; i++) *p++ = (UInt8)r->notes[i];
     *p++ = 0;
-    p = PutTrailer(p, r->uid, r->modified);
+    p = PutTrailer(p, r->uid, r->modified, r->clockShift);
     return (UInt32)(p - buf);
 }
 
@@ -346,7 +352,7 @@ Int32 ServiceVisitUnpack(const UInt8 *buf, UInt32 len, ServiceVisitRecord *r)
     while (p < end && *p && n < fillMaxNotes - 1) r->notes[n++] = (char)*p++;
     r->notes[n] = 0;
     if (p < end && *p == 0) p++;
-    GetTrailer(p, end, &r->uid, &r->modified);
+    GetTrailer(p, end, &r->uid, &r->modified, &r->clockShift);
     return 0;
 }
 
@@ -384,17 +390,25 @@ Int32 RecTrailerRead(UInt8 kind, const UInt8 *buf, UInt32 len, UInt32 *uid, UInt
 {
     Int32 pos = RecTrailerPos(kind, buf, len);
     *uid = 0; *modified = 0;
-    if (pos < 0 || len - (UInt32)pos < recTrailerSize) return 0;
+    if (pos < 0 || len - (UInt32)pos < recTrailerCore) return 0;
     Get32(buf + pos, uid);
     Get32(buf + pos + 4, modified);
     return 1;
 }
 
+/* Replaces uid and modified in place. A record with the short rc6 trailer keeps it
+ * short (the caller's buffer may end there); one with none gets the full trailer,
+ * its clock shift unknown. */
 UInt32 RecTrailerWrite(UInt8 kind, UInt8 *buf, UInt32 len, UInt32 uid, UInt32 modified)
 {
     Int32 pos = RecTrailerPos(kind, buf, len);
+    UInt32 have;
     if (pos < 0) return len;
-    PutTrailer(buf + pos, uid, modified);
+    have = len - (UInt32)pos;
+    Put32(Put32(buf + pos, uid), modified);
+    if (have >= recTrailerSize) return len;
+    if (have >= recTrailerCore) return (UInt32)pos + recTrailerCore;
+    Put16(buf + pos + recTrailerCore, recShiftUnknown);
     return (UInt32)pos + recTrailerSize;
 }
 

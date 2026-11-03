@@ -354,7 +354,7 @@ Int32 CsvRowToFill(const CsvMap *m, char *fields[], Int16 n, FillRecord *f, char
     UInt16 y = 0; UInt8 mo = 0, d = 0;
     for (k = 0; k < sizeof *f; k++) p[k] = 0;
     vehicleName[0] = 0; err[0] = 0;
-    f->time = fillTimeUnknown; f->fxRate = fxOne; f->flags = fillFlagFullTank;
+    f->time = fillTimeUnknown; f->fxRate = fxOne; f->flags = fillFlagFullTank; f->clockShift = recShiftUnknown;
 #define FIELD(i) ((i) >= 0 && (i) < n ? fields[i] : "")
     /* date: YYYY-MM-DD, MM/DD/YYYY or DD/MM/YYYY (first part > 12 means day first) */
     s = FIELD(m->date);

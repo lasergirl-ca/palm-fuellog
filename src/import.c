@@ -342,6 +342,7 @@ static Err Pass(UInt16 vol, Boolean write)
         }
         if (write) {
             if (IsDuplicate(&gImpFill)) { gImport.skipped++; continue; }
+            gImpFill.clockShift = AppClockShift();   /* dates read from a file are real */
             if (DbAddFill(&gImpFill, NULL) == errNone) gImport.written++;
         } else {
             if (vid && IsDuplicate(&gImpFill)) gImport.duplicates++; else gImport.ready++;

@@ -34,4 +34,13 @@ UInt32 DateEpochOffsetDays(UInt16 offsetYears) EXPORT_SEC;
  * every date when shift is 0, comes back unchanged. */
 UInt16 DateUnshift(UInt16 days, UInt16 deviceToday, UInt16 shift) EXPORT_SEC;
 
+/* A record's date is established once its trailer carries the clock shift it was
+ * saved under (dateShiftUnknown = never, a record from before rc9). The launch pass
+ * asks what to do with such a record: 1 = rewrite with *date and *shiftOut (moved
+ * forward when it sits in the device window of a shifted clock, or simply marked
+ * when it is no older than plausibleFrom), 0 = leave it, established or too old to
+ * judge. */
+#define dateShiftUnknown 0xFFFF
+Int32 DateEstablish(UInt16 clockShift, UInt16 *date, UInt16 deviceToday, UInt16 shift, UInt16 plausibleFrom, UInt16 *shiftOut) EXPORT_SEC;
+
 #endif

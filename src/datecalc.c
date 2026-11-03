@@ -84,6 +84,16 @@ UInt16 DateUnshift(UInt16 days, UInt16 deviceToday, UInt16 shift)
     return days;
 }
 
+Int32 DateEstablish(UInt16 clockShift, UInt16 *date, UInt16 deviceToday, UInt16 shift, UInt16 plausibleFrom, UInt16 *shiftOut)
+{
+    UInt16 d;
+    if (clockShift != dateShiftUnknown) return 0;
+    d = DateUnshift(*date, deviceToday, shift);
+    if (d != *date) { *date = d; *shiftOut = shift; return 1; }   /* a device-time date, moved */
+    if (*date >= plausibleFrom) { *shiftOut = shift; return 1; }   /* real already, now marked */
+    return 0;                                                       /* older than the app: not ours to guess */
+}
+
 UInt32 DateEpochOffsetDays(UInt16 offsetYears)
 {
     return (UInt32)(offsetYears / 4) * 1461UL;

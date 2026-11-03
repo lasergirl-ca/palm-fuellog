@@ -12,12 +12,18 @@
 
 #define recSchemaVersion 1
 
-/* Sync trailer: every record may end with 8 bytes, uid (random, never 0) and
- * modified (real seconds since 1904, 0 = unknown). It follows the fixed part
- * (vehicle, service type) or the terminating NUL (fill, programme, visit),
- * so a reader from before sync stops at the NUL and never sees it. Pack
- * always writes it; Unpack reads it when the bytes are there. */
-#define recTrailerSize 8
+/* Sync trailer: every record may end with 10 bytes, uid (random, never 0),
+ * modified (real seconds since 1904, 0 = unknown) and clockShift (the days
+ * the device clock was behind real time when the record's date was last
+ * established; 0xFFFF = never established, a record from before rc9). It
+ * follows the fixed part (vehicle, service type) or the terminating NUL
+ * (fill, programme, visit), so a reader from before sync stops at the NUL
+ * and never sees it. Pack always writes all 10; Unpack reads uid and
+ * modified when 8 bytes are there (rc6 to rc8 wrote 8) and clockShift when
+ * 10 are. Only fills and visits carry a date; the others write 0xFFFF. */
+#define recTrailerSize 10
+#define recTrailerCore 8          /* uid and modified: the part every trailer has */
+#define recShiftUnknown 0xFFFF    /* = dateShiftUnknown in datecalc.h */
 #define recKindFill 0            /* the database order of db.h */
 #define recKindVehicle 1
 #define recKindProgramme 2
@@ -74,6 +80,7 @@ typedef struct {
     char   notes[fillMaxNotes];
     UInt32 uid;
     UInt32 modified;
+    UInt16 clockShift;    /* see the trailer: recShiftUnknown until the date is established */
 } FillRecord;
 
 /* ---- Vehicle (FuelVeh-ZFlg, type Vehi) ---- */
@@ -203,6 +210,7 @@ typedef struct {
     char   notes[fillMaxNotes];
     UInt32 uid;
     UInt32 modified;
+    UInt16 clockShift;       /* see the trailer */
 } ServiceVisitRecord;
 
 /* ---- AppInfo block shared by all five databases ---- */

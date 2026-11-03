@@ -67,6 +67,7 @@ void AppClockInit(void)
 }
 
 UInt16 AppClockShift(void) { return gShiftDays; }
+UInt16 AppPlausibleFrom(void) { return DateYmdToDays(FUELLOG_BUILD_YEAR - 14, 1, 1); }
 Boolean AppClockIsDateFix(void) { return gDateFix; }
 
 UInt16 AppToday(void)
