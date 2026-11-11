@@ -704,6 +704,9 @@ BEGIN
     POPUPTRIGGER "Economy" ID GrKindTrigger AT (4 15 90 12) LEFTANCHOR
     LIST "Economy" "Price per fill" "Spend per month" ID GrKindList AT (4 15 90 33) NONUSABLE VISIBLEITEMS 3
     POPUPLIST ID GrKindTrigger GrKindList
+    POPUPTRIGGER "MPG (Imp)" ID GrUnitTrigger AT (96 15 62 12) RIGHTANCHOR
+    LIST "L/100 km" "km/L" "MPG (US)" "MPG (Imp)" ID GrUnitList AT (98 15 60 44) NONUSABLE VISIBLEITEMS 4
+    POPUPLIST ID GrUnitTrigger GrUnitList
     BUTTON "Done" ID GrDoneButton AT (4 146 36 12)
     BUTTON "Reports" ID GrReportsButton AT (46 146 44 12)
 END

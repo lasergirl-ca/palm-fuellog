@@ -146,7 +146,7 @@ The fill list is home base. Logging a fill-up takes one tap on New, and stats ar
 | Note | Lined note, 256 bytes, live byte count | Expands when the input area collapses | Edit Programme and Note |
 | Stats | Average economy and spend in large type, then label-value rows, then points balances | Fits one hi-res screen, no scrolling | Stats and Graphs |
 | Reports | Monthly/Yearly popup, year stepper, table with total row, splits by payment and currency | 5-way left/right changes the period | Reports and the Points dialog |
-| Graphs | Economy, price or spend; dashed mean; tap a point for date and value; Price and Spend buttons | Drawn at double density with `WinSetCoordinateSystem(kCoordinatesDouble)` | Stats and Graphs |
+| Graphs | Economy, price or spend; dashed mean; tap a point for date and value; a unit popup on the economy graph (it sets the Prefs economy unit); Price and Spend buttons | Drawn at double density with `WinSetCoordinateSystem(kCoordinatesDouble)` | Stats and Graphs |
 | Service | Services sorted by urgency, due date with an explanation line, Overdue/Soon/OK chips, last visit, alarm date; Log, History | Status is a word in a chip, never colour alone | Service and Log service |
 | Log service | Date, odometer from last fill, checklist of services done plus an Other box with free text, cost, currency, Cash/Card, shop, detail, next-due preview | One visit covers several services | Service and Log service |
 | Service history | Longest gap, average gap, total spent; visits with gap in km and months; over-limit visit highlighted | Opened from Service | Service history and Service Type |

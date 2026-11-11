@@ -325,6 +325,8 @@
 #define GrKindList           3104
 #define GrDoneButton         3105
 #define GrReportsButton      3106
+#define GrUnitTrigger        3107
+#define GrUnitList           3108
 
 #define MenuExport           1406
 #define ExportForm           3200

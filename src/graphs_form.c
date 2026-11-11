@@ -49,6 +49,9 @@ static void SeriesColour(UInt8 s) RPT_SEC;
 static void DrawGraph(void) RPT_SEC;
 static void LayoutGraph(FormType *form) RPT_SEC;
 static void BuildGrPopup(FormType *form) RPT_SEC;
+static void UnitRefresh(FormType *form, Boolean drawn) RPT_SEC;
+
+static Boolean gGrElectric;                   /* the economy graph of one electric car: kWh/100 km, no choice */
 
 static UInt8 SeriesFor(UInt8 vehicle)
 {
@@ -195,6 +198,8 @@ static void DrawGraph(void)
     gGrPlot.topLeft.x = 30; gGrPlot.topLeft.y = (Coord)(gGrSeriesCount > 1 ? 40 : 30);
     gGrPlot.extent.x = 118; gGrPlot.extent.y = (Coord)(h - 17 - 24 - gGrPlot.topLeft.y);
     FntSetFont(stdFont);
+    if (gGrKind == grEconomy && gGrElectric)      /* where the unit popup sits for a fuel car */
+        WinDrawChars("kWh/100 km", 10, (Coord)(158 - FntCharsWidth("kWh/100 km", 10)), 15);
     if (gGrN < (gGrKind == grEconomy ? 1 : 1)) {
         WinDrawChars("Nothing to plot yet.", 20, 30, 60);
         if (gGrKind == grEconomy) WinDrawChars("Economy needs two full fills.", 29, 14, 72);
@@ -317,6 +322,26 @@ static void BuildGrPopup(FormType *form)
     CtlSetLabel(FrmGetObjectPtr(form, FrmGetObjectIndex(form, GrVehicleTrigger)), gGVNames[sel]);
 }
 
+/* The economy graph says its unit and lets it be changed: the popup shows and sets the
+ * Prefs economy unit, so Stats and the list follow. It is hidden for price and spend, and
+ * for one electric car, whose graph is always kWh/100 km. */
+static void UnitRefresh(FormType *form, Boolean drawn)
+{
+    UInt16 trig = FrmGetObjectIndex(form, GrUnitTrigger);
+    UInt8 unit = gPrefs.economyUnit < 4 ? gPrefs.economyUnit : unitEcoL100km;
+    gGrElectric = gPrefs.currentVehicle != 255 && VehGet(gPrefs.currentVehicle, &gGrVeh) && gGrVeh.powertrain == vehPowerElectric;
+    FrmHideObject(form, trig);
+    if (drawn) {
+        RectangleType r;
+        r.topLeft.x = 96; r.topLeft.y = 15; r.extent.x = 64; r.extent.y = 12;
+        WinEraseRectangle(&r, 0);
+    }
+    if (gGrKind != grEconomy || gGrElectric) return;
+    LstSetSelection(FrmGetObjectPtr(form, FrmGetObjectIndex(form, GrUnitList)), unit);
+    CtlSetLabel(FrmGetObjectPtr(form, trig), UnitEcoLabel(unit));
+    FrmShowObject(form, trig);
+}
+
 Boolean GraphsFormHandleEvent(EventType *event)
 {
     FormType *form = FrmGetActiveForm();
@@ -329,6 +354,7 @@ Boolean GraphsFormHandleEvent(EventType *event)
             LstSetSelection(lst, gGrKind);
             CtlSetLabel(FrmGetObjectPtr(form, FrmGetObjectIndex(form, GrKindTrigger)), LstGetSelectionText(lst, gGrKind));
         }
+        UnitRefresh(form, false);
         Collect();
         FrmDrawForm(form);
         DrawGraph();
@@ -353,13 +379,22 @@ Boolean GraphsFormHandleEvent(EventType *event)
         if (event->data.popSelect.listID == GrVehicleList) {
             gPrefs.currentVehicle = gGVIds[event->data.popSelect.selection];
             CtlSetLabel(FrmGetObjectPtr(form, FrmGetObjectIndex(form, GrVehicleTrigger)), gGVNames[event->data.popSelect.selection]);
+            UnitRefresh(form, true);
             Collect(); DrawGraph();
             return true;
         }
         if (event->data.popSelect.listID == GrKindList) {
             gGrKind = (UInt8)event->data.popSelect.selection;
+            UnitRefresh(form, true);
             Collect(); DrawGraph();
             break;
+        }
+        if (event->data.popSelect.listID == GrUnitList) {
+            gPrefs.economyUnit = (UInt8)event->data.popSelect.selection;   /* the list is in unitEco* order */
+            gGrSelected = -1;
+            UnitRefresh(form, true);
+            Collect(); DrawGraph();
+            return true;
         }
         break;
     case ctlSelectEvent:
