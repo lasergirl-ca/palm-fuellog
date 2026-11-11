@@ -89,7 +89,7 @@ int main(void)
         check("USD rate from table", CurrencyDefaultRate(curUSD, curCAD, rates), 1360000);
         check("AUD unset rate is the built-in one", CurrencyDefaultRate(curAUD, curCAD, rates), CurrencyBuiltInRate(curAUD, curCAD));
         check("built-in rate is a real number", CurrencyBuiltInRate(curNZD, curCAD) > 100000 && CurrencyBuiltInRate(curNZD, curCAD) < 10000000, 1);
-        check("built-in rate is symmetric to 1 in 1e4", labs((long)(CalcMulDiv(CurrencyBuiltInRate(curNZD, curCAD), CurrencyBuiltInRate(curCAD, curNZD), 1000000) - 1000000)) < 100, 1);
+        check("built-in rate is symmetric to 1 in 1e4", labs((long)CalcMulDiv(CurrencyBuiltInRate(curNZD, curCAD), CurrencyBuiltInRate(curCAD, curNZD), 1000000) - 1000000L) < 100, 1);
         check("NZD code", strcmp(CurrencyCode(curNZD), "NZD"), 0);
         check("GBP code", strcmp(CurrencyCode(curGBP), "GBP"), 0);
         check("GBP symbol is the Palm Latin pound", (unsigned char)CurrencySymbol(curGBP)[0], 0xA3);
