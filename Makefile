@@ -99,6 +99,7 @@ test: $(BUILD)
 	python3 -I tools/check_xlsx.py $(BUILD)/out/fuellog-seek.xlsx $(BUILD)/out/fuellog-stream.xlsx
 	$(HOSTCC) -Wall -Wextra -O2 -o $(BUILD)/test_inflate tests/test_inflate.c src/inflate.c src/zipread.c src/crc32.c
 	python3 -I tools/check_inflate.py $(BUILD)/test_inflate $(BUILD)/inflate $(INFLATE_EXTRA)
+	$(MAKE) -s -C ppc host-test HOSTCC="$(HOSTCC)"
 
 check: $(APP).prc
 	python3 -I tools/prcinfo.py $(APP).prc --expect-code 12

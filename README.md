@@ -22,6 +22,9 @@ The design lives in the live doc (link in `docs/README.md`); `docs/` holds the
 export, the mock-ups, the paper form, the spike write-ups and one file per
 milestone (`M1.md` to `M9.md`) with what was built and what to check on the device.
 
+A Pocket PC version for Windows Mobile 5 and 6, on the same core and the same data files,
+is under way in `ppc/` (see `ppc/README.md`).
+
 Current state: `v1.0-rc10`. Everything builds and passes the host tests; the M5 to M8
 features are waiting on their device pass (see the end of `docs/M8.md`).
 

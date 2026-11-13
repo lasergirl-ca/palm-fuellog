@@ -8,7 +8,7 @@ LDFLAGS = -Wl,--subsystem,wince
 OUT = build/out
 OBJ = build/obj
 
-all: $(OUT)/hello.exe $(OUT)/coretest.exe
+all: $(OUT)/hello.exe $(OUT)/coretest.exe $(OUT)/FuelLog.exe
 
 $(OUT)/hello.exe: hello/hello.c
 	@mkdir -p $(OUT)
@@ -36,7 +36,48 @@ $(OUT)/coretest.exe: coretest/coretest.c coretest/ct.h $(SUITE_OBJS) $(CORE_OBJS
 	$(CC) $(CFLAGS) -std=gnu99 $(LDFLAGS) -Wl,--stack,0x40000 -o $@ coretest/coretest.c $(SUITE_OBJS) $(CORE_OBJS) -lcoredll
 	$(STRIP) $@
 
+# FuelLog for Pocket PC: the window (app/main.c) over the fill list model, the
+# .pdb store and the shared core.
+APP_CORE = calc records presets units currency prefs text datecalc
+APP_OBJS = $(OBJ)/app_main.o $(OBJ)/app_fillview.o $(OBJ)/store_pdbfile.o $(OBJ)/store_db.o $(OBJ)/app_rc.o $(APP_CORE:%=$(OBJ)/%.o)
+
+# _WIN32_IE: the CE headers hide the list view's owner-data and full-row styles
+# and InitCommonControlsEx below 0x0500.
+$(OBJ)/app_%.o: app/%.c app/fillview.h store/db.h store/pdbfile.h
+	@mkdir -p $(OBJ)
+	$(CC) $(CFLAGS) -D_WIN32_IE=0x0500 -Wextra -std=gnu99 -c -o $@ $<
+
+$(OBJ)/store_%.o: store/%.c store/db.h store/pdbfile.h
+	@mkdir -p $(OBJ)
+	$(CC) $(CFLAGS) -Wextra -std=gnu99 -c -o $@ $<
+
+$(OBJ)/app_rc.o: app/app.rc
+	@mkdir -p $(OBJ)
+	arm-mingw32ce-windres -D_WIN32_WCE=0x0501 -o $@ $<
+
+$(OUT)/FuelLog.exe: $(APP_OBJS)
+	@mkdir -p $(OUT)
+	$(CC) $(LDFLAGS) -Wl,--stack,0x40000 -o $@ $(APP_OBJS) -laygshell -lcommctrl -lcoredll
+	$(STRIP) $@
+
 clean:
 	rm -rf build
 
 .PHONY: all clean
+
+# Host tests for the parts of the Pocket PC build that are plain C: the .pdb
+# store and the fill list model, against the fixture set tools/mkpdb writes.
+# Run on the Mac (make -C ppc host-test), not in the box.
+HOSTCC ?= cc
+HOST = build/host
+SHARED = ../src/records.c ../src/calc.c ../src/units.c ../src/currency.c ../src/text.c ../src/datecalc.c ../src/prefs.c ../src/presets.c
+
+host-test:
+	@mkdir -p $(HOST)
+	$(HOSTCC) -Wall -o $(HOST)/mkpdb ../tools/mkpdb/mkpdb.c ../src/records.c ../src/datecalc.c
+	@rm -rf $(HOST)/pdb $(HOST)/work && mkdir -p $(HOST)/pdb && $(HOST)/mkpdb $(HOST)/pdb >/dev/null && cp -R $(HOST)/pdb $(HOST)/work
+	$(HOSTCC) -Wall -Wextra -o $(HOST)/test_store tests/test_store.c store/pdbfile.c store/db.c app/fillview.c $(SHARED)
+	$(HOST)/test_store $(HOST)/pdb $(HOST)/work
+	@if command -v go >/dev/null; then (cd ../tools/fuellogdump && go build -o ../../ppc/$(HOST)/fuellogdump .) && $(HOST)/fuellogdump dump $(HOST)/work | diff - ../tests/expected_dump.csv && echo "ok   Go reader reads the set the store wrote"; else echo "skip Go reader (go not installed)"; fi
+
+.PHONY: host-test

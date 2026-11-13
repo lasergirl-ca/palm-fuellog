@@ -58,7 +58,7 @@ Not in the self-test: the four suites that read fixture files (`inflate`, `xlsxr
 | Device | hello | coretest |
 |---|---|---|
 | Windows Mobile 5 | Windows CE 5.1 build 1702, screen 240 x 320, 57,944 KB memory with 36,880 KB free | 12 of 12 suites, 457 checks, 0 failures |
-| Windows Mobile 6 | not run | 12 of 12 suites, 457 checks, 0 failures |
+| Windows Mobile 6 | Windows CE 5.2 build 1239, screen 240 x 320, 54,632 KB memory with 29,356 KB free | 12 of 12 suites, 457 checks, 0 failures |
 
 The two `coretest.txt` files are byte-identical. Against the same twelve suites run on the
 Mac, all 481 lines match; six differ only in how a value above 2^31 prints through a

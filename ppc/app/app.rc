@@ -1,0 +1,4 @@
+/* Resources of FuelLog for Pocket PC. HI_RES_AWARE tells a VGA device not
+ * to pixel-double the window: the app scales its own layout by the screen's
+ * dots per inch. */
+HI_RES_AWARE CEUX { 1 }
