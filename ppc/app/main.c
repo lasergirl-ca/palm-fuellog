@@ -13,12 +13,15 @@
 #include "vehedit.h"
 #include "pgmedit.h"
 #include "settings.h"
+#include "textview.h"
+#include "graphview.h"
+#include "../../src/report.h"
 #include "../store/db.h"
 #include "../../src/datecalc.h"
 #include "../../src/units.h"
 #include "../../src/currency.h"
 
-#define kVersion "0.4"
+#define kVersion "0.5"
 #define kClass L"FuelLogPPC"
 #define kFormClass L"FuelLogForm"
 #define kSheetClass L"FuelLogSheet"
@@ -29,7 +32,9 @@
 
 enum { IDC_VEHICLE = 100, IDC_LIST, IDC_AVG, IDC_MONTH, IDC_EMPTY, IDC_VEHLIST, IDC_VEHARCH, IDC_PGMLIST };
 enum { IDM_ABOUT = 200, IDM_PALM, IDM_EXIT, IDM_NEW, IDM_SAVE, IDM_CANCEL, IDM_DELETE, IDM_DONE, IDM_VEHICLES, IDM_PREFS,
-       IDM_PROGRAMMES, IDM_OK, IDM_ARCHIVE };
+       IDM_PROGRAMMES, IDM_OK, IDM_ARCHIVE, IDM_STATS, IDM_REPORTS, IDM_GRAPHS };
+/* The Reports and Graphs pages' pickers. */
+enum { IDR_MODE = 600, IDR_PREV, IDR_LABEL, IDR_NEXT, IDR_FROM, IDR_TO, IDG_KIND, IDG_UNIT, IDG_UNITTEXT };
 /* The form's controls, in the order they are laid out. */
 enum { IDF_LVEH = 300, IDF_VEH, IDF_DATE, IDF_TIME, IDF_LODO, IDF_ODO, IDF_ODOHINT, IDF_LTRIP, IDF_TRIP, IDF_TRIPHINT,
        IDF_LVOL, IDF_VOL, IDF_UNIT, IDF_LPRICE, IDF_PRICE, IDF_CALC, IDF_LTOTAL, IDF_TOTAL, IDF_CUR,
@@ -43,7 +48,10 @@ enum { IDE_NAME = 440, IDE_CUR, IDE_MONEY, IDE_EARN, IDE_BASIS, IDE_PREM, IDE_PA
 /* The Points page: four ids per row (programme, earned, redeemed, hint), then Add and the total. */
 #define IDT_ROW(i) (500 + 4 * (i))
 enum { IDT_ADD = 520, IDT_TOTAL };
-enum { pageList, pageForm, pagePrefs, pageVehicles, pageVehicle, pagePoints, pageProgrammes, pageProgramme };
+enum { pageList, pageForm, pagePrefs, pageVehicles, pageVehicle, pagePoints, pageProgrammes, pageProgramme,
+       pageStats, pageReports, pageGraphs };
+#define kTextClass L"FuelLogText"
+#define kGraphClass L"FuelLogGraph"
 #define WM_SHOWPAGE (WM_APP + 1)     /* posted, so a menu bar is never replaced inside its own command */
 
 #define kMaxRows 4096
@@ -51,6 +59,16 @@ enum { pageList, pageForm, pagePrefs, pageVehicles, pageVehicle, pagePoints, pag
 
 static HINSTANCE gInst;
 static HWND gWin, gMenuBar, gVehicle, gList, gAvg, gMonth, gEmpty, gForm, gVehList, gVehArch, gPgmList;
+/* Stats, Reports and Graphs. */
+static HWND gTextPanel, gGraph, gRptMode, gRptPrev, gRptLabel, gRptNext, gRptFrom, gRptTo, gGrKind, gGrUnit, gGrUnitText;
+static HFONT gFontBold, gFontLarge;
+static TextLine gLines[tvMaxLines];
+static UInt16 gLineCount;
+static int gTextScroll, gTextHeight;
+static ReportPeriod gRptPeriod;
+static GraphData gGraphData;
+static UInt8 gGraphKind;
+static Int16 gGraphSel = -1;
 static SHACTIVATEINFO gSai;
 static int gDpi = 96, gPage = pageList, gDataOk;
 static FuelPrefs gPrefs;
@@ -283,6 +301,21 @@ static void Layout(void)
     MoveWindow(gPgmSheet.panel, 0, 0, w, h, TRUE);
     MoveWindow(gPtsSheet.panel, 0, 0, w, h, TRUE);
     MoveWindow(gPgmList, 0, 0, w, h, TRUE);
+    /* Stats under the vehicle picker; Reports and Graphs have a second row of pickers. */
+    {
+        int row2 = S(26), top2 = S(50);
+        MoveWindow(gTextPanel, 0, gPage == pageStats ? top : top2, w, h - (gPage == pageStats ? top : top2), TRUE);
+        MoveWindow(gGraph, 0, top2, w, h - top2, TRUE);
+        MoveWindow(gRptMode, S(2), row2, S(74), S(100), TRUE);
+        MoveWindow(gRptPrev, S(80), row2, S(24), S(20), TRUE);
+        MoveWindow(gRptLabel, S(106), row2 + S(3), w - S(136), S(16), TRUE);
+        MoveWindow(gRptNext, w - S(28), row2, S(24), S(20), TRUE);
+        MoveWindow(gRptFrom, S(80), row2, (w - S(84)) / 2 - S(1), S(20), TRUE);
+        MoveWindow(gRptTo, S(80) + (w - S(84)) / 2 + S(1), row2, (w - S(84)) / 2 - S(1), S(20), TRUE);
+        MoveWindow(gGrKind, S(2), row2, S(118), S(100), TRUE);
+        MoveWindow(gGrUnit, S(124), row2, w - S(128), S(100), TRUE);
+        MoveWindow(gGrUnitText, S(124), row2 + S(3), w - S(128), S(16), TRUE);
+    }
 }
 
 /* ---- the form: New Fill and Edit Fill ---- */
@@ -1342,6 +1375,476 @@ static void PtsClose(int ok)
     PostMessageW(gWin, WM_SHOWPAGE, pageForm, 0);
 }
 
+/* ---- Stats and Reports: lines of text, painted ---- */
+
+static int LineHeight(UInt8 style)
+{
+    if (style == tvHeadline) return S(24);
+    if (style == tvRule) return S(7);
+    return S(15);
+}
+
+static void TextScrollBar(void)
+{
+    RECT r;
+    SCROLLINFO si;
+    GetClientRect(gTextPanel, &r);
+    if (gTextScroll > gTextHeight - r.bottom) gTextScroll = gTextHeight - r.bottom;
+    if (gTextScroll < 0) gTextScroll = 0;
+    memset(&si, 0, sizeof si);
+    si.cbSize = sizeof si;
+    si.fMask = SIF_RANGE | SIF_PAGE | SIF_POS;
+    si.nMax = gTextHeight - 1;
+    si.nPage = (UINT)r.bottom;
+    si.nPos = gTextScroll;
+    SetScrollInfo(gTextPanel, SB_VERT, &si, TRUE);
+}
+
+static void DrawCell(HDC dc, const char *s, int left, int right, int top, int h, UINT align)
+{
+    WCHAR w[tvText + 2];
+    RECT rc;
+    if (!s[0]) return;
+    ToWide(s, w, tvText + 2);
+    rc.left = left; rc.right = right; rc.top = top; rc.bottom = top + h;
+    DrawTextW(dc, w, -1, &rc, align | DT_SINGLELINE | DT_VCENTER | DT_NOPREFIX);
+}
+
+static void TextPaint(HDC dc, int W, int H)
+{
+    static const int edge[4] = { 44, 78, 118, 150 };     /* the Palm report's right edges, of 160 */
+    RECT all;
+    HFONT normal = (HFONT)GetStockObject(SYSTEM_FONT), old;
+    int y = -gTextScroll, i, c;
+    all.left = 0; all.top = 0; all.right = W; all.bottom = H;
+    FillRect(dc, &all, (HBRUSH)GetStockObject(WHITE_BRUSH));
+    SetBkMode(dc, TRANSPARENT);
+    SetTextColor(dc, RGB(0, 0, 0));
+    old = (HFONT)SelectObject(dc, normal);
+    for (i = 0; i < gLineCount; i++) {
+        const TextLine *l = &gLines[i];
+        int h = LineHeight(l->style);
+        if (y + h > 0 && y < H) {
+            switch (l->style) {
+            case tvHeadline:
+                SelectObject(dc, gFontLarge ? gFontLarge : normal);
+                DrawCell(dc, l->cell[0], S(4), W - S(6), y, h, DT_LEFT);
+                DrawCell(dc, l->cell[1], S(4), W - S(6), y, h, DT_RIGHT);
+                break;
+            case tvRule: {
+                HPEN pen = CreatePen(PS_SOLID, 1, RGB(0x99, 0x99, 0x99)), op = (HPEN)SelectObject(dc, pen);
+                POINT pt[2];
+                pt[0].x = S(4); pt[0].y = y + h / 2; pt[1].x = W - S(6); pt[1].y = y + h / 2;
+                Polyline(dc, pt, 2);
+                SelectObject(dc, op);
+                DeleteObject(pen);
+                break;
+            }
+            case tvHeading:
+                SelectObject(dc, gFontBold ? gFontBold : normal);
+                DrawCell(dc, l->cell[0], S(4), W - S(6), y, h, DT_LEFT);
+                break;
+            case tvTable: case tvTableBold:
+                SelectObject(dc, l->style == tvTableBold && gFontBold ? gFontBold : normal);
+                DrawCell(dc, l->cell[0], S(4), W, y, h, DT_LEFT);
+                for (c = 1; c < tvCells; c++) DrawCell(dc, l->cell[c], 0, (W - S(2)) * edge[c - 1] / 160, y, h, DT_RIGHT);
+                break;
+            case tvNote:
+                SelectObject(dc, normal);
+                DrawCell(dc, l->cell[0], S(4), W - S(4), y, h, DT_LEFT);
+                break;
+            default:                                    /* tvRow, tvCaption */
+                SelectObject(dc, normal);
+                DrawCell(dc, l->cell[0], S(4), W - S(6), y, h, DT_LEFT);
+                DrawCell(dc, l->cell[1], S(4), W - S(6), y, h, DT_RIGHT);
+                break;
+            }
+        }
+        y += h;
+    }
+    SelectObject(dc, old);
+}
+
+/* Paint into a bitmap first, so scrolling does not flicker. */
+static void PaintBuffered(HWND h, void (*paint)(HDC, int, int))
+{
+    PAINTSTRUCT ps;
+    RECT r;
+    HDC dc = BeginPaint(h, &ps), mem;
+    HBITMAP bmp, ob;
+    GetClientRect(h, &r);
+    mem = CreateCompatibleDC(dc);
+    bmp = mem ? CreateCompatibleBitmap(dc, r.right, r.bottom) : NULL;
+    if (mem && bmp) {
+        ob = (HBITMAP)SelectObject(mem, bmp);
+        paint(mem, r.right, r.bottom);
+        BitBlt(dc, 0, 0, r.right, r.bottom, mem, 0, 0, SRCCOPY);
+        SelectObject(mem, ob);
+    } else {
+        paint(dc, r.right, r.bottom);
+    }
+    if (bmp) DeleteObject(bmp);
+    if (mem) DeleteDC(mem);
+    EndPaint(h, &ps);
+}
+
+static LRESULT CALLBACK TextProc(HWND h, UINT m, WPARAM w, LPARAM l)
+{
+    switch (m) {
+    case WM_PAINT: PaintBuffered(h, TextPaint); return 0;
+    case WM_ERASEBKGND: return 1;
+    case WM_SIZE: TextScrollBar(); return 0;
+    case WM_VSCROLL: {
+        RECT r;
+        GetClientRect(h, &r);
+        switch (LOWORD(w)) {
+        case SB_LINEUP: gTextScroll -= S(15); break;
+        case SB_LINEDOWN: gTextScroll += S(15); break;
+        case SB_PAGEUP: gTextScroll -= r.bottom - S(15); break;
+        case SB_PAGEDOWN: gTextScroll += r.bottom - S(15); break;
+        case SB_THUMBTRACK: case SB_THUMBPOSITION: gTextScroll = HIWORD(w); break;
+        default: return 0;
+        }
+        TextScrollBar();
+        InvalidateRect(h, NULL, FALSE);
+        return 0;
+    }
+    case WM_KEYDOWN:
+        if (w == VK_DOWN || w == VK_UP) { SendMessageW(h, WM_VSCROLL, w == VK_DOWN ? SB_LINEDOWN : SB_LINEUP, 0); return 0; }
+        break;
+    }
+    return DefWindowProcW(h, m, w, l);
+}
+
+/* The Reports page's period pickers from gRptPeriod. */
+static void ReportControls(void)
+{
+    char b[16];
+    WCHAR w[16];
+    SYSTEMTIME st;
+    UInt16 y; UInt8 mo, d;
+    int range = gRptPeriod.mode == rptRange, show = gPage == pageReports;
+    SendMessageW(gRptMode, CB_SETCURSEL, gRptPeriod.mode, 0);
+    ReportViewPeriodText(&gRptPeriod, b);
+    ToWide(b, w, 16);
+    SetWindowTextW(gRptLabel, w);
+    ShowWindow(gRptMode, show ? SW_SHOW : SW_HIDE);
+    ShowWindow(gRptPrev, show && !range ? SW_SHOW : SW_HIDE);
+    ShowWindow(gRptLabel, show && !range ? SW_SHOW : SW_HIDE);
+    ShowWindow(gRptNext, show && !range ? SW_SHOW : SW_HIDE);
+    ShowWindow(gRptFrom, show && range ? SW_SHOW : SW_HIDE);
+    ShowWindow(gRptTo, show && range ? SW_SHOW : SW_HIDE);
+    if (range) {
+        memset(&st, 0, sizeof st);
+        DateDaysToYmd(gRptPeriod.from, &y, &mo, &d);
+        st.wYear = y; st.wMonth = mo; st.wDay = d;
+        SendMessageW(gRptFrom, DTM_SETSYSTEMTIME, GDT_VALID, (LPARAM)&st);
+        DateDaysToYmd(gRptPeriod.to, &y, &mo, &d);
+        st.wYear = y; st.wMonth = mo; st.wDay = d;
+        SendMessageW(gRptTo, DTM_SETSYSTEMTIME, GDT_VALID, (LPARAM)&st);
+    }
+}
+
+/* ---- Graphs ---- */
+
+static const COLORREF kSeriesColour[gvSeries] = {
+    RGB(0x00, 0x55, 0xCC), RGB(0xCC, 0x33, 0x00), RGB(0x00, 0x88, 0x33), RGB(0x88, 0x33, 0xAA),
+    RGB(0xCC, 0x88, 0x00), RGB(0x00, 0x88, 0x88), RGB(0x66, 0x66, 0x66), RGB(0x00, 0x00, 0x00)
+};
+
+/* The plot area inside the graph page, and the mapping to it. */
+static RECT gPlot;
+static int gLo, gHi;      /* the y range with a tenth's margin either side */
+static Int32 gPx[gvMax], gPy[gvMax];
+
+static int PX(Int32 x)
+{
+    const GraphData *g = &gGraphData;
+    return gPlot.left + (int)((long long)(x - g->xmin) * (gPlot.right - gPlot.left) / (g->xmax - g->xmin));
+}
+static int PY(Int32 y)
+{
+    long long span = (long long)gHi - gLo;
+    if (span <= 0) span = 1;
+    return gPlot.bottom - (int)(((long long)y - gLo) * (gPlot.bottom - gPlot.top) / span);
+}
+
+static void GraphLayout(int W, int H)
+{
+    const GraphData *g = &gGraphData;
+    UInt16 k;
+    gPlot.left = S(38); gPlot.right = W - S(8);
+    gPlot.top = S(g->seriesCount > 1 ? 22 : 8);
+    gPlot.bottom = H - S(48);
+    gLo = g->min - (g->max - g->min) / 10; gHi = g->max + (g->max - g->min) / 10;
+    if (gHi == gLo) gHi = gLo + 1;
+    for (k = 0; k < g->n; k++) { gPx[k] = PX(g->x[k]); gPy[k] = PY(g->y[k]); }
+}
+
+static void GText(HDC dc, const char *s, int x, int y, UINT align)
+{
+    WCHAR w[64];
+    RECT rc;
+    ToWide(s, w, 64);
+    rc.left = align == DT_RIGHT ? 0 : x; rc.right = align == DT_RIGHT ? x : x + S(200);
+    rc.top = y; rc.bottom = y + S(14);
+    DrawTextW(dc, w, -1, &rc, align | DT_SINGLELINE | DT_NOPREFIX | DT_NOCLIP);
+}
+
+static void GraphPaint(HDC dc, int W, int H)
+{
+    const GraphData *g = &gGraphData;
+    RECT all;
+    HFONT normal = (HFONT)GetStockObject(SYSTEM_FONT), old;
+    HPEN axis, dash, op;
+    char b[64];
+    UInt16 k;
+    UInt8 s;
+    int tick;
+
+    all.left = 0; all.top = 0; all.right = W; all.bottom = H;
+    FillRect(dc, &all, (HBRUSH)GetStockObject(WHITE_BRUSH));
+    SetBkMode(dc, TRANSPARENT);
+    SetTextColor(dc, RGB(0, 0, 0));
+    old = (HFONT)SelectObject(dc, normal);
+    GraphLayout(W, H);
+    if (!g->n) {
+        GText(dc, "Nothing to plot yet.", S(30), S(40), DT_LEFT);
+        if (g->kind == gvEconomy) GText(dc, "Economy needs two full fills.", S(14), S(56), DT_LEFT);
+        SelectObject(dc, old);
+        return;
+    }
+    /* legend under All vehicles */
+    if (g->seriesCount > 1) {
+        int x = S(4);
+        for (s = 0; s < g->seriesCount && x < W - S(20); s++) {
+            HBRUSH br = CreateSolidBrush(kSeriesColour[s]);
+            RECT sw;
+            char name[10];
+            SIZE sz;
+            WCHAR w[12];
+            sw.left = x; sw.top = S(4); sw.right = x + S(7); sw.bottom = S(11);
+            FillRect(dc, &sw, br);
+            DeleteObject(br);
+            strncpy(name, g->seriesName[s], 9); name[9] = 0;
+            GText(dc, name, x + S(10), S(1), DT_LEFT);
+            ToWide(name, w, 12);
+            GetTextExtentPoint32W(dc, w, (int)wcslen(w), &sz);
+            x += S(10) + sz.cx + S(8);
+        }
+    }
+    /* axes and the dashed mean */
+    axis = CreatePen(PS_SOLID, 1, RGB(0x66, 0x66, 0x66));
+    dash = CreatePen(PS_DASH, 1, RGB(0x99, 0x99, 0x99));
+    op = (HPEN)SelectObject(dc, axis);
+    {
+        POINT pt[3];
+        pt[0].x = gPlot.left; pt[0].y = gPlot.top; pt[1].x = gPlot.left; pt[1].y = gPlot.bottom;
+        pt[2].x = gPlot.right; pt[2].y = gPlot.bottom;
+        Polyline(dc, pt, 3);
+        SelectObject(dc, dash);
+        pt[0].x = gPlot.left; pt[0].y = PY(g->mean); pt[1].x = gPlot.right; pt[1].y = pt[0].y;
+        Polyline(dc, pt, 2);
+    }
+    SelectObject(dc, op);
+    DeleteObject(axis);
+    DeleteObject(dash);
+    /* lines and dots per series */
+    for (s = 0; s < (g->seriesCount ? g->seriesCount : 1); s++) {
+        COLORREF col = g->seriesCount > 1 ? kSeriesColour[s] : kSeriesColour[0];
+        HPEN pen = CreatePen(PS_SOLID, S(1) < 1 ? 1 : S(1), col);
+        HBRUSH br = CreateSolidBrush(col);
+        POINT prev;
+        int have = 0;
+        op = (HPEN)SelectObject(dc, pen);
+        for (k = 0; k < g->n; k++) {
+            RECT dot;
+            if (g->s[k] != s) continue;
+            if (have) {
+                POINT pt[2];
+                pt[0] = prev; pt[1].x = gPx[k]; pt[1].y = gPy[k];
+                Polyline(dc, pt, 2);
+            }
+            dot.left = gPx[k] - S(2); dot.top = gPy[k] - S(2); dot.right = gPx[k] + S(3); dot.bottom = gPy[k] + S(3);
+            FillRect(dc, &dot, br);
+            prev.x = gPx[k]; prev.y = gPy[k]; have = 1;
+        }
+        SelectObject(dc, op);
+        DeleteObject(pen);
+        DeleteObject(br);
+    }
+    /* y labels: max, min, and the mean in bold, at the left */
+    tick = S(7);
+    GraphViewValueText(g, &gPrefs, g->max, gPoint, b); GText(dc, b, gPlot.left - S(3), PY(g->max) - tick, DT_RIGHT);
+    GraphViewValueText(g, &gPrefs, g->min, gPoint, b); GText(dc, b, gPlot.left - S(3), PY(g->min) - tick, DT_RIGHT);
+    if (gFontBold) SelectObject(dc, gFontBold);
+    GraphViewValueText(g, &gPrefs, g->mean, gPoint, b); GText(dc, b, gPlot.left - S(3), PY(g->mean) - tick, DT_RIGHT);
+    SelectObject(dc, normal);
+    /* x labels: months along the bottom */
+    {
+        Int32 at[gvLabels];
+        char text[gvLabels][12];
+        UInt8 i, n = GraphViewXLabels(g, at, text);
+        for (i = 0; i < n; i++) {
+            int x = PX(at[i]);
+            /* Under a month of data the labels are the first and last dates ("Aug 10"): the last ends at its point. */
+            if (n == 2 && i == 1 && g->kind != gvSpend && text[1][3] == ' ') GText(dc, text[i], x, gPlot.bottom + S(3), DT_RIGHT);
+            else GText(dc, text[i], x - S(8) < 0 ? 0 : x - S(8), gPlot.bottom + S(3), DT_LEFT);
+        }
+    }
+    /* the summary, then the selected point's callout or the hint */
+    GraphViewSummary(g, &gPrefs, gPoint, b);
+    GText(dc, b, S(4), H - S(32), DT_LEFT);
+    if (gGraphSel >= 0 && gGraphSel < (Int16)g->n) {
+        WCHAR w[48];
+        SIZE sz;
+        RECT box;
+        HPEN frame = CreatePen(PS_SOLID, 1, RGB(0, 0, 0));
+        GraphViewPointText(g, &gPrefs, (UInt16)gGraphSel, gPoint, b);
+        ToWide(b, w, 48);
+        GetTextExtentPoint32W(dc, w, (int)wcslen(w), &sz);
+        box.left = gPx[gGraphSel] - sz.cx / 2 - S(4);
+        if (box.left < S(2)) box.left = S(2);
+        if (box.left + sz.cx + S(8) > W - S(2)) box.left = W - S(2) - sz.cx - S(8);
+        box.right = box.left + sz.cx + S(8);
+        box.top = gPy[gGraphSel] - S(22);
+        if (box.top < gPlot.top) box.top = gPy[gGraphSel] + S(6);
+        box.bottom = box.top + sz.cy + S(4);
+        op = (HPEN)SelectObject(dc, frame);
+        SelectObject(dc, GetStockObject(WHITE_BRUSH));
+        RoundRect(dc, box.left, box.top, box.right, box.bottom, S(6), S(6));
+        SelectObject(dc, op);
+        DeleteObject(frame);
+        box.left += S(4); box.top += S(2);
+        DrawTextW(dc, w, -1, &box, DT_LEFT | DT_SINGLELINE | DT_NOPREFIX | DT_NOCLIP);
+        GText(dc, "Tap it again to clear", S(4), H - S(16), DT_LEFT);
+    } else {
+        GText(dc, "Tap a point for its date and value", S(4), H - S(16), DT_LEFT);
+    }
+    SelectObject(dc, old);
+}
+
+static LRESULT CALLBACK GraphProc(HWND h, UINT m, WPARAM w, LPARAM l)
+{
+    switch (m) {
+    case WM_PAINT: PaintBuffered(h, GraphPaint); return 0;
+    case WM_ERASEBKGND: return 1;
+    case WM_SIZE: InvalidateRect(h, NULL, FALSE); return 0;
+    case WM_LBUTTONDOWN: {
+        RECT r;
+        Int16 hit;
+        int x = (short)LOWORD(l), y = (short)HIWORD(l);
+        if (!gGraphData.n) return 0;
+        GetClientRect(h, &r);
+        GraphLayout(r.right, r.bottom);
+        hit = GraphViewNearest(gPx, gPy, gGraphData.n, x, y, (Int32)S(20) * S(20));
+        gGraphSel = hit == gGraphSel ? -1 : hit;
+        InvalidateRect(h, NULL, FALSE);
+        return 0;
+    }
+    }
+    return DefWindowProcW(h, m, w, l);
+}
+
+/* The unit picker over an economy graph; the unit's name alone for one electric car. */
+static void GraphControls(void)
+{
+    int show = gPage == pageGraphs, economy = gGraphKind == gvEconomy;
+    WCHAR w[16];
+    SendMessageW(gGrKind, CB_SETCURSEL, gGraphKind, 0);
+    SendMessageW(gGrUnit, CB_SETCURSEL, gPrefs.economyUnit < 4 ? gPrefs.economyUnit : 0, 0);
+    ToWide(GraphViewUnit(&gGraphData, &gPrefs), w, 16);
+    SetWindowTextW(gGrUnitText, w);
+    ShowWindow(gGrKind, show ? SW_SHOW : SW_HIDE);
+    ShowWindow(gGrUnit, show && economy && !gGraphData.electric ? SW_SHOW : SW_HIDE);
+    ShowWindow(gGrUnitText, show && economy && gGraphData.electric ? SW_SHOW : SW_HIDE);
+}
+
+/* Work the page out again after a change of vehicle, period, kind or unit. */
+static void InfoRefresh(int keepScroll)
+{
+    static int busy;            /* setting the range pickers must not come back here */
+    if (busy) return;
+    busy = 1;
+    if (gPage == pageStats) gLineCount = StatsViewBuild(&gPrefs, Today(), gPoint, gThousands, gLines, tvMaxLines);
+    else if (gPage == pageReports) gLineCount = ReportViewBuild(&gPrefs, &gRptPeriod, gPoint, gThousands, gLines, tvMaxLines);
+    if (gPage == pageStats || gPage == pageReports) {
+        UInt16 i;
+        gTextHeight = S(4);
+        for (i = 0; i < gLineCount; i++) gTextHeight += LineHeight(gLines[i].style);
+        if (!keepScroll) gTextScroll = 0;
+        TextScrollBar();
+        InvalidateRect(gTextPanel, NULL, FALSE);
+        if (gPage == pageReports) ReportControls();
+    }
+    if (gPage == pageGraphs) {
+        GraphViewCollect(&gGraphData, gGraphKind, &gPrefs);
+        gGraphSel = -1;
+        GraphControls();
+        InvalidateRect(gGraph, NULL, FALSE);
+    }
+    busy = 0;
+}
+
+static void InfoOpen(int page)
+{
+    if (!gRptPeriod.year) ReportViewSetMode(&gRptPeriod, rptMonthly, Today());
+    PostMessageW(gWin, WM_SHOWPAGE, (WPARAM)page, 0);
+}
+
+/* A range end picked: keep from <= to, as the Palm does. */
+static void RangePicked(int which)
+{
+    SYSTEMTIME st;
+    HWND c = which == IDR_FROM ? gRptFrom : gRptTo;
+    UInt16 d;
+    if (SendMessageW(c, DTM_GETSYSTEMTIME, 0, (LPARAM)&st) != GDT_VALID) return;
+    d = DateYmdToDays((UInt16)st.wYear, (UInt8)st.wMonth, (UInt8)st.wDay);
+    if (which == IDR_FROM) { gRptPeriod.from = d; if (gRptPeriod.to < d) gRptPeriod.to = d; }
+    else { gRptPeriod.to = d; if (gRptPeriod.from > d) gRptPeriod.from = d; }
+    InfoRefresh(0);
+}
+
+static void InfoCreate(HWND h)
+{
+    LOGFONTW lf;
+    SYSTEMTIME range[2];
+    HFONT sys = (HFONT)GetStockObject(SYSTEM_FONT);
+    memset(&lf, 0, sizeof lf);
+    if (!GetObjectW(sys, sizeof lf, &lf)) { lf.lfHeight = -S(11); lstrcpyW(lf.lfFaceName, L"Tahoma"); }
+    lf.lfWeight = FW_BOLD;
+    gFontBold = CreateFontIndirectW(&lf);
+    lf.lfHeight = lf.lfHeight * 17 / 10;
+    gFontLarge = CreateFontIndirectW(&lf);
+
+    gTextPanel = CreateWindowW(kTextClass, L"", WS_CHILD | WS_VSCROLL, 0, 0, 10, 10, h, NULL, gInst, NULL);
+    gGraph = CreateWindowW(kGraphClass, L"", WS_CHILD, 0, 0, 10, 10, h, NULL, gInst, NULL);
+    gRptMode = CreateWindowW(L"COMBOBOX", L"", WS_CHILD | WS_VSCROLL | CBS_DROPDOWNLIST, 0, 0, 10, 10, h, (HMENU)IDR_MODE, gInst, NULL);
+    SendMessageW(gRptMode, CB_ADDSTRING, 0, (LPARAM)L"Monthly");
+    SendMessageW(gRptMode, CB_ADDSTRING, 0, (LPARAM)L"Yearly");
+    SendMessageW(gRptMode, CB_ADDSTRING, 0, (LPARAM)L"Range");
+    gRptPrev = CreateWindowW(L"BUTTON", L"<", WS_CHILD | BS_PUSHBUTTON, 0, 0, 10, 10, h, (HMENU)IDR_PREV, gInst, NULL);
+    gRptLabel = CreateWindowW(L"STATIC", L"", WS_CHILD | SS_CENTER, 0, 0, 10, 10, h, (HMENU)IDR_LABEL, gInst, NULL);
+    gRptNext = CreateWindowW(L"BUTTON", L">", WS_CHILD | BS_PUSHBUTTON, 0, 0, 10, 10, h, (HMENU)IDR_NEXT, gInst, NULL);
+    gRptFrom = CreateWindowW(DATETIMEPICK_CLASSW, L"", WS_CHILD | DTS_SHORTDATEFORMAT, 0, 0, 10, 10, h, (HMENU)IDR_FROM, gInst, NULL);
+    gRptTo = CreateWindowW(DATETIMEPICK_CLASSW, L"", WS_CHILD | DTS_SHORTDATEFORMAT, 0, 0, 10, 10, h, (HMENU)IDR_TO, gInst, NULL);
+    memset(range, 0, sizeof range);
+    range[0].wYear = 1990; range[0].wMonth = 1; range[0].wDay = 1;
+    range[1].wYear = 2079; range[1].wMonth = 12; range[1].wDay = 31;
+    SendMessageW(gRptFrom, DTM_SETRANGE, GDTR_MIN | GDTR_MAX, (LPARAM)range);
+    SendMessageW(gRptTo, DTM_SETRANGE, GDTR_MIN | GDTR_MAX, (LPARAM)range);
+    gGrKind = CreateWindowW(L"COMBOBOX", L"", WS_CHILD | WS_VSCROLL | CBS_DROPDOWNLIST, 0, 0, 10, 10, h, (HMENU)IDG_KIND, gInst, NULL);
+    SendMessageW(gGrKind, CB_ADDSTRING, 0, (LPARAM)L"Economy");
+    SendMessageW(gGrKind, CB_ADDSTRING, 0, (LPARAM)L"Price per fill");
+    SendMessageW(gGrKind, CB_ADDSTRING, 0, (LPARAM)L"Spend per month");
+    gGrUnit = CreateWindowW(L"COMBOBOX", L"", WS_CHILD | WS_VSCROLL | CBS_DROPDOWNLIST, 0, 0, 10, 10, h, (HMENU)IDG_UNIT, gInst, NULL);
+    SendMessageW(gGrUnit, CB_ADDSTRING, 0, (LPARAM)L"L/100 km");
+    SendMessageW(gGrUnit, CB_ADDSTRING, 0, (LPARAM)L"km/L");
+    SendMessageW(gGrUnit, CB_ADDSTRING, 0, (LPARAM)L"MPG (US)");
+    SendMessageW(gGrUnit, CB_ADDSTRING, 0, (LPARAM)L"MPG (Imp)");
+    gGrUnitText = CreateWindowW(L"STATIC", L"", WS_CHILD | SS_RIGHT, 0, 0, 10, 10, h, (HMENU)IDG_UNITTEXT, gInst, NULL);
+}
+
 /* ---- a backup set from a Palm, on a storage card ---- */
 
 /* The newest set (their names are dates, so the greatest name) under
@@ -1415,7 +1918,7 @@ static void TakePalmSet(void)
 static void About(void)
 {
     WCHAR msg[400];
-    wsprintfW(msg, L"FuelLog for Pocket PC %S\r\nSo far: the fill list, New and Edit Fill with points, Vehicles, Programmes and Preferences.\r\n\r\n%u fills, %u vehicles, %u programmes, %u service visits\r\n"
+    wsprintfW(msg, L"FuelLog for Pocket PC %S\r\nSo far: the fill list, New and Edit Fill with points, Stats, Reports, Graphs, Vehicles, Programmes and Preferences.\r\n\r\n%u fills, %u vehicles, %u programmes, %u service visits\r\n"
         L"Data: %s\r\nScreen %d dpi\r\n\r\nFree software under the GNU GPLv3.",
         kVersion, (unsigned)DbCount(dbFills), (unsigned)DbCount(dbVehicles), (unsigned)DbCount(dbProgrammes),
         (unsigned)DbCount(dbServiceVisits), kDataDirW, gDpi);
@@ -1455,7 +1958,18 @@ static void SetMenuBar(int page)
         AppendMenuW(bar, MF_STRING, IDM_DONE, L"Done");
         AppendMenuW(bar, MF_STRING, IDM_NEW, L"New");
         break;
+    case pageStats: case pageReports: case pageGraphs:
+        AppendMenuW(menu, MF_STRING | (page == pageStats ? MF_CHECKED : 0), IDM_STATS, L"Stats");
+        AppendMenuW(menu, MF_STRING | (page == pageReports ? MF_CHECKED : 0), IDM_REPORTS, L"Reports");
+        AppendMenuW(menu, MF_STRING | (page == pageGraphs ? MF_CHECKED : 0), IDM_GRAPHS, L"Graphs");
+        AppendMenuW(bar, MF_STRING, IDM_DONE, L"Done");
+        AppendMenuW(bar, MF_POPUP, (UINT_PTR)menu, L"Menu");
+        break;
     default:
+        AppendMenuW(menu, MF_STRING, IDM_STATS, L"Stats");
+        AppendMenuW(menu, MF_STRING, IDM_REPORTS, L"Reports");
+        AppendMenuW(menu, MF_STRING, IDM_GRAPHS, L"Graphs");
+        AppendMenuW(menu, MF_SEPARATOR, 0, NULL);
         AppendMenuW(menu, MF_STRING, IDM_VEHICLES, L"Vehicles");
         AppendMenuW(menu, MF_STRING, IDM_PROGRAMMES, L"Programmes");
         AppendMenuW(menu, MF_STRING, IDM_PREFS, L"Preferences");
@@ -1490,7 +2004,11 @@ static void ShowPage(int page)
     ShowWindow(gPgmSheet.panel, page == pageProgramme ? SW_SHOW : SW_HIDE);
     ShowWindow(gPtsSheet.panel, page == pagePoints ? SW_SHOW : SW_HIDE);
     ShowWindow(gPgmList, page == pageProgrammes ? SW_SHOW : SW_HIDE);
-    ShowWindow(gVehicle, list ? SW_SHOW : SW_HIDE);
+    ShowWindow(gTextPanel, page == pageStats || page == pageReports ? SW_SHOW : SW_HIDE);
+    ShowWindow(gGraph, page == pageGraphs ? SW_SHOW : SW_HIDE);
+    ReportControls();                       /* each shows its pickers only on its own page */
+    GraphControls();
+    ShowWindow(gVehicle, list || page == pageStats || page == pageReports || page == pageGraphs ? SW_SHOW : SW_HIDE);
     ShowWindow(gAvg, list ? SW_SHOW : SW_HIDE);
     ShowWindow(gMonth, list ? SW_SHOW : SW_HIDE);
     if (!list) {
@@ -1511,6 +2029,14 @@ static void ShowPage(int page)
         if (gFormBack) { SHSipPreference(gWin, SIP_FORCEDOWN); SetFocus(F(IDF_PTS)); }
         else SetFocus(gEdit.index == fillEditNew ? F(IDF_ODO) : gForm);
         gFormBack = 0;
+        break;
+    case pageStats: case pageReports: case pageGraphs:
+        SHSipPreference(gWin, SIP_FORCEDOWN);
+        SetWindowTextW(gWin, page == pageStats ? L"Stats" : page == pageReports ? L"Reports" : L"Graphs");
+        Layout();                           /* Stats has no second row of pickers */
+        BuildVehicles();
+        InfoRefresh(0);
+        SetFocus(page == pageGraphs ? gGraph : gTextPanel);
         break;
     case pagePoints:
         SetWindowTextW(gWin, L"Points");
@@ -1610,6 +2136,7 @@ static void Create(HWND h)
     AddColumn(gPgmList, 0, 92, 0, L"Programme");
     AddColumn(gPgmList, 1, 66, 1, L"Balance");
     AddColumn(gPgmList, 2, 170, 0, L"Rule or expiry");
+    InfoCreate(h);
 }
 
 static LRESULT CALLBACK Proc(HWND h, UINT m, WPARAM w, LPARAM l)
@@ -1638,7 +2165,36 @@ static LRESULT CALLBACK Proc(HWND h, UINT m, WPARAM w, LPARAM l)
         case IDM_VEHICLES: if (gPage == pageList) PostMessageW(h, WM_SHOWPAGE, pageVehicles, 0); return 0;
         case IDM_PROGRAMMES: if (gPage == pageList) PostMessageW(h, WM_SHOWPAGE, pageProgrammes, 0); return 0;
         case IDM_PREFS: if (gPage == pageList) PrefsOpen(); return 0;
-        case IDM_DONE: if (gPage == pageVehicles || gPage == pageProgrammes) PostMessageW(h, WM_SHOWPAGE, pageList, 0); return 0;
+        case IDM_STATS: case IDM_REPORTS: case IDM_GRAPHS:
+            if (gPage == pageList || gPage == pageStats || gPage == pageReports || gPage == pageGraphs)
+                InfoOpen(LOWORD(w) == IDM_STATS ? pageStats : LOWORD(w) == IDM_REPORTS ? pageReports : pageGraphs);
+            return 0;
+        case IDM_DONE:
+            if (gPage == pageVehicles || gPage == pageProgrammes || gPage == pageStats || gPage == pageReports || gPage == pageGraphs)
+                PostMessageW(h, WM_SHOWPAGE, pageList, 0);
+            return 0;
+        case IDR_MODE:
+            if (HIWORD(w) == CBN_SELCHANGE) {
+                int sel = (int)SendMessageW(gRptMode, CB_GETCURSEL, 0, 0);
+                if (sel >= 0) { ReportViewSetMode(&gRptPeriod, (UInt8)sel, Today()); InfoRefresh(0); }
+            }
+            return 0;
+        case IDR_PREV: case IDR_NEXT:
+            if (HIWORD(w) == BN_CLICKED) { ReportViewStep(&gRptPeriod, LOWORD(w) == IDR_PREV ? -1 : 1); InfoRefresh(0); }
+            return 0;
+        case IDG_KIND:
+            if (HIWORD(w) == CBN_SELCHANGE) {
+                int sel = (int)SendMessageW(gGrKind, CB_GETCURSEL, 0, 0);
+                if (sel >= 0) { gGraphKind = (UInt8)sel; InfoRefresh(0); }
+            }
+            return 0;
+        case IDG_UNIT:
+            if (HIWORD(w) == CBN_SELCHANGE) {
+                /* the list is in unitEco* order; Stats and the fill list follow, as on the Palm */
+                int sel = (int)SendMessageW(gGrUnit, CB_GETCURSEL, 0, 0);
+                if (sel >= 0) { gPrefs.economyUnit = (UInt8)sel; StorePrefs(); InfoRefresh(0); }
+            }
+            return 0;
         case IDM_NEW:
             if (gPage == pageList) FormOpen(fillEditNew);
             else if (gPage == pageVehicles) VehOpen(vehEditNew);
@@ -1665,7 +2221,11 @@ static LRESULT CALLBACK Proc(HWND h, UINT m, WPARAM w, LPARAM l)
         case IDC_VEHICLE:
             if (HIWORD(w) == CBN_SELCHANGE) {
                 int sel = (int)SendMessageW(gVehicle, CB_GETCURSEL, 0, 0);
-                if (sel >= 0 && sel <= vehMaxVehicles) { gPrefs.currentVehicle = gVehIds[sel]; StorePrefs(); Refresh(); }
+                if (sel >= 0 && sel <= vehMaxVehicles) {
+                    gPrefs.currentVehicle = gVehIds[sel];
+                    StorePrefs();
+                    if (gPage == pageList) Refresh(); else InfoRefresh(0);
+                }
             }
             return 0;
         case IDC_VEHARCH:
@@ -1678,6 +2238,10 @@ static LRESULT CALLBACK Proc(HWND h, UINT m, WPARAM w, LPARAM l)
         break;
     case WM_NOTIFY: {
         NMHDR *n = (NMHDR *)l;
+        if ((n->idFrom == IDR_FROM || n->idFrom == IDR_TO) && n->code == (UINT)DTN_DATETIMECHANGE) {
+            if (gPage == pageReports) RangePicked((int)n->idFrom);
+            return 0;
+        }
         if (n->idFrom == IDC_VEHLIST) {
             /* A tap on a vehicle opens it. */
             if (n->code == (UINT)NM_CLICK || n->code == (UINT)NM_RETURN) {
@@ -1766,6 +2330,12 @@ int WINAPI WinMain(HINSTANCE inst, HINSTANCE prev, LPWSTR cmd, int show)
     if (!RegisterClassW(&wc)) return 1;
     wc.lpfnWndProc = SheetProc;
     wc.lpszClassName = kSheetClass;
+    if (!RegisterClassW(&wc)) return 1;
+    wc.lpfnWndProc = TextProc;
+    wc.lpszClassName = kTextClass;
+    if (!RegisterClassW(&wc)) return 1;
+    wc.lpfnWndProc = GraphProc;
+    wc.lpszClassName = kGraphClass;
     if (!RegisterClassW(&wc)) return 1;
     wc.lpfnWndProc = Proc;
     wc.lpszClassName = kClass;

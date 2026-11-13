@@ -4,12 +4,13 @@ A Windows Mobile 5 and 6 version of FuelLog, built on the Palm version's own cor
 record formats, the maths, the dates, stats, reports, service rules, points and sync rules
 are the files in `../src`, compiled unchanged; this folder adds storage and the windows.
 
-Status: **P3b, Programmes and Points.** It opens the six FuelLog databases, shows the
+Status: **P4, Stats, Reports and Graphs.** It opens the six FuelLog databases, shows the
 fills with the same columns and figures as the Palm's list, can take a backup set a Palm
 wrote to a storage card, adds, edits and deletes fills and charges by the Palm form's rules
-with their points, keeps the vehicles and the rewards programmes, and has its own
-Preferences for units and currency. P1 to P3 ran on a Windows Mobile 5 and a Windows
-Mobile 6 device (Nov 12, 2026); P3b has not run on one yet.
+with their points, keeps the vehicles and the rewards programmes, has its own Preferences
+for units and currency, and shows the Palm's Stats, Reports and Graphs. P1 to P3b ran on a
+Windows Mobile 5 and a Windows Mobile 6 device (Nov 12, 2026); P4 has not run on one yet,
+and from here the slices are built back to back and checked on the devices together.
 
 ## How it fits with the Palm version
 
@@ -75,6 +76,14 @@ The compiler is CeGCC's `arm-mingw32ce` (GCC 9.3.0) in a Docker volume; see `dev
    40.00 L", "redeem: $1.00 off"). OK keeps the rows and takes the redemptions off the
    total; Cancel puts them back as they were. A new fill starts with its auto-apply
    programmes for its payment and currency, as on the Palm.
+9. **Menu, Stats, Reports, Graphs** are the Palm's three pages, each under the vehicle
+   picker and each with Done and a Menu that moves between them. Stats is the Palm's list
+   of figures (economy and spend in large type, then distance, fuel, prices, cost per
+   100 km with and without service, points). Reports is the table by month, by year (twelve
+   at a time) or for a date range, with < and > to step, the total, and the breakdowns by
+   vehicle, payment and currency. Graphs plots economy per full-to-full segment, price per
+   fill or spend per month, one line per vehicle under All vehicles; a tap names the
+   nearest point, and the unit picker over the economy graph sets the Prefs unit.
 
 Two places where this form deliberately differs from the Palm's, both found while porting:
 the previous odometer shown for an edited fill is that vehicle's fill before it (the Palm
@@ -92,13 +101,17 @@ app/fillview.c       what the fill list shows (plain C, host-tested)
 app/filledit.c       New and Edit Fill's rules (plain C, host-tested)
 app/vehedit.c        the vehicle list's rows and Edit Vehicle's rules (host-tested)
 app/pgmedit.c        programme balances, expiry, the list and Edit Programme's rules (host-tested)
+app/statsview.c      Stats as lines of text (host-tested)
+app/reportview.c     Reports as lines of text, and the report periods (host-tested)
+app/graphview.c      the graphs' points, ranges and axis labels (host-tested)
 app/settings.c       Prefs as the bytes kept in the registry (host-tested)
-app/main.c           the window: its pages (list, fill, Points, Preferences, vehicles, programmes) and soft keys
+app/main.c           the window: its pages (list, fill, Points, Stats, Reports, Graphs, Preferences, vehicles, programmes)
 app/app.rc           the hi-res flag for VGA devices
 tests/test_store.c   host tests against the fixture set tools/mkpdb writes
 tests/test_filledit.c  host tests of the fill form's rules on a copy of that set
 tests/test_vehedit.c   host tests of the Prefs bytes and the vehicle rules
 tests/test_pgmedit.c   host tests of the programme rules and the presets
+tests/test_views.c     host tests of Stats, Reports and Graphs (VIEWS_DUMP=1 prints the lines)
 hello/, coretest/    the SP9 spike programmes
 ```
 
@@ -109,14 +122,31 @@ hello/, coretest/    the SP9 spike programmes
 | P1 | The .pdb store; the fill list; taking a Palm backup set | Works on both devices (Nov 12, 2026) |
 | P2 | New and Edit Fill, with any two of volume, price and total giving the third; delete | Works on both devices (Nov 12, 2026) |
 | P3 | Vehicles; Prefs (units, currency), kept in the registry | Works on both devices (Nov 12, 2026) |
-| P3b | Programmes and the Points page on a fill | Built; device check pending |
-| P4 | Stats, reports and graphs | |
+| P3b | Programmes and the Points page on a fill | Works on both devices (Nov 12, 2026) |
+| P4 | Stats, reports and graphs | Built; device check pending |
 | P5 | Service types, visits, the due list and a reminder | |
 | P6 | CSV, XLSX and PDF export; CSV, XLSX and XLS import; backup and restore | |
 | P7 | Sync with a Palm or another Pocket PC through a `.fuel` file on a card; beaming if IrOBEX allows | |
 | P8 | VGA and landscape pass, an icon, a CAB installer | |
 
-## What to check on the devices (P3b)
+## What to check on the devices (P4)
+
+1. Menu on the list reads Stats, Reports, Graphs, then Vehicles, Programmes, Preferences.
+2. Stats for each vehicle and for All vehicles: the same figures as the Palm's Stats for
+   the same log and units. Scroll to the Points lines at the bottom.
+3. Reports, Monthly: this year's months with fills, the Total, Distance and average price;
+   < and > step a year. Yearly shows twelve years. Range shows two date pickers; picking a
+   From after the To moves the To with it.
+4. Under All vehicles, Reports adds By vehicle; By payment and By currency always show.
+5. Graphs, Economy: a line of dots with the dashed mean, labels at the left, months along
+   the bottom. Tap a dot: a box names its date and value; tap it again to clear.
+6. Change the unit over the economy graph to MPG (US): the graph, Stats and the fill list
+   all follow. One electric car shows "kWh/100 km" without a picker.
+7. Price per fill and Spend per month plot; under All vehicles the price graph has a
+   coloured line per vehicle and a legend.
+8. Changing the vehicle picker on any of the three pages changes the other two and the list.
+
+## What was checked on the devices (P3b, Nov 12, 2026: works on both)
 
 1. Menu reads Vehicles, Programmes, Preferences, Use Palm backup, About, Exit.
 2. Programmes: the Palm's programmes with the same balances as the Palm's Programmes

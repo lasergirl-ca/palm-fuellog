@@ -38,12 +38,12 @@ $(OUT)/coretest.exe: coretest/coretest.c coretest/ct.h $(SUITE_OBJS) $(CORE_OBJS
 
 # FuelLog for Pocket PC: the window (app/main.c) over the fill list and fill form
 # models, the .pdb store and the shared core.
-APP_CORE = calc records presets units currency prefs text datecalc points
-APP_OBJS = $(OBJ)/app_main.o $(OBJ)/app_fillview.o $(OBJ)/app_filledit.o $(OBJ)/app_vehedit.o $(OBJ)/app_pgmedit.o $(OBJ)/app_settings.o $(OBJ)/store_pdbfile.o $(OBJ)/store_db.o $(OBJ)/app_rc.o $(APP_CORE:%=$(OBJ)/%.o)
+APP_CORE = calc records presets units currency prefs text datecalc points stats report
+APP_OBJS = $(OBJ)/app_main.o $(OBJ)/app_fillview.o $(OBJ)/app_filledit.o $(OBJ)/app_vehedit.o $(OBJ)/app_pgmedit.o $(OBJ)/app_statsview.o $(OBJ)/app_reportview.o $(OBJ)/app_graphview.o $(OBJ)/app_settings.o $(OBJ)/store_pdbfile.o $(OBJ)/store_db.o $(OBJ)/app_rc.o $(APP_CORE:%=$(OBJ)/%.o)
 
 # _WIN32_IE: the CE headers hide the list view's owner-data and full-row styles
 # and InitCommonControlsEx below 0x0500.
-$(OBJ)/app_%.o: app/%.c app/fillview.h app/filledit.h app/vehedit.h app/pgmedit.h app/settings.h store/db.h store/pdbfile.h
+$(OBJ)/app_%.o: app/%.c app/fillview.h app/filledit.h app/vehedit.h app/pgmedit.h app/settings.h app/textview.h app/graphview.h store/db.h store/pdbfile.h
 	@mkdir -p $(OBJ)
 	$(CC) $(CFLAGS) -D_WIN32_IE=0x0500 -Wextra -std=gnu99 -c -o $@ $<
 
@@ -70,7 +70,7 @@ clean:
 # Run on the Mac (make -C ppc host-test), not in the box.
 HOSTCC ?= cc
 HOST = build/host
-SHARED = ../src/records.c ../src/calc.c ../src/units.c ../src/currency.c ../src/text.c ../src/datecalc.c ../src/prefs.c ../src/presets.c ../src/points.c
+SHARED = ../src/records.c ../src/calc.c ../src/units.c ../src/currency.c ../src/text.c ../src/datecalc.c ../src/prefs.c ../src/presets.c ../src/points.c ../src/stats.c ../src/report.c
 
 host-test:
 	@mkdir -p $(HOST)
@@ -91,5 +91,8 @@ host-test:
 	$(HOSTCC) -Wall -Wextra -o $(HOST)/test_pgmedit tests/test_pgmedit.c store/pdbfile.c store/db.c app/pgmedit.c $(SHARED)
 	$(HOST)/test_pgmedit $(HOST)/work4 $(HOST)/empty4
 	@if command -v go >/dev/null; then $(HOST)/fuellogdump dump $(HOST)/work4 >/dev/null && echo "ok   Go reader reads the set the programme form wrote"; fi
+	@rm -rf $(HOST)/work5 && cp -R $(HOST)/pdb $(HOST)/work5
+	$(HOSTCC) -Wall -Wextra -o $(HOST)/test_views tests/test_views.c store/pdbfile.c store/db.c app/statsview.c app/reportview.c app/graphview.c app/pgmedit.c $(SHARED)
+	$(HOST)/test_views $(HOST)/work5
 
 .PHONY: host-test
