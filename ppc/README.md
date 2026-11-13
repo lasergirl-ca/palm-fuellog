@@ -4,11 +4,11 @@ A Windows Mobile 5 and 6 version of FuelLog, built on the Palm version's own cor
 record formats, the maths, the dates, stats, reports, service rules, points and sync rules
 are the files in `../src`, compiled unchanged; this folder adds storage and the windows.
 
-Status: **P6a, Export and backup.** It opens the six FuelLog databases, shows the fills
-with the same columns and figures as the Palm's list, adds, edits and deletes fills and
-charges by the Palm form's rules with their points, keeps the vehicles, the rewards
-programmes and the service log, has its own Preferences, shows the Palm's Stats, Reports,
-Graphs and Service, and exports CSV, XLSX and PDF and makes and restores backup sets the
+Status: **P6b, Import.** It opens the six FuelLog databases, shows the fills with the same
+columns and figures as the Palm's list, adds, edits and deletes fills and charges by the
+Palm form's rules with their points, keeps the vehicles, the rewards programmes and the
+service log, has its own Preferences, shows the Palm's Stats, Reports, Graphs and Service,
+exports CSV, XLSX and PDF, imports CSV, XLSX and XLS, and makes and restores backup sets the
 Palm can use. P1 to P3b ran on a Windows Mobile 5 and a Windows Mobile 6 device (Nov 12,
 2026); P4 onwards have not run on one yet, and from here the slices are built back to back
 and checked on the devices together.
@@ -102,6 +102,13 @@ The compiler is CeGCC's `arm-mingw32ce` (GCC 9.3.0) in a Docker volume; see `dev
    a set the Palm can restore; Menu, Restore lists the sets there, a Palm's included. With
    the weekly backup ticked, closing FuelLog makes a set when a week has passed, on the card
    when there is one; Sets kept prunes the oldest.
+12. **Export and backup, Menu, Import a file** lists the CSV, XLSX and XLS files in the
+   Import folder on the device (`\My Documents\FuelLog\Import`), on each card
+   (`\PALM\Programs\FuelLog\Import`, where the Palm looks) and in My Documents. A tap reads
+   the file and shows the Palm's preview: rows ready, those already in the log, new vehicles
+   and programmes, and each error by line. Import (left soft key) adds the ready rows; a file
+   with the paper form's KB Points column has a picker above the preview for the programme
+   it counts for.
 
 Two places where this form deliberately differs from the Palm's, both found while porting:
 the previous odometer shown for an edited fill is that vehicle's fill before it (the Palm
@@ -125,6 +132,7 @@ app/graphview.c      the graphs' points, ranges and axis labels (host-tested)
 app/svcview.c        what is due, the Service and History rows, Service Type and Log Service (host-tested)
 app/exportfile.c     the Palm's CSV, XLSX and PDF exporters, ported over the store (host-tested)
 app/backupfile.c     backup sets and restore (host-tested)
+app/importfile.c     the Palm's CSV, XLSX and XLS import, ported over the store (host-tested)
 store/dirs.c         folders and whole files, Windows CE and POSIX
 app/settings.c       Prefs as the bytes kept in the registry (host-tested)
 app/main.c           the window: its pages (list, fill, Points, Stats, Reports, Graphs, Service, Export, Preferences, vehicles, programmes)
@@ -136,6 +144,7 @@ tests/test_pgmedit.c   host tests of the programme rules and the presets
 tests/test_views.c     host tests of Stats, Reports and Graphs (VIEWS_DUMP=1 prints the lines)
 tests/test_service.c   host tests of the service model
 tests/test_files.c     host tests of export, backup and restore; check_export.py reads the XLSX
+tests/test_import.c    host tests of import: the exporter's CSV and XLSX read back, errors, KB Points, XLS
 hello/, coretest/    the SP9 spike programmes
 ```
 
@@ -150,9 +159,19 @@ hello/, coretest/    the SP9 spike programmes
 | P4 | Stats, reports and graphs | Built; device check pending |
 | P5 | Service types, visits, the due list and a reminder | Built; device check pending |
 | P6a | CSV, XLSX and PDF export; backup and restore | Built; device check pending |
-| P6b | CSV, XLSX and XLS import | |
+| P6b | CSV, XLSX and XLS import | Built; device check pending |
 | P7 | Sync with a Palm or another Pocket PC through a `.fuel` file on a card; beaming if IrOBEX allows | |
 | P8 | VGA and landscape pass, an icon, a CAB installer | |
+
+## What to check on the devices (P6b)
+
+1. Export a CSV here, then Menu, Import a file: the CSV is listed under Import or the card.
+   Tapping it says every row is already in the log; Cancel.
+2. Copy a CSV or XLSX the Palm exported (or one from Excel) into My Documents by
+   ActiveSync: it is listed under My Documents, and the preview counts its rows, new
+   vehicles and programmes. Import adds them; the list shows them in date order.
+3. A file with a bad row (a letter in an odometer) lists the line and skips just that row.
+4. The paper form's CSV with a KB Points column shows the programme picker over the preview.
 
 ## What to check on the devices (P6a)
 

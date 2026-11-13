@@ -25,7 +25,7 @@ milestone (`M1.md` to `M9.md`) with what was built and what to check on the devi
 A Pocket PC version for Windows Mobile 5 and 6, on the same core and the same data files,
 is under way in `ppc/` (see `ppc/README.md`): so far the fill list, New and Edit Fill,
 Vehicles, Preferences, Programmes and Points, which run on both kinds of device, and Stats,
-Reports, Graphs, Service, and export and backup.
+Reports, Graphs, Service, export, import and backup.
 
 Current state: `v1.0-rc10`. Everything builds and passes the host tests; the M5 to M8
 features are waiting on their device pass (see the end of `docs/M8.md`).

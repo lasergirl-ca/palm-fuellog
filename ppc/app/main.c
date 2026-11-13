@@ -18,6 +18,7 @@
 #include "svcview.h"
 #include "exportfile.h"
 #include "backupfile.h"
+#include "importfile.h"
 #include "../store/dirs.h"
 #include <notify.h>
 #include "../../src/report.h"
@@ -25,8 +26,9 @@
 #include "../../src/datecalc.h"
 #include "../../src/units.h"
 #include "../../src/currency.h"
+#include "../../src/text.h"
 
-#define kVersion "0.7"
+#define kVersion "0.8"
 #define kClass L"FuelLogPPC"
 #define kFormClass L"FuelLogForm"
 #define kSheetClass L"FuelLogSheet"
@@ -35,10 +37,10 @@
 #define kDataDirW L"\\My Documents\\FuelLog"
 #define kPalmBackup L"\\PALM\\Programs\\FuelLog\\Backup"
 
-enum { IDC_VEHICLE = 100, IDC_LIST, IDC_AVG, IDC_MONTH, IDC_EMPTY, IDC_VEHLIST, IDC_VEHARCH, IDC_PGMLIST, IDC_BANNER, IDC_SETLIST };
+enum { IDC_VEHICLE = 100, IDC_LIST, IDC_AVG, IDC_MONTH, IDC_EMPTY, IDC_VEHLIST, IDC_VEHARCH, IDC_PGMLIST, IDC_BANNER, IDC_SETLIST, IDC_FILELIST, IDC_KBCOMBO };
 enum { IDM_ABOUT = 200, IDM_PALM, IDM_EXIT, IDM_NEW, IDM_SAVE, IDM_CANCEL, IDM_DELETE, IDM_DONE, IDM_VEHICLES, IDM_PREFS,
        IDM_PROGRAMMES, IDM_OK, IDM_ARCHIVE, IDM_STATS, IDM_REPORTS, IDM_GRAPHS, IDM_SERVICE, IDM_HISTORY,
-       IDM_INTERVALS, IDM_LOG, IDM_NEWSVC, IDM_EXPORT, IDM_DOEXPORT, IDM_BACKUP, IDM_RESTORE };
+       IDM_INTERVALS, IDM_LOG, IDM_NEWSVC, IDM_EXPORT, IDM_DOEXPORT, IDM_BACKUP, IDM_RESTORE, IDM_IMPORT, IDM_DOIMPORT };
 /* The Export page. */
 enum { IDX_FORMAT = 800, IDX_VEH, IDX_YEAR, IDX_PGM, IDX_DEST, IDX_WHERE, IDX_LAST, IDX_AUTO, IDX_KEEP };
 /* The Service Type and Log Service sheets. */
@@ -61,7 +63,7 @@ enum { IDE_NAME = 440, IDE_CUR, IDE_MONEY, IDE_EARN, IDE_BASIS, IDE_PREM, IDE_PA
 #define IDT_ROW(i) (500 + 4 * (i))
 enum { IDT_ADD = 520, IDT_TOTAL };
 enum { pageList, pageForm, pagePrefs, pageVehicles, pageVehicle, pagePoints, pageProgrammes, pageProgramme,
-       pageStats, pageReports, pageGraphs, pageService, pageHistory, pageSvt, pageVisit, pageExport, pageRestore };
+       pageStats, pageReports, pageGraphs, pageService, pageHistory, pageSvt, pageVisit, pageExport, pageRestore, pageChoose, pageImport };
 #define kRowsClass L"FuelLogRows"
 #define kTextClass L"FuelLogText"
 #define kGraphClass L"FuelLogGraph"
@@ -101,6 +103,13 @@ static UInt16 gExpYears[40], gExpYearCount;
 static char gSets[24][dirNameLen];
 static UInt16 gSetCount;
 static char gRestoreDir[300];
+/* Import. */
+static HWND gFileList, gKbCombo;
+typedef struct { char name[dirNameLen], where[24], path[300]; } ImportFile;
+static ImportFile gImpFiles[24];
+static UInt16 gImpFileCount;
+static UInt8 gKbIds[pgmMaxProgrammes];
+static UInt8 gKbCount;
 static SHACTIVATEINFO gSai;
 static int gDpi = 96, gPage = pageList, gDataOk;
 static FuelPrefs gPrefs;
@@ -361,7 +370,10 @@ static void Layout(void)
     /* Stats under the vehicle picker; Reports and Graphs have a second row of pickers. */
     {
         int row2 = S(26), top2 = S(50);
-        MoveWindow(gTextPanel, 0, gPage == pageStats ? top : top2, w, h - (gPage == pageStats ? top : top2), TRUE);
+        int textTop = gPage == pageStats ? top : gPage == pageImport ? (gImport.kbPoints && gKbCount ? top : 0) : top2;
+        MoveWindow(gTextPanel, 0, textTop, w, h - textTop, TRUE);
+        MoveWindow(gKbCombo, S(2), S(2), w - S(4), S(120), TRUE);
+        MoveWindow(gFileList, 0, 0, w, h, TRUE);
         MoveWindow(gGraph, 0, top2, w, h - top2, TRUE);
         MoveWindow(gRptMode, S(2), row2, S(74), S(100), TRUE);
         MoveWindow(gRptPrev, S(80), row2, S(24), S(20), TRUE);
@@ -2692,6 +2704,173 @@ static void RestoreSet(int row)
     PostMessageW(gWin, WM_SHOWPAGE, pageList, 0);
 }
 
+/* ---- Import ---- */
+
+static void AddFiles(const char *dir, const char *where)
+{
+    static const char *const ext[3] = { ".csv", ".xlsx", ".xls" };
+    char names[24][dirNameLen];
+    UInt16 n, i;
+    UInt8 e;
+    for (e = 0; e < 3; e++) {
+        n = DirList(dir, 0, ext[e], names, (UInt16)(24 - gImpFileCount));
+        for (i = 0; i < n && gImpFileCount < 24; i++) {
+            ImportFile *f = &gImpFiles[gImpFileCount++];
+            strcpy(f->name, names[i]);
+            strncpy(f->where, where, sizeof f->where - 1); f->where[sizeof f->where - 1] = 0;
+            PathJoin(f->path, dir, names[i]);
+        }
+    }
+}
+
+/* CSV, XLSX and XLS files in the Import folders, on the device and on each card (where the Palm
+ * looks), and in My Documents, where ActiveSync puts what is copied over. */
+static void ChooseOpen(void)
+{
+    char dir[300];
+    UInt16 i;
+    LVITEMW it;
+    WCHAR w[300];
+    gImpFileCount = 0;
+    FindCards();
+    DestFolder(0, "Import", dir);
+    DirMake(dir);
+    AddFiles(dir, "Import");
+    for (i = 0; i < gCardCount; i++) {
+        DestFolder(i + 1, "Import", dir);
+        DirMake(dir);
+        AddFiles(dir, gCards[i] + 1);
+    }
+    AddFiles("\\My Documents", "My Documents");
+    SendMessageW(gFileList, LVM_DELETEALLITEMS, 0, 0);
+    for (i = 0; i < gImpFileCount; i++) {
+        memset(&it, 0, sizeof it);
+        it.mask = LVIF_TEXT;
+        it.iItem = i;
+        ToWide(gImpFiles[i].name, w, 300);
+        it.pszText = w;
+        SendMessageW(gFileList, LVM_INSERTITEMW, 0, (LPARAM)&it);
+        it.iSubItem = 1;
+        ToWide(gImpFiles[i].where, w, 300);
+        it.pszText = w;
+        SendMessageW(gFileList, LVM_SETITEMW, 0, (LPARAM)&it);
+    }
+    if (!gImpFileCount) {
+        MessageBoxW(gWin, L"No CSV, XLSX or XLS files found.\r\n\r\nPut the file in \\My Documents\\FuelLog\\Import, in My Documents, "
+            L"or on a card in \\PALM\\Programs\\FuelLog\\Import, as for the Palm.", L"Import", MB_OK | MB_ICONINFORMATION);
+        return;
+    }
+    PostMessageW(gWin, WM_SHOWPAGE, pageChoose, 0);
+}
+
+static void ImportLine(const char *text, UInt8 style)
+{
+    TextLine *l;
+    if (gLineCount >= tvMaxLines) return;
+    l = &gLines[gLineCount++];
+    memset(l, 0, sizeof *l);
+    l->style = style;
+    strncpy(l->cell[0], text, tvText - 1);
+}
+
+/* The preview, in the Palm's words. */
+static void ImportPreview(void)
+{
+    char b[96], n[16];
+    UInt16 i;
+    gLineCount = 0;
+    strcpy(b, gImport.file); strcat(b, ", ");
+    TextFixed(n, (Int32)gImport.rows, 0, gPoint, gThousands); strcat(b, n); strcat(b, gImport.rows == 1 ? " row read" : " rows read");
+    ImportLine(b, tvNote);
+    if (gImport.badHeader) {
+        ImportLine("The first line is not a fills header.", tvHeading);
+        ImportLine("It needs Date, Odometer or Trip, and", tvNote);
+        ImportLine("Volume or Total. Export a CSV from", tvNote);
+        ImportLine("Export and backup for a template.", tvNote);
+    } else {
+        TextFixed(b, (Int32)gImport.ready, 0, gPoint, gThousands); strcat(b, gImport.ready == 1 ? " row ready to import" : " rows ready to import");
+        ImportLine(b, tvHeading);
+        if (gImport.duplicates) { TextFixed(b, (Int32)gImport.duplicates, 0, gPoint, gThousands); strcat(b, " already in the log (skipped)"); ImportLine(b, tvNote); }
+        if (gImport.errors) { TextFixed(b, (Int32)gImport.errors, 0, gPoint, gThousands); strcat(b, gImport.errors == 1 ? " row has an error (below)" : " rows have errors (below)"); ImportLine(b, tvNote); }
+        if (gImport.newVehicles) {
+            TextFixed(b, gImport.newVehicles, 0, gPoint, 0); strcat(b, gImport.newVehicles == 1 ? " new vehicle: " : " new vehicles: ");
+            for (i = 0; i < gImport.newVehicles && i < impMaxNewVeh; i++) { if (i) strcat(b, ", "); strcat(b, gImport.newVehicleNames[i]); }
+            ImportLine(b, tvNote);
+        }
+        if (gImport.newProgrammes) { TextFixed(b, gImport.newProgrammes, 0, gPoint, 0); strcat(b, gImport.newProgrammes == 1 ? " new programme" : " new programmes"); ImportLine(b, tvNote); }
+        if (gImport.kbPoints) { strcpy(b, "KB Points column to "); strcat(b, gImport.kbTarget); ImportLine(b, tvNote); }
+        if (gImport.errors) {
+            ImportLine("Errors", tvHeading);
+            for (i = 0; i < gImport.errors && i < impMaxErrors; i++) ImportLine(gImport.errorLines[i], tvNote);
+            ImportLine(gImport.errors > impMaxErrors ? "...and more; fix these and import again." : "These rows are skipped.", tvNote);
+        }
+        ImportLine("Nothing is written until you choose Import.", tvNote);
+    }
+    gTextHeight = S(4);
+    for (i = 0; i < gLineCount; i++) gTextHeight += LineHeight(gLines[i].style);
+    gTextScroll = 0;
+    TextScrollBar();
+    InvalidateRect(gTextPanel, NULL, FALSE);
+}
+
+static void ChooseFile(int row)
+{
+    WCHAR msg[300], wn[dirNameLen];
+    Int32 r;
+    HCURSOR old;
+    if (row < 0 || row >= gImpFileCount) return;
+    ImportSetup(&gPrefs);
+    old = SetCursor(LoadCursor(NULL, IDC_WAIT));
+    r = ImportScan(gImpFiles[row].path, kDataDir);
+    SetCursor(old);
+    if (r) {
+        ToWide(gImpFiles[row].name, wn, dirNameLen);
+        wsprintfW(msg, L"%s could not be read (error %d). Is it a CSV, XLSX or XLS of fills?", wn, (int)r);
+        MessageBoxW(gWin, msg, L"Import", MB_OK | MB_ICONEXCLAMATION);
+        return;
+    }
+    /* The KB Points column's programme, chosen above the preview as on the Palm. */
+    SendMessageW(gKbCombo, CB_RESETCONTENT, 0, 0);
+    gKbCount = 0;
+    if (gImport.kbPoints) {
+        ProgrammeRecord pg;
+        UInt16 i, n = DbCount(dbProgrammes);
+        UInt8 current = ImportKbDefault();
+        int sel = 0;
+        WCHAR w[pgmNameLen + 20];
+        for (i = 0; i < n && gKbCount < pgmMaxProgrammes; i++) {
+            if (DbGetProgramme(i, &pg) != dbOk || pg.archived) continue;
+            ToWide(pg.name, w + 0, pgmNameLen + 2);
+            SendMessageW(gKbCombo, CB_ADDSTRING, 0, (LPARAM)w);
+            if (pg.id == current) sel = gKbCount;
+            gKbIds[gKbCount++] = pg.id;
+        }
+        if (gKbCount) SendMessageW(gKbCombo, CB_SETCURSEL, (WPARAM)sel, 0);
+    }
+    ImportPreview();
+    PostMessageW(gWin, WM_SHOWPAGE, pageImport, 0);
+}
+
+static void ImportRun(void)
+{
+    WCHAR msg[200];
+    HCURSOR old;
+    if (!gImport.ready) return;
+    old = SetCursor(LoadCursor(NULL, IDC_WAIT));
+    if (ImportWrite() != 0) {
+        SetCursor(old);
+        MessageBoxW(gWin, L"The file could not be read a second time. Nothing more was added.", L"Import", MB_OK | MB_ICONEXCLAMATION);
+        return;
+    }
+    SetCursor(old);
+    SaveData();
+    ScheduleAlarm();
+    wsprintfW(msg, L"Imported %u fills. %u already in the log were skipped.", (unsigned)gImport.written, (unsigned)gImport.skipped);
+    MessageBoxW(gWin, msg, L"Import", MB_OK | MB_ICONINFORMATION);
+    gPrefs.currentVehicle = 255;
+    PostMessageW(gWin, WM_SHOWPAGE, pageList, 0);
+}
+
 /* ---- a backup set from a Palm, on a storage card ---- */
 
 /* The newest set (their names are dates, so the greatest name) under
@@ -2765,7 +2944,7 @@ static void TakePalmSet(void)
 static void About(void)
 {
     WCHAR msg[400];
-    wsprintfW(msg, L"FuelLog for Pocket PC %S\r\nSo far: the fill list, New and Edit Fill with points, Stats, Reports, Graphs, Service, Export and backup, Vehicles, Programmes and Preferences.\r\n\r\n%u fills, %u vehicles, %u programmes, %u service visits\r\n"
+    wsprintfW(msg, L"FuelLog for Pocket PC %S\r\nSo far: the fill list, New and Edit Fill with points, Stats, Reports, Graphs, Service, Export, Import and backup, Vehicles, Programmes and Preferences.\r\n\r\n%u fills, %u vehicles, %u programmes, %u service visits\r\n"
         L"Data: %s\r\nScreen %d dpi\r\n\r\nFree software under the GNU GPLv3.",
         kVersion, (unsigned)DbCount(dbFills), (unsigned)DbCount(dbVehicles), (unsigned)DbCount(dbProgrammes),
         (unsigned)DbCount(dbServiceVisits), kDataDirW, gDpi);
@@ -2810,15 +2989,24 @@ static void SetMenuBar(int page)
     case pageExport:
         AppendMenuW(menu, MF_STRING, IDM_BACKUP, L"Back up now");
         AppendMenuW(menu, MF_STRING, IDM_RESTORE, L"Restore...");
+        AppendMenuW(menu, MF_STRING, IDM_IMPORT, L"Import a file...");
         AppendMenuW(menu, MF_SEPARATOR, 0, NULL);
         AppendMenuW(menu, MF_STRING, IDM_DONE, L"Done");
         AppendMenuW(bar, MF_STRING, IDM_DOEXPORT, L"Export");
         AppendMenuW(bar, MF_POPUP, (UINT_PTR)menu, L"Menu");
         break;
-    case pageRestore:
+    case pageRestore: case pageChoose:
         DestroyMenu(menu);
         AppendMenuW(bar, MF_STRING, IDM_DONE, L"Done");
         break;
+    case pageImport: {
+        WCHAR w[24];
+        DestroyMenu(menu);
+        wsprintfW(w, L"Import %u", (unsigned)gImport.ready);
+        if (gImport.ready) AppendMenuW(bar, MF_STRING, IDM_DOIMPORT, w);
+        AppendMenuW(bar, MF_STRING, IDM_CANCEL, L"Cancel");
+        break;
+    }
     case pageService:
         AppendMenuW(menu, MF_STRING, IDM_NEWSVC, L"New service");
         AppendMenuW(menu, MF_STRING, IDM_HISTORY, L"History");
@@ -2881,7 +3069,9 @@ static void ShowPage(int page)
     ShowWindow(gPgmSheet.panel, page == pageProgramme ? SW_SHOW : SW_HIDE);
     ShowWindow(gPtsSheet.panel, page == pagePoints ? SW_SHOW : SW_HIDE);
     ShowWindow(gPgmList, page == pageProgrammes ? SW_SHOW : SW_HIDE);
-    ShowWindow(gTextPanel, page == pageStats || page == pageReports ? SW_SHOW : SW_HIDE);
+    ShowWindow(gTextPanel, page == pageStats || page == pageReports || page == pageImport ? SW_SHOW : SW_HIDE);
+    ShowWindow(gFileList, page == pageChoose ? SW_SHOW : SW_HIDE);
+    ShowWindow(gKbCombo, page == pageImport && gImport.kbPoints && gKbCount ? SW_SHOW : SW_HIDE);
     ShowWindow(gGraph, page == pageGraphs ? SW_SHOW : SW_HIDE);
     ShowWindow(gRowsPanel, page == pageService || page == pageHistory ? SW_SHOW : SW_HIDE);
     ShowWindow(gSvtSheet.panel, page == pageSvt ? SW_SHOW : SW_HIDE);
@@ -2931,6 +3121,15 @@ static void ShowPage(int page)
     case pageRestore:
         SetWindowTextW(gWin, L"Restore");
         SetFocus(gSetList);
+        break;
+    case pageChoose:
+        SetWindowTextW(gWin, L"Import: choose a file");
+        SetFocus(gFileList);
+        break;
+    case pageImport:
+        SetWindowTextW(gWin, L"Import");
+        Layout();                           /* the KB Points picker over the preview, when the file has that column */
+        SetFocus(gTextPanel);
         break;
     case pageSvt:
         SetWindowTextW(gWin, gSvtEdit.index == svtEditNew ? L"New Service" : L"Service Type");
@@ -3063,6 +3262,11 @@ static void Create(HWND h)
     gSetList = CreateWindowW(WC_LISTVIEWW, L"", WS_CHILD | LVS_REPORT | LVS_SINGLESEL | LVS_NOSORTHEADER, 0, 0, 10, 10, h, (HMENU)IDC_SETLIST, gInst, NULL);
     SendMessageW(gSetList, LVM_SETEXTENDEDLISTVIEWSTYLE, 0, LVS_EX_FULLROWSELECT);
     AddColumn(gSetList, 0, 200, 0, L"Backup set (tap one to restore it)");
+    gFileList = CreateWindowW(WC_LISTVIEWW, L"", WS_CHILD | LVS_REPORT | LVS_SINGLESEL | LVS_NOSORTHEADER, 0, 0, 10, 10, h, (HMENU)IDC_FILELIST, gInst, NULL);
+    SendMessageW(gFileList, LVM_SETEXTENDEDLISTVIEWSTYLE, 0, LVS_EX_FULLROWSELECT);
+    AddColumn(gFileList, 0, 150, 0, L"File (tap one to read it)");
+    AddColumn(gFileList, 1, 84, 0, L"Where");
+    gKbCombo = CreateWindowW(L"COMBOBOX", L"", WS_CHILD | WS_VSCROLL | CBS_DROPDOWNLIST, 0, 0, 10, 10, h, (HMENU)IDC_KBCOMBO, gInst, NULL);
 }
 
 static LRESULT CALLBACK Proc(HWND h, UINT m, WPARAM w, LPARAM l)
@@ -3101,7 +3305,7 @@ static LRESULT CALLBACK Proc(HWND h, UINT m, WPARAM w, LPARAM l)
                 PostMessageW(h, WM_SHOWPAGE, pageList, 0);
             else if (gPage == pageHistory) PostMessageW(h, WM_SHOWPAGE, pageService, 0);
             else if (gPage == pageExport) PostMessageW(h, WM_SHOWPAGE, pageList, 0);
-            else if (gPage == pageRestore) PostMessageW(h, WM_SHOWPAGE, pageExport, 0);
+            else if (gPage == pageRestore || gPage == pageChoose) PostMessageW(h, WM_SHOWPAGE, pageExport, 0);
             return 0;
         case IDR_MODE:
             if (HIWORD(w) == CBN_SELCHANGE) {
@@ -3144,6 +3348,14 @@ static LRESULT CALLBACK Proc(HWND h, UINT m, WPARAM w, LPARAM l)
         case IDM_DOEXPORT: if (gPage == pageExport) ExportRun(); return 0;
         case IDM_BACKUP: if (gPage == pageExport) BackupRun(); return 0;
         case IDM_RESTORE: if (gPage == pageExport) RestoreOpen(); return 0;
+        case IDM_IMPORT: if (gPage == pageExport) ChooseOpen(); return 0;
+        case IDM_DOIMPORT: if (gPage == pageImport) ImportRun(); return 0;
+        case IDC_KBCOMBO:
+            if (HIWORD(w) == CBN_SELCHANGE) {
+                int sel = (int)SendMessageW(gKbCombo, CB_GETCURSEL, 0, 0);
+                if (sel >= 0 && sel < gKbCount) { ImportSetKbTarget(gKbIds[sel]); ImportPreview(); }
+            }
+            return 0;
         case IDC_BANNER: if (HIWORD(w) == BN_CLICKED && gPage == pageList) ServiceOpen(); return 0;
         case IDM_NEWSVC: if (gPage == pageService) SvtOpen(svtEditNew, pageService); return 0;
         case IDM_HISTORY: if (gPage == pageService) { gHistType = 0xFFFF; PostMessageW(h, WM_SHOWPAGE, pageHistory, 0); } return 0;
@@ -3165,6 +3377,7 @@ static LRESULT CALLBACK Proc(HWND h, UINT m, WPARAM w, LPARAM l)
             else if (gPage == pagePoints) PtsClose(0);
             else if (gPage == pageSvt) PostMessageW(h, WM_SHOWPAGE, (WPARAM)gSvtReturn, 0);
             else if (gPage == pageVisit) PostMessageW(h, WM_SHOWPAGE, (WPARAM)gVisitReturn, 0);
+            else if (gPage == pageImport) PostMessageW(h, WM_SHOWPAGE, pageExport, 0);
             return 0;
         case IDC_VEHICLE:
             if (HIWORD(w) == CBN_SELCHANGE) {
@@ -3204,6 +3417,14 @@ static LRESULT CALLBACK Proc(HWND h, UINT m, WPARAM w, LPARAM l)
             if (n->code == (UINT)NM_CLICK || n->code == (UINT)NM_RETURN) {
                 int row = n->code == (UINT)NM_CLICK ? TappedRow(gVehList) : (int)SendMessageW(gVehList, LVM_GETNEXTITEM, (WPARAM)-1, LVNI_SELECTED);
                 if (gPage == pageVehicles && row >= 0 && row < (int)gVehCount) VehOpen(gVehIdx[row]);
+                return 0;
+            }
+            break;
+        }
+        if (n->idFrom == IDC_FILELIST) {
+            if (n->code == (UINT)NM_CLICK || n->code == (UINT)NM_RETURN) {
+                int row = n->code == (UINT)NM_CLICK ? TappedRow(gFileList) : (int)SendMessageW(gFileList, LVM_GETNEXTITEM, (WPARAM)-1, LVNI_SELECTED);
+                if (gPage == pageChoose) ChooseFile(row);
                 return 0;
             }
             break;
