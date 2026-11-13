@@ -1,4 +1,7 @@
-/* Resources of FuelLog for Pocket PC. HI_RES_AWARE tells a VGA device not
- * to pixel-double the window: the app scales its own layout by the screen's
+/* Resources of FuelLog for Pocket PC. The icon is the Palm's fuel can
+ * (tools/mkicon.py builds it from rsc/icons/icon44x44x8.bmp); the shell
+ * shows the first icon in the file. HI_RES_AWARE tells a VGA device not to
+ * pixel-double the window: the app scales its own layout by the screen's
  * dots per inch. */
+1 ICON "FuelLog.ico"
 HI_RES_AWARE CEUX { 1 }

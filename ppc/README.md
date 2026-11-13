@@ -142,7 +142,8 @@ app/syncfile.c       the Palm's sync bundle and its apply, ported over the store
 store/dirs.c         folders and whole files, Windows CE and POSIX
 app/settings.c       Prefs as the bytes kept in the registry (host-tested)
 app/main.c           the window: its pages (list, fill, Points, Stats, Reports, Graphs, Service, Export, Preferences, vehicles, programmes)
-app/app.rc           the hi-res flag for VGA devices
+app/app.rc           the icon, and the hi-res flag for VGA devices
+app/FuelLog.ico      the Palm's icon, built by tools/mkicon.py
 tests/test_store.c   host tests against the fixture set tools/mkpdb writes
 tests/test_filledit.c  host tests of the fill form's rules on a copy of that set
 tests/test_vehedit.c   host tests of the Prefs bytes and the vehicle rules
@@ -153,6 +154,7 @@ tests/test_files.c     host tests of export, backup and restore; check_export.py
 tests/test_import.c    host tests of import: the exporter's CSV and XLSX read back, errors, KB Points, XLS
 tests/test_syncfile.c  host tests of sync files: two logs synced both ways, an empty log, bad files
 hello/, coretest/    the SP9 spike programmes
+tools/mkicon.py      the icon from rsc/icons/icon44x44x8.bmp (standard-library Python)
 ```
 
 ## Plan
@@ -168,7 +170,23 @@ hello/, coretest/    the SP9 spike programmes
 | P6a | CSV, XLSX and PDF export; backup and restore | Built; device check pending |
 | P6b | CSV, XLSX and XLS import | Built; device check pending |
 | P7 | Sync with a Palm or another Pocket PC through a `.fuel` file on a card; beaming if IrOBEX allows | Sync files built, device check pending; beaming not attempted |
-| P8 | VGA and landscape pass, an icon, a CAB installer | |
+| P8 | VGA and landscape pass, an icon, a CAB installer | Icon, rotation and landscape columns built, device check pending; no CAB (below) |
+
+## What to check on the devices (P8)
+
+1. File Explorer and the Start menu show FuelLog's red fuel can rather than a blank icon.
+2. On a device that rotates (or with Settings, Screen, Landscape): the list, the forms and
+   the graphs fill the turned screen, and the fill list's columns widen to use it.
+3. On a VGA device: text and controls are the same size as on QVGA, not doubled or tiny.
+
+### Why there is no CAB yet
+
+A Windows Mobile 5 or 6 Pocket PC installs a CAB through a binary setup file that
+Microsoft's Cabwiz (a Windows program) writes from an .inf file. The text alternative, a
+`_setup.xml` provisioning document, relies on the FileOperation configuration service
+provider, which Microsoft documents as "not available on Windows Mobile-based Pocket PC".
+So FuelLog.exe is still copied over by hand; a CAB needs Cabwiz run on Windows (or a
+reimplementation of its binary format checked on a device).
 
 ## What to check on the devices (P7)
 

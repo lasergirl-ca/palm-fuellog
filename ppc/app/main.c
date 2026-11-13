@@ -29,7 +29,7 @@
 #include "../../src/currency.h"
 #include "../../src/text.h"
 
-#define kVersion "0.9"
+#define kVersion "0.10"
 #define kClass L"FuelLogPPC"
 #define kFormClass L"FuelLogForm"
 #define kSheetClass L"FuelLogSheet"
@@ -68,7 +68,10 @@ enum { pageList, pageForm, pagePrefs, pageVehicles, pageVehicle, pagePoints, pag
 #define kRowsClass L"FuelLogRows"
 #define kTextClass L"FuelLogText"
 #define kGraphClass L"FuelLogGraph"
-#define WM_SHOWPAGE (WM_APP + 1)     /* posted, so a menu bar is never replaced inside its own command */
+#define WM_SHOWPAGE (WM_APP + 1)
+#ifndef SETTINGCHANGE_RESET
+#define SETTINGCHANGE_RESET 0x3002      /* WM_SETTINGCHANGE's wParam when the screen rotates */
+#endif     /* posted, so a menu bar is never replaced inside its own command */
 
 #define kMaxRows 4096
 #define kRow 22                      /* the form's row pitch at 96 dpi */
@@ -348,6 +351,14 @@ static void Layout(void)
     w = r.right; h = r.bottom;
     MoveWindow(gVehicle, S(2), S(2), w - S(4), S(140), TRUE);      /* the height is the dropped list's */
     MoveWindow(gBanner, S(2), top, w - S(4), S(20), TRUE);
+    /* The fill list's five columns are laid out for 240 pixels; a wider screen (landscape, or a
+     * square VGA) shares the extra width out among them. */
+    {
+        static const int base[fillViewCols] = { 46, 56, 38, 48, 36 };
+        int i, room = w - S(16), sum = S(224);
+        for (i = 0; i < fillViewCols && gList; i++)
+            SendMessageW(gList, LVM_SETCOLUMNWIDTH, (WPARAM)i, (LPARAM)(room > sum ? S(base[i]) * room / sum : S(base[i])));
+    }
     MoveWindow(gRowsPanel, 0, gPage == pageHistory ? 0 : top, w, gPage == pageHistory ? h : h - top, TRUE);
     MoveWindow(gSvtSheet.panel, 0, 0, w, h, TRUE);
     MoveWindow(gSvlSheet.panel, 0, 0, w, h, TRUE);
@@ -3238,6 +3249,15 @@ static void ShowPage(int page)
 }
 
 /* The row under the last tap, or -1: the whole row counts, not only its date. */
+/* The window covers the work area less the menu bar's height, as at start; again after a rotation. */
+static void FitToScreen(HWND h)
+{
+    RECT r, mb;
+    if (!SystemParametersInfoW(SPI_GETWORKAREA, 0, &r, 0)) return;
+    if (gMenuBar && GetWindowRect(gMenuBar, &mb)) r.bottom -= mb.bottom - mb.top;
+    MoveWindow(h, r.left, r.top, r.right - r.left, r.bottom - r.top, TRUE);
+}
+
 static int TappedRow(HWND list)
 {
     LVHITTESTINFO ht;
@@ -3335,7 +3355,8 @@ static LRESULT CALLBACK Proc(HWND h, UINT m, WPARAM w, LPARAM l)
         SHHandleWMActivate(h, w, l, &gSai, FALSE);
         return 0;
     case WM_SETTINGCHANGE:
-        SHHandleWMSettingChange(h, w, l, &gSai);
+        if (w == SETTINGCHANGE_RESET) FitToScreen(h);   /* the screen turned: fill the new work area */
+        else SHHandleWMSettingChange(h, w, l, &gSai);
         return 0;
     case WM_SHOWPAGE:
         ShowPage((int)w);

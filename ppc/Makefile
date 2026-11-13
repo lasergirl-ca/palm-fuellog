@@ -51,9 +51,9 @@ $(OBJ)/store_%.o: store/%.c store/db.h store/pdbfile.h store/dirs.h
 	@mkdir -p $(OBJ)
 	$(CC) $(CFLAGS) -Wextra -std=gnu99 -c -o $@ $<
 
-$(OBJ)/app_rc.o: app/app.rc
+$(OBJ)/app_rc.o: app/app.rc app/FuelLog.ico
 	@mkdir -p $(OBJ)
-	arm-mingw32ce-windres -D_WIN32_WCE=0x0501 -o $@ $<
+	arm-mingw32ce-windres -D_WIN32_WCE=0x0501 --include-dir=app -o $@ $<
 
 $(OUT)/FuelLog.exe: $(APP_OBJS)
 	@mkdir -p $(OUT)
