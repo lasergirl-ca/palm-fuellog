@@ -329,3 +329,19 @@ int DbProgrammeById(UInt8 id, ProgrammeRecord *r)
     for (i = 0; i < n; i++) if (DbGetProgramme(i, r) == dbOk && r->id == id) return 1;
     return 0;
 }
+
+Int32 DbWriteCopy(const char *dir)
+{
+    UInt8 i;
+    char path[300];
+    if (!gOpen) return dbErrIo;
+    for (i = 0; i < dbAll; i++) {
+        Int32 e;
+        DbPath(dir, i, path);
+        e = PdbSave(&gDb[i], path);
+        if (e) return Err(e);
+    }
+    return dbOk;
+}
+
+const char *DbDir(void) { return gDir; }

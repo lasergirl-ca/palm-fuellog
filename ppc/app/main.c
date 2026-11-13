@@ -16,6 +16,9 @@
 #include "textview.h"
 #include "graphview.h"
 #include "svcview.h"
+#include "exportfile.h"
+#include "backupfile.h"
+#include "../store/dirs.h"
 #include <notify.h>
 #include "../../src/report.h"
 #include "../store/db.h"
@@ -23,7 +26,7 @@
 #include "../../src/units.h"
 #include "../../src/currency.h"
 
-#define kVersion "0.6"
+#define kVersion "0.7"
 #define kClass L"FuelLogPPC"
 #define kFormClass L"FuelLogForm"
 #define kSheetClass L"FuelLogSheet"
@@ -32,10 +35,12 @@
 #define kDataDirW L"\\My Documents\\FuelLog"
 #define kPalmBackup L"\\PALM\\Programs\\FuelLog\\Backup"
 
-enum { IDC_VEHICLE = 100, IDC_LIST, IDC_AVG, IDC_MONTH, IDC_EMPTY, IDC_VEHLIST, IDC_VEHARCH, IDC_PGMLIST, IDC_BANNER };
+enum { IDC_VEHICLE = 100, IDC_LIST, IDC_AVG, IDC_MONTH, IDC_EMPTY, IDC_VEHLIST, IDC_VEHARCH, IDC_PGMLIST, IDC_BANNER, IDC_SETLIST };
 enum { IDM_ABOUT = 200, IDM_PALM, IDM_EXIT, IDM_NEW, IDM_SAVE, IDM_CANCEL, IDM_DELETE, IDM_DONE, IDM_VEHICLES, IDM_PREFS,
        IDM_PROGRAMMES, IDM_OK, IDM_ARCHIVE, IDM_STATS, IDM_REPORTS, IDM_GRAPHS, IDM_SERVICE, IDM_HISTORY,
-       IDM_INTERVALS, IDM_LOG, IDM_NEWSVC };
+       IDM_INTERVALS, IDM_LOG, IDM_NEWSVC, IDM_EXPORT, IDM_DOEXPORT, IDM_BACKUP, IDM_RESTORE };
+/* The Export page. */
+enum { IDX_FORMAT = 800, IDX_VEH, IDX_YEAR, IDX_PGM, IDX_DEST, IDX_WHERE, IDX_LAST, IDX_AUTO, IDX_KEEP };
 /* The Service Type and Log Service sheets. */
 enum { IDY_NAME = 700, IDY_DIST, IDY_MONTHS, IDY_WARNDIST, IDY_WARNDAYS, IDY_ALARM, IDY_DETAIL, IDY_SUM1, IDY_SUM2, IDY_SUM3 };
 #define IDS_CHK(i) (742 + (i))
@@ -56,7 +61,7 @@ enum { IDE_NAME = 440, IDE_CUR, IDE_MONEY, IDE_EARN, IDE_BASIS, IDE_PREM, IDE_PA
 #define IDT_ROW(i) (500 + 4 * (i))
 enum { IDT_ADD = 520, IDT_TOTAL };
 enum { pageList, pageForm, pagePrefs, pageVehicles, pageVehicle, pagePoints, pageProgrammes, pageProgramme,
-       pageStats, pageReports, pageGraphs, pageService, pageHistory, pageSvt, pageVisit };
+       pageStats, pageReports, pageGraphs, pageService, pageHistory, pageSvt, pageVisit, pageExport, pageRestore };
 #define kRowsClass L"FuelLogRows"
 #define kTextClass L"FuelLogText"
 #define kGraphClass L"FuelLogGraph"
@@ -88,6 +93,14 @@ static UInt16 gHistType = 0xFFFF;
 static SvtEdit gSvtEdit;
 static SvlEdit gSvlEdit;
 static int gSvtReturn = pageService, gVisitReturn = pageService;
+/* Export and backup. */
+static HWND gSetList;
+static char gCards[4][64];           /* storage cards: the root folders with the temporary attribute */
+static UInt8 gCardCount, gExpVehIds[vehMaxVehicles + 1], gExpPgmIds[pgmMaxProgrammes + 1];
+static UInt16 gExpYears[40], gExpYearCount;
+static char gSets[24][dirNameLen];
+static UInt16 gSetCount;
+static char gRestoreDir[300];
 static SHACTIVATEINFO gSai;
 static int gDpi = 96, gPage = pageList, gDataOk;
 static FuelPrefs gPrefs;
@@ -134,7 +147,7 @@ typedef struct {
     void (*changed)(int id);    /* a combo's choice changed */
     void (*edited)(int id);     /* an edit's text changed by the user */
 } Sheet;
-static Sheet gPrefsSheet, gVehSheet, gPgmSheet, gPtsSheet, gSvtSheet, gSvlSheet;
+static Sheet gPrefsSheet, gVehSheet, gPgmSheet, gPtsSheet, gSvtSheet, gSvlSheet, gExpSheet;
 static void PtsOpen(void);
 static void ScheduleAlarm(void);
 static void Layout(void);
@@ -328,6 +341,8 @@ static void Layout(void)
     MoveWindow(gRowsPanel, 0, gPage == pageHistory ? 0 : top, w, gPage == pageHistory ? h : h - top, TRUE);
     MoveWindow(gSvtSheet.panel, 0, 0, w, h, TRUE);
     MoveWindow(gSvlSheet.panel, 0, 0, w, h, TRUE);
+    MoveWindow(gExpSheet.panel, 0, 0, w, h, TRUE);
+    MoveWindow(gSetList, 0, 0, w, h, TRUE);
     {
         int listTop = top + (gBannerShown ? S(22) : 0);     /* the service banner sits over the list */
         MoveWindow(gList, 0, listTop, w, h - listTop - foot, TRUE);
@@ -996,7 +1011,8 @@ static LRESULT CALLBACK SheetProc(HWND h, UINT m, WPARAM w, LPARAM l)
 {
     Sheet *s = h == gPrefsSheet.panel ? &gPrefsSheet : h == gVehSheet.panel ? &gVehSheet
              : h == gPgmSheet.panel ? &gPgmSheet : h == gPtsSheet.panel ? &gPtsSheet
-             : h == gSvtSheet.panel ? &gSvtSheet : h == gSvlSheet.panel ? &gSvlSheet : NULL;
+             : h == gSvtSheet.panel ? &gSvtSheet : h == gSvlSheet.panel ? &gSvlSheet
+             : h == gExpSheet.panel ? &gExpSheet : NULL;
     if (m == WM_CREATE) {
         SheetCreate((Sheet *)((CREATESTRUCTW *)l)->lpCreateParams, h);
         return 0;
@@ -2412,6 +2428,270 @@ static void RowTapped(int row)
     }
 }
 
+/* ---- Export and backup ---- */
+
+/* Storage cards: root folders with the temporary attribute. */
+static void FindCards(void)
+{
+    WIN32_FIND_DATAW fd;
+    HANDLE h = FindFirstFileW(L"\\*", &fd);
+    gCardCount = 0;
+    if (h == INVALID_HANDLE_VALUE) return;
+    do {
+        char name[64];
+        if ((fd.dwFileAttributes & (FILE_ATTRIBUTE_DIRECTORY | FILE_ATTRIBUTE_TEMPORARY)) != (FILE_ATTRIBUTE_DIRECTORY | FILE_ATTRIBUTE_TEMPORARY)) continue;
+        if (WideCharToMultiByte(CP_ACP, 0, fd.cFileName, -1, name, sizeof name, NULL, NULL) == 0) continue;
+        if (gCardCount < 4) { strcpy(gCards[gCardCount], "\\"); strcat(gCards[gCardCount], name); gCardCount++; }
+    } while (FindNextFileW(h, &fd));
+    FindClose(h);
+}
+
+/* The FuelLog folder at a destination: the device's own, or the Palm's folder on a card, so a
+ * card moves between a Palm and a Pocket PC with its exports and backup sets. */
+static void DestRoot(int dest, char *root)
+{
+    if (dest > 0 && dest <= gCardCount) { strcpy(root, gCards[dest - 1]); strcat(root, "\\PALM\\Programs\\FuelLog"); }
+    else strcpy(root, kDataDir);
+}
+
+static void DestFolder(int dest, const char *sub, char *out)
+{
+    char root[300];
+    DestRoot(dest, root);
+    if (dest > 0) {               /* the Palm's folders, one level at a time */
+        char p[300];
+        strcpy(p, gCards[dest - 1]); strcat(p, "\\PALM"); DirMake(p);
+        strcat(p, "\\Programs"); DirMake(p);
+        DirMake(root);
+    }
+    PathJoin(out, root, sub);
+}
+
+static int Time24(void)
+{
+    WCHAR b[4];
+    return !(GetLocaleInfoW(LOCALE_USER_DEFAULT, LOCALE_ITIME, b, 4) > 0 && b[0] == L'0');
+}
+
+static const SheetRow kExpRows[] = {
+    { IDX_FORMAT, rowCombo, L"Format:", L"CSV (text)\0XLSX workbook\0PDF report\0", 0 },
+    { IDX_VEH, rowCombo, L"Vehicle:", NULL, 0 },
+    { IDX_YEAR, rowCombo, L"Range:", NULL, 0 },
+    { IDX_PGM, rowCombo, L"Points:", NULL, 0 },
+    { IDX_DEST, rowCombo, L"Save to:", NULL, 0 },
+    { IDX_WHERE, rowText, L"", NULL, 0 },
+    { IDX_LAST, rowText, L"", NULL, 0 },
+    { IDX_AUTO, rowCheck, L"Back up each week on closing", NULL, 0 },
+    { IDX_KEEP, rowCombo, L"Sets kept:", L"3\0" L"5\0" L"10\0", 0 },
+};
+
+static void ExportLabels(void)
+{
+    Sheet *s = &gExpSheet;
+    char b[300];
+    int dest = SheetGetSel(s, IDX_DEST, 0);
+    DestRoot(dest, b);
+    SheetSetText(s, IDX_WHERE, b);
+    if (gPrefs.lastBackupDate) { strcpy(b, "Last backup "); SvcViewDueDate(b + strlen(b), gPrefs.lastBackupDate, Today()); }
+    else strcpy(b, "No backup yet");
+    SheetSetText(s, IDX_LAST, b);
+}
+
+static void ExportChanged(int id)
+{
+    static const UInt8 keep[3] = { 3, 5, 10 };
+    if (id == IDX_DEST) ExportLabels();
+    else if (id == IDX_AUTO) { gPrefs.autoBackup = (UInt8)SheetGetCheck(&gExpSheet, IDX_AUTO); StorePrefs(); }
+    else if (id == IDX_KEEP) { gPrefs.backupSetsKept = keep[SheetGetSel(&gExpSheet, IDX_KEEP, 1) % 3]; StorePrefs(); }
+}
+
+static void ExportOpen(void)
+{
+    Sheet *s = &gExpSheet;
+    char names[pgmMaxProgrammes + 1][pgmNameLen];
+    VehicleRecord v;
+    ProgrammeRecord pg;
+    FillRecord f;
+    UInt16 n, i, y, ymin = 0, ymax = 0;
+    UInt8 m, d;
+    int count, sel;
+    if (!gDataOk) {
+        MessageBoxW(gWin, L"The log in \\My Documents\\FuelLog could not be read.", L"FuelLog", MB_OK | MB_ICONEXCLAMATION);
+        return;
+    }
+    FindCards();
+    /* vehicles */
+    count = 0; sel = 0;
+    n = DbCount(dbVehicles);
+    for (i = 0; i < n && count < vehMaxVehicles; i++) {
+        if (DbGetVehicle(i, &v) != dbOk) continue;
+        strcpy(names[count], v.name);
+        gExpVehIds[count + 1] = v.id;
+        if (v.id == gPrefs.currentVehicle) sel = count + 1;
+        count++;
+    }
+    gExpVehIds[0] = 255;
+    SheetSetChoices(s, IDX_VEH, L"All vehicles", names, count, sel);
+    /* years with fills, newest first */
+    n = DbCount(dbFills);
+    for (i = 0; i < n; i++) {
+        if (DbGetFill(i, &f) != dbOk) continue;
+        DateDaysToYmd(f.date, &y, &m, &d);
+        if (!ymin || y < ymin) ymin = y;
+        if (y > ymax) ymax = y;
+    }
+    gExpYearCount = 0;
+    for (y = ymax; ymin && y >= ymin && gExpYearCount < 40; y--) gExpYears[gExpYearCount++] = y;
+    SendMessageW(SC(s, IDX_YEAR), CB_RESETCONTENT, 0, 0);
+    SendMessageW(SC(s, IDX_YEAR), CB_ADDSTRING, 0, (LPARAM)L"All years");
+    for (i = 0; i < gExpYearCount; i++) {
+        WCHAR w[8];
+        wsprintfW(w, L"%u", (unsigned)gExpYears[i]);
+        SendMessageW(SC(s, IDX_YEAR), CB_ADDSTRING, 0, (LPARAM)w);
+    }
+    SendMessageW(SC(s, IDX_YEAR), CB_SETCURSEL, 0, 0);
+    /* programmes */
+    count = 0;
+    n = DbCount(dbProgrammes);
+    for (i = 0; i < n && count < pgmMaxProgrammes; i++) {
+        if (DbGetProgramme(i, &pg) != dbOk) continue;
+        strcpy(names[count], pg.name);
+        gExpPgmIds[count + 1] = pg.id;
+        count++;
+    }
+    gExpPgmIds[0] = 255;
+    SheetSetChoices(s, IDX_PGM, L"All programmes", names, count, 0);
+    /* destinations: the card first when there is one, as the Palm writes to its card */
+    SendMessageW(SC(s, IDX_DEST), CB_RESETCONTENT, 0, 0);
+    SendMessageW(SC(s, IDX_DEST), CB_ADDSTRING, 0, (LPARAM)L"This device");
+    for (i = 0; i < gCardCount; i++) {
+        WCHAR w[64];
+        ToWide(gCards[i] + 1, w, 64);
+        SendMessageW(SC(s, IDX_DEST), CB_ADDSTRING, 0, (LPARAM)w);
+    }
+    SendMessageW(SC(s, IDX_DEST), CB_SETCURSEL, gCardCount ? 1 : 0, 0);
+    SheetSetCheck(s, IDX_AUTO, gPrefs.autoBackup);
+    SheetSetSel(s, IDX_KEEP, gPrefs.backupSetsKept <= 3 ? 0 : gPrefs.backupSetsKept <= 5 ? 1 : 2);
+    ExportLabels();
+    s->scroll = 0;
+    SheetLayout(s);
+    PostMessageW(gWin, WM_SHOWPAGE, pageExport, 0);
+}
+
+static void ExportRun(void)
+{
+    Sheet *s = &gExpSheet;
+    char dir[300], name[40];
+    WCHAR msg[400], wn[40], wd[300];
+    UInt32 bytes = 0;
+    int fmt = SheetGetSel(s, IDX_FORMAT, 0), veh = SheetGetSel(s, IDX_VEH, 0), year = SheetGetSel(s, IDX_YEAR, 0);
+    int pgm = SheetGetSel(s, IDX_PGM, 0), dest = SheetGetSel(s, IDX_DEST, 0);
+    Int32 r;
+    HCURSOR old = SetCursor(LoadCursor(NULL, IDC_WAIT));
+    DestFolder(dest, "Export", dir);
+    ExportSetup(&gPrefs, gPoint, gThousands, Time24());
+    r = ExportFile(dir, (UInt8)fmt, gExpVehIds[veh], year > 0 && year <= gExpYearCount ? gExpYears[year - 1] : 0,
+                   gExpPgmIds[pgm], Today(), name, &bytes);
+    SetCursor(old);
+    ToWide(name, wn, 40);
+    ToWide(dir, wd, 300);
+    if (r == exportOk) wsprintfW(msg, L"Exported %s (%u bytes) to %s.", wn, (unsigned)bytes, wd);
+    else if (r == exportErrFolder) wsprintfW(msg, L"The folder %s could not be made or written. Is the card in and unlocked?", wd);
+    else wsprintfW(msg, L"%s was not written in full. Free some storage and try again.", wn);
+    MessageBoxW(gWin, msg, L"Export", MB_OK | (r == exportOk ? MB_ICONINFORMATION : MB_ICONEXCLAMATION));
+}
+
+/* A backup set of the log as it stands. On closing, the weekly one goes to the card when there is one. */
+static Int32 BackupTo(int dest, char *set, char *dir)
+{
+    Int32 r;
+    DestFolder(dest, "Backup", dir);
+    r = BackupNow(dir, Today(), NowMinutes(), gPrefs.backupSetsKept, set);
+    if (r == backupOk) { gPrefs.lastBackupDate = Today(); StorePrefs(); }
+    return r;
+}
+
+static void BackupRun(void)
+{
+    char set[40], dir[300];
+    WCHAR msg[400], ws[40], wd[300];
+    HCURSOR old = SetCursor(LoadCursor(NULL, IDC_WAIT));
+    Int32 r = BackupTo(SheetGetSel(&gExpSheet, IDX_DEST, 0), set, dir);
+    SetCursor(old);
+    ToWide(set, ws, 40);
+    ToWide(dir, wd, 300);
+    if (r == backupOk) wsprintfW(msg, L"Backed up as set %s in %s. A Palm restores it from the same folder on its card.", ws, wd);
+    else wsprintfW(msg, L"The backup could not be written to %s. Is the card in and unlocked?", wd);
+    MessageBoxW(gWin, msg, L"Back up", MB_OK | (r == backupOk ? MB_ICONINFORMATION : MB_ICONEXCLAMATION));
+    ExportLabels();
+}
+
+static void AutoBackup(void)
+{
+    char set[40], dir[300];
+    if (!gDataOk || !BackupDue(&gPrefs, Today())) return;
+    FindCards();
+    BackupTo(gCardCount ? 1 : 0, set, dir);
+}
+
+/* The sets at the Export page's destination, newest first. */
+static void RestoreOpen(void)
+{
+    LVITEMW it;
+    WCHAR w[dirNameLen];
+    UInt16 i;
+    DestFolder(SheetGetSel(&gExpSheet, IDX_DEST, 0), "Backup", gRestoreDir);
+    gSetCount = BackupList(gRestoreDir, gSets, 24);
+    SendMessageW(gSetList, LVM_DELETEALLITEMS, 0, 0);
+    for (i = 0; i < gSetCount; i++) {
+        ToWide(gSets[i], w, dirNameLen);
+        memset(&it, 0, sizeof it);
+        it.mask = LVIF_TEXT;
+        it.iItem = i;
+        it.pszText = w;
+        SendMessageW(gSetList, LVM_INSERTITEMW, 0, (LPARAM)&it);
+    }
+    if (!gSetCount) {
+        WCHAR msg[400], wd[300];
+        ToWide(gRestoreDir, wd, 300);
+        wsprintfW(msg, L"No backup sets in %s.", wd);
+        MessageBoxW(gWin, msg, L"Restore", MB_OK | MB_ICONINFORMATION);
+        return;
+    }
+    PostMessageW(gWin, WM_SHOWPAGE, pageRestore, 0);
+}
+
+static void RestoreSet(int row)
+{
+    char setDir[300];
+    WCHAR msg[400], ws[dirNameLen];
+    DbClock clock;
+    Int32 r;
+    HCURSOR old;
+    if (row < 0 || row >= gSetCount) return;
+    ToWide(gSets[row], ws, dirNameLen);
+    wsprintfW(msg, L"Restore the set %s?\r\n\r\nEvery fill, vehicle, programme and service now on this device will be replaced.", ws);
+    if (MessageBoxW(gWin, msg, L"Restore", MB_YESNO | MB_ICONQUESTION | MB_DEFBUTTON2) != IDYES) return;
+    PathJoin(setDir, gRestoreDir, gSets[row]);
+    clock.now = Now;
+    clock.clockShift = 0;
+    old = SetCursor(LoadCursor(NULL, IDC_WAIT));
+    r = BackupRestore(setDir, kDataDir, &clock);
+    SetCursor(old);
+    if (r == backupErrOpen) gDataOk = 0;      /* every other outcome leaves a log open */
+    if (r == backupErrNewer) MessageBoxW(gWin, L"That set was written by a newer FuelLog than this one. Nothing was changed.", L"Restore", MB_OK | MB_ICONEXCLAMATION);
+    else if (r == backupErrMissing) MessageBoxW(gWin, L"That set is missing one of FuelLog's databases. Nothing was changed.", L"Restore", MB_OK | MB_ICONEXCLAMATION);
+    else if (r != backupOk) MessageBoxW(gWin, L"The set could not be restored in full. Free some storage and try again.", L"Restore", MB_OK | MB_ICONEXCLAMATION);
+    else {
+        wsprintfW(msg, L"Restored the set %s.", ws);
+        MessageBoxW(gWin, msg, L"Restore", MB_OK | MB_ICONINFORMATION);
+    }
+    gPrefs.currentVehicle = 255;
+    StorePrefs();
+    ScheduleAlarm();
+    PostMessageW(gWin, WM_SHOWPAGE, pageList, 0);
+}
+
 /* ---- a backup set from a Palm, on a storage card ---- */
 
 /* The newest set (their names are dates, so the greatest name) under
@@ -2485,7 +2765,7 @@ static void TakePalmSet(void)
 static void About(void)
 {
     WCHAR msg[400];
-    wsprintfW(msg, L"FuelLog for Pocket PC %S\r\nSo far: the fill list, New and Edit Fill with points, Stats, Reports, Graphs, Service, Vehicles, Programmes and Preferences.\r\n\r\n%u fills, %u vehicles, %u programmes, %u service visits\r\n"
+    wsprintfW(msg, L"FuelLog for Pocket PC %S\r\nSo far: the fill list, New and Edit Fill with points, Stats, Reports, Graphs, Service, Export and backup, Vehicles, Programmes and Preferences.\r\n\r\n%u fills, %u vehicles, %u programmes, %u service visits\r\n"
         L"Data: %s\r\nScreen %d dpi\r\n\r\nFree software under the GNU GPLv3.",
         kVersion, (unsigned)DbCount(dbFills), (unsigned)DbCount(dbVehicles), (unsigned)DbCount(dbProgrammes),
         (unsigned)DbCount(dbServiceVisits), kDataDirW, gDpi);
@@ -2527,6 +2807,18 @@ static void SetMenuBar(int page)
         AppendMenuW(bar, MF_STRING, IDM_DONE, L"Done");
         AppendMenuW(bar, MF_STRING, IDM_NEW, L"New");
         break;
+    case pageExport:
+        AppendMenuW(menu, MF_STRING, IDM_BACKUP, L"Back up now");
+        AppendMenuW(menu, MF_STRING, IDM_RESTORE, L"Restore...");
+        AppendMenuW(menu, MF_SEPARATOR, 0, NULL);
+        AppendMenuW(menu, MF_STRING, IDM_DONE, L"Done");
+        AppendMenuW(bar, MF_STRING, IDM_DOEXPORT, L"Export");
+        AppendMenuW(bar, MF_POPUP, (UINT_PTR)menu, L"Menu");
+        break;
+    case pageRestore:
+        DestroyMenu(menu);
+        AppendMenuW(bar, MF_STRING, IDM_DONE, L"Done");
+        break;
     case pageService:
         AppendMenuW(menu, MF_STRING, IDM_NEWSVC, L"New service");
         AppendMenuW(menu, MF_STRING, IDM_HISTORY, L"History");
@@ -2558,6 +2850,7 @@ static void SetMenuBar(int page)
         AppendMenuW(menu, MF_STRING, IDM_PROGRAMMES, L"Programmes");
         AppendMenuW(menu, MF_STRING, IDM_PREFS, L"Preferences");
         AppendMenuW(menu, MF_SEPARATOR, 0, NULL);
+        AppendMenuW(menu, MF_STRING, IDM_EXPORT, L"Export and backup");
         AppendMenuW(menu, MF_STRING, IDM_PALM, L"Use Palm backup...");
         AppendMenuW(menu, MF_STRING, IDM_ABOUT, L"About");
         AppendMenuW(menu, MF_SEPARATOR, 0, NULL);
@@ -2593,6 +2886,8 @@ static void ShowPage(int page)
     ShowWindow(gRowsPanel, page == pageService || page == pageHistory ? SW_SHOW : SW_HIDE);
     ShowWindow(gSvtSheet.panel, page == pageSvt ? SW_SHOW : SW_HIDE);
     ShowWindow(gSvlSheet.panel, page == pageVisit ? SW_SHOW : SW_HIDE);
+    ShowWindow(gExpSheet.panel, page == pageExport ? SW_SHOW : SW_HIDE);
+    ShowWindow(gSetList, page == pageRestore ? SW_SHOW : SW_HIDE);
     if (!list) ShowWindow(gBanner, SW_HIDE);
     ReportControls();                       /* each shows its pickers only on its own page */
     GraphControls();
@@ -2626,6 +2921,16 @@ static void ShowPage(int page)
         if (page == pageService) { BuildVehicles(); ServiceVehiclePick(); ServiceRefresh(); }
         else HistoryRefresh();
         SetFocus(gRowsPanel);
+        break;
+    case pageExport:
+        SHSipPreference(gWin, SIP_FORCEDOWN);
+        SetWindowTextW(gWin, L"Export");
+        SheetLayout(&gExpSheet);
+        SetFocus(gExpSheet.panel);
+        break;
+    case pageRestore:
+        SetWindowTextW(gWin, L"Restore");
+        SetFocus(gSetList);
         break;
     case pageSvt:
         SetWindowTextW(gWin, gSvtEdit.index == svtEditNew ? L"New Service" : L"Service Type");
@@ -2752,6 +3057,12 @@ static void Create(HWND h)
     gSvlSheet.changed = VisitChanged;
     gSvlSheet.edited = VisitEdited;
     CreateWindowW(kSheetClass, L"", WS_CHILD | WS_VSCROLL | WS_CLIPCHILDREN, 0, 0, 10, 10, h, NULL, gInst, &gSvlSheet);
+    gExpSheet.rows = kExpRows; gExpSheet.count = sizeof kExpRows / sizeof kExpRows[0]; gExpSheet.labelW = 66;
+    gExpSheet.changed = ExportChanged;
+    CreateWindowW(kSheetClass, L"", WS_CHILD | WS_VSCROLL | WS_CLIPCHILDREN, 0, 0, 10, 10, h, NULL, gInst, &gExpSheet);
+    gSetList = CreateWindowW(WC_LISTVIEWW, L"", WS_CHILD | LVS_REPORT | LVS_SINGLESEL | LVS_NOSORTHEADER, 0, 0, 10, 10, h, (HMENU)IDC_SETLIST, gInst, NULL);
+    SendMessageW(gSetList, LVM_SETEXTENDEDLISTVIEWSTYLE, 0, LVS_EX_FULLROWSELECT);
+    AddColumn(gSetList, 0, 200, 0, L"Backup set (tap one to restore it)");
 }
 
 static LRESULT CALLBACK Proc(HWND h, UINT m, WPARAM w, LPARAM l)
@@ -2789,6 +3100,8 @@ static LRESULT CALLBACK Proc(HWND h, UINT m, WPARAM w, LPARAM l)
                 || gPage == pageService)
                 PostMessageW(h, WM_SHOWPAGE, pageList, 0);
             else if (gPage == pageHistory) PostMessageW(h, WM_SHOWPAGE, pageService, 0);
+            else if (gPage == pageExport) PostMessageW(h, WM_SHOWPAGE, pageList, 0);
+            else if (gPage == pageRestore) PostMessageW(h, WM_SHOWPAGE, pageExport, 0);
             return 0;
         case IDR_MODE:
             if (HIWORD(w) == CBN_SELCHANGE) {
@@ -2827,6 +3140,10 @@ static LRESULT CALLBACK Proc(HWND h, UINT m, WPARAM w, LPARAM l)
             return 0;
         case IDM_OK: if (gPage == pagePoints) PtsClose(1); return 0;
         case IDM_SERVICE: if (gPage == pageList) ServiceOpen(); return 0;
+        case IDM_EXPORT: if (gPage == pageList) ExportOpen(); return 0;
+        case IDM_DOEXPORT: if (gPage == pageExport) ExportRun(); return 0;
+        case IDM_BACKUP: if (gPage == pageExport) BackupRun(); return 0;
+        case IDM_RESTORE: if (gPage == pageExport) RestoreOpen(); return 0;
         case IDC_BANNER: if (HIWORD(w) == BN_CLICKED && gPage == pageList) ServiceOpen(); return 0;
         case IDM_NEWSVC: if (gPage == pageService) SvtOpen(svtEditNew, pageService); return 0;
         case IDM_HISTORY: if (gPage == pageService) { gHistType = 0xFFFF; PostMessageW(h, WM_SHOWPAGE, pageHistory, 0); } return 0;
@@ -2891,6 +3208,15 @@ static LRESULT CALLBACK Proc(HWND h, UINT m, WPARAM w, LPARAM l)
             }
             break;
         }
+        if (n->idFrom == IDC_SETLIST) {
+            /* A tap on a set offers to restore it. */
+            if (n->code == (UINT)NM_CLICK || n->code == (UINT)NM_RETURN) {
+                int row = n->code == (UINT)NM_CLICK ? TappedRow(gSetList) : (int)SendMessageW(gSetList, LVM_GETNEXTITEM, (WPARAM)-1, LVNI_SELECTED);
+                if (gPage == pageRestore) RestoreSet(row);
+                return 0;
+            }
+            break;
+        }
         if (n->idFrom == IDC_PGMLIST) {
             /* A tap on a programme opens it. */
             if (n->code == (UINT)NM_CLICK || n->code == (UINT)NM_RETURN) {
@@ -2926,6 +3252,7 @@ static LRESULT CALLBACK Proc(HWND h, UINT m, WPARAM w, LPARAM l)
         break;
     }
     case WM_CLOSE:
+        AutoBackup();                       /* the weekly set, as the Palm makes on leaving */
         StorePrefs();
         if (DbDirty()) DbSave();
         DestroyWindow(h);

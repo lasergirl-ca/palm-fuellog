@@ -4,13 +4,14 @@ A Windows Mobile 5 and 6 version of FuelLog, built on the Palm version's own cor
 record formats, the maths, the dates, stats, reports, service rules, points and sync rules
 are the files in `../src`, compiled unchanged; this folder adds storage and the windows.
 
-Status: **P5, Service.** It opens the six FuelLog databases, shows the fills with the same
-columns and figures as the Palm's list, can take a backup set a Palm wrote to a storage
-card, adds, edits and deletes fills and charges by the Palm form's rules with their points,
-keeps the vehicles, the rewards programmes and the service log, has its own Preferences for
-units and currency, and shows the Palm's Stats, Reports and Graphs. P1 to P3b ran on a
-Windows Mobile 5 and a Windows Mobile 6 device (Nov 12, 2026); P4 and P5 have not run on one
-yet, and from here the slices are built back to back and checked on the devices together.
+Status: **P6a, Export and backup.** It opens the six FuelLog databases, shows the fills
+with the same columns and figures as the Palm's list, adds, edits and deletes fills and
+charges by the Palm form's rules with their points, keeps the vehicles, the rewards
+programmes and the service log, has its own Preferences, shows the Palm's Stats, Reports,
+Graphs and Service, and exports CSV, XLSX and PDF and makes and restores backup sets the
+Palm can use. P1 to P3b ran on a Windows Mobile 5 and a Windows Mobile 6 device (Nov 12,
+2026); P4 onwards have not run on one yet, and from here the slices are built back to back
+and checked on the devices together.
 
 ## How it fits with the Palm version
 
@@ -93,6 +94,14 @@ The compiler is CeGCC's `arm-mingw32ce` (GCC 9.3.0) in a Docker volume; see `dev
    shows a banner line that opens Service, and a fill that tips a service over says so once.
    A service with Alarm when due ticked sets a Windows Mobile reminder for 9 am on its due
    date (a dialog and a sound, with FuelLog's icon to tap), replaced whenever anything changes.
+11. **Menu, Export and backup** writes the Palm's CSV, XLSX (five sheets) or PDF report of
+   all fills or one vehicle, one year or one programme's fills (Export, the left soft key).
+   Save to is this device (`\My Documents\FuelLog\Export`) or a storage card, where the
+   files go in the Palm's own folders (`\<card>\PALM\Programs\FuelLog\Export` and
+   `Backup`), so a card carries them between a Palm and a Pocket PC. Menu, Back up now makes
+   a set the Palm can restore; Menu, Restore lists the sets there, a Palm's included. With
+   the weekly backup ticked, closing FuelLog makes a set when a week has passed, on the card
+   when there is one; Sets kept prunes the oldest.
 
 Two places where this form deliberately differs from the Palm's, both found while porting:
 the previous odometer shown for an edited fill is that vehicle's fill before it (the Palm
@@ -114,8 +123,11 @@ app/statsview.c      Stats as lines of text (host-tested)
 app/reportview.c     Reports as lines of text, and the report periods (host-tested)
 app/graphview.c      the graphs' points, ranges and axis labels (host-tested)
 app/svcview.c        what is due, the Service and History rows, Service Type and Log Service (host-tested)
+app/exportfile.c     the Palm's CSV, XLSX and PDF exporters, ported over the store (host-tested)
+app/backupfile.c     backup sets and restore (host-tested)
+store/dirs.c         folders and whole files, Windows CE and POSIX
 app/settings.c       Prefs as the bytes kept in the registry (host-tested)
-app/main.c           the window: its pages (list, fill, Points, Stats, Reports, Graphs, Service, Preferences, vehicles, programmes)
+app/main.c           the window: its pages (list, fill, Points, Stats, Reports, Graphs, Service, Export, Preferences, vehicles, programmes)
 app/app.rc           the hi-res flag for VGA devices
 tests/test_store.c   host tests against the fixture set tools/mkpdb writes
 tests/test_filledit.c  host tests of the fill form's rules on a copy of that set
@@ -123,6 +135,7 @@ tests/test_vehedit.c   host tests of the Prefs bytes and the vehicle rules
 tests/test_pgmedit.c   host tests of the programme rules and the presets
 tests/test_views.c     host tests of Stats, Reports and Graphs (VIEWS_DUMP=1 prints the lines)
 tests/test_service.c   host tests of the service model
+tests/test_files.c     host tests of export, backup and restore; check_export.py reads the XLSX
 hello/, coretest/    the SP9 spike programmes
 ```
 
@@ -136,9 +149,23 @@ hello/, coretest/    the SP9 spike programmes
 | P3b | Programmes and the Points page on a fill | Works on both devices (Nov 12, 2026) |
 | P4 | Stats, reports and graphs | Built; device check pending |
 | P5 | Service types, visits, the due list and a reminder | Built; device check pending |
-| P6 | CSV, XLSX and PDF export; CSV, XLSX and XLS import; backup and restore | |
+| P6a | CSV, XLSX and PDF export; backup and restore | Built; device check pending |
+| P6b | CSV, XLSX and XLS import | |
 | P7 | Sync with a Palm or another Pocket PC through a `.fuel` file on a card; beaming if IrOBEX allows | |
 | P8 | VGA and landscape pass, an icon, a CAB installer | |
+
+## What to check on the devices (P6a)
+
+1. Menu on the list has Export and backup. With the Palm's card in, Save to names the card
+   and the folder under it.
+2. Export a CSV, an XLSX and a PDF. Each says its name and size. Copy them to a computer:
+   the CSV and XLSX open in Excel with accented notes intact, the PDF has the summary, the
+   log pages and the economy graph.
+3. Export one vehicle, one year, and one programme's fills: each has only those rows.
+4. Back up now, then put the card in the Palm: Export, Restore lists the set and restores
+   it. Make a backup on the Palm and Restore it here: the log matches the Palm's.
+5. Tick Back up each week on closing, close FuelLog with Menu, Exit: a set appears when a
+   week has passed since the last (set the device date ahead to see it).
 
 ## What to check on the devices (P5)
 

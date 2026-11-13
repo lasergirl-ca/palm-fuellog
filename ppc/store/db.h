@@ -63,6 +63,9 @@ Int32 DbGetFill(UInt16 index, FillRecord *r);
 Int32 DbGetVehicle(UInt16 index, VehicleRecord *r);
 /* The vehicle with this id; 0 when there is none. */
 int   DbVehicleById(UInt8 id, VehicleRecord *r);
+/* All six databases as they stand in memory, written to another folder: a backup set. */
+Int32 DbWriteCopy(const char *dir);
+const char *DbDir(void);
 Int32 DbGetProgramme(UInt16 index, ProgrammeRecord *r);
 int   DbProgrammeById(UInt8 id, ProgrammeRecord *r);
 
