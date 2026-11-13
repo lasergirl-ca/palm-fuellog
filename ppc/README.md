@@ -4,10 +4,11 @@ A Windows Mobile 5 and 6 version of FuelLog, built on the Palm version's own cor
 record formats, the maths, the dates, stats, reports, service rules, points and sync rules
 are the files in `../src`, compiled unchanged; this folder adds storage and the windows.
 
-Status: **P2, New and Edit Fill.** It opens the six FuelLog databases, shows the fills with
-the same columns and figures as the Palm's list, can take a backup set a Palm wrote to a
-storage card, and adds, edits and deletes fills and charges by the Palm form's rules. P1 ran
-on a Windows Mobile 5 and a Windows Mobile 6 device (Nov 12, 2026); P2 has not run on one yet.
+Status: **P3, Vehicles and Preferences.** It opens the six FuelLog databases, shows the
+fills with the same columns and figures as the Palm's list, can take a backup set a Palm
+wrote to a storage card, adds, edits and deletes fills and charges by the Palm form's rules,
+keeps the vehicles, and has its own Preferences for units and currency. P1 and P2 ran on a
+Windows Mobile 5 and a Windows Mobile 6 device (Nov 12, 2026); P3 has not run on one yet.
 
 ## How it fits with the Palm version
 
@@ -52,11 +53,19 @@ The compiler is CeGCC's `arm-mingw32ce` (GCC 9.3.0) in a Docker volume; see `dev
    Cancel and, for a fill already in the log, Delete. Every save is written to the `.pdb`
    files at once.
 
-Units are the defaults for now (km, litres, km/L in the list, prices in cents, CAD home
-currency): Prefs are a later slice, and the Palm's own Prefs do not travel in a backup set.
-The last payment, currency and exchange rate are remembered only until FuelLog closes, for
-the same reason. Points: a new fill earns its auto-apply programmes as on the Palm, and an
-edited fill keeps the points stored on it; the dialog that changes them comes with P3.
+5. **Menu, Preferences** sets the units (distance, volume, economy, price per litre or
+   gallon, price in dollars or cents), the home currency and the currency a new fill
+   starts in. They start at the Palm's defaults (km, litres, cents, CAD), because the
+   Palm's own Prefs do not travel in a backup set, and are kept in the registry under
+   `HKEY_CURRENT_USER\Software\FuelLog` with the vehicle the list shows and the last
+   payment, currency and exchange rates.
+6. **Menu, Vehicles** lists the vehicles with their fill count and last odometer; a tap
+   opens one, New makes one (sixteen at most), and Show archived brings back the hidden
+   ones. A vehicle with fills can be archived but not deleted, as on the Palm.
+
+Points: a new fill earns its auto-apply programmes as on the Palm, and an edited fill keeps
+the points stored on it; the programmes and the dialog that changes a fill's points come
+with P3b.
 
 Two places where this form deliberately differs from the Palm's, both found while porting:
 the previous odometer shown for an edited fill is that vehicle's fill before it (the Palm
@@ -72,10 +81,13 @@ store/pdbfile.c      a .pdb file read whole and written whole
 store/db.c           FuelLog's six databases over those files
 app/fillview.c       what the fill list shows (plain C, host-tested)
 app/filledit.c       New and Edit Fill's rules (plain C, host-tested)
-app/main.c           the window: the list page, the form page, the soft keys
+app/vehedit.c        the vehicle list's rows and Edit Vehicle's rules (host-tested)
+app/settings.c       Prefs as the bytes kept in the registry (host-tested)
+app/main.c           the window: its pages (list, fill, Preferences, vehicles) and soft keys
 app/app.rc           the hi-res flag for VGA devices
 tests/test_store.c   host tests against the fixture set tools/mkpdb writes
 tests/test_filledit.c  host tests of the fill form's rules on a copy of that set
+tests/test_vehedit.c   host tests of the Prefs bytes and the vehicle rules
 hello/, coretest/    the SP9 spike programmes
 ```
 
@@ -84,15 +96,37 @@ hello/, coretest/    the SP9 spike programmes
 | Slice | What | State |
 |---|---|---|
 | P1 | The .pdb store; the fill list; taking a Palm backup set | Works on both devices (Nov 12, 2026) |
-| P2 | New and Edit Fill, with any two of volume, price and total giving the third; delete | Built; device check pending |
-| P3 | Vehicles, programmes, the Points dialog and Prefs (units, currency), kept in the registry | |
+| P2 | New and Edit Fill, with any two of volume, price and total giving the third; delete | Works on both devices (Nov 12, 2026) |
+| P3 | Vehicles; Prefs (units, currency), kept in the registry | Built; device check pending |
+| P3b | Programmes and the Points dialog on a fill | |
 | P4 | Stats, reports and graphs | |
 | P5 | Service types, visits, the due list and a reminder | |
 | P6 | CSV, XLSX and PDF export; CSV, XLSX and XLS import; backup and restore | |
 | P7 | Sync with a Palm or another Pocket PC through a `.fuel` file on a card; beaming if IrOBEX allows | |
 | P8 | VGA and landscape pass, an icon, a CAB installer | |
 
-## What to check on the devices (P2)
+## What to check on the devices (P3)
+
+1. Menu now reads Vehicles, Preferences, Use Palm backup, About, Exit.
+2. Preferences: seven pickers, soft keys Save and Cancel. Change Economy to MPG (US) and
+   Distance to miles, Save: the list's Odo column and economy column follow, and the
+   footer's average. Cancel changes nothing.
+3. Close FuelLog and start it again: the units are still as set, and the vehicle picker
+   is on the vehicle it showed.
+4. Preferences, Price as Dollars: New Fill's price label reads "Price $/L:" and a typed
+   1.789 gives the same total as 178.9 did in cents.
+5. Vehicles: each vehicle with its type, fill count and last odometer; soft keys Done and
+   New. A tap opens Edit Vehicle with its name, type, starting odometer and tank.
+6. In Edit Vehicle, change Type to Electric: the tank row reads Battery kWh, the Fuel row
+   goes and Home c/kWh appears. Plug-in hybrid shows both Fuel and Home c/kWh.
+7. A vehicle with fills has no Delete in its Menu and says why at the bottom; tick
+   Archived, Save: it leaves the list and the pickers, and Show archived brings it back.
+8. New vehicle, Save: it is in the list page's picker and in New Fill's. Delete it from
+   its Menu (it has no fills).
+9. A saved fill's payment and currency are what the next New Fill starts with, even
+   after closing and starting FuelLog.
+
+## What was checked on the devices (P2, Nov 12, 2026: works on both)
 
 1. The soft keys read New and Menu. A tap anywhere on a row opens Edit Fill with that
    fill's figures; Menu, Cancel goes back and the list is unchanged.
