@@ -19,6 +19,7 @@
 #include "exportfile.h"
 #include "backupfile.h"
 #include "importfile.h"
+#include "syncfile.h"
 #include "../store/dirs.h"
 #include <notify.h>
 #include "../../src/report.h"
@@ -28,7 +29,7 @@
 #include "../../src/currency.h"
 #include "../../src/text.h"
 
-#define kVersion "0.8"
+#define kVersion "0.9"
 #define kClass L"FuelLogPPC"
 #define kFormClass L"FuelLogForm"
 #define kSheetClass L"FuelLogSheet"
@@ -40,7 +41,7 @@
 enum { IDC_VEHICLE = 100, IDC_LIST, IDC_AVG, IDC_MONTH, IDC_EMPTY, IDC_VEHLIST, IDC_VEHARCH, IDC_PGMLIST, IDC_BANNER, IDC_SETLIST, IDC_FILELIST, IDC_KBCOMBO };
 enum { IDM_ABOUT = 200, IDM_PALM, IDM_EXIT, IDM_NEW, IDM_SAVE, IDM_CANCEL, IDM_DELETE, IDM_DONE, IDM_VEHICLES, IDM_PREFS,
        IDM_PROGRAMMES, IDM_OK, IDM_ARCHIVE, IDM_STATS, IDM_REPORTS, IDM_GRAPHS, IDM_SERVICE, IDM_HISTORY,
-       IDM_INTERVALS, IDM_LOG, IDM_NEWSVC, IDM_EXPORT, IDM_DOEXPORT, IDM_BACKUP, IDM_RESTORE, IDM_IMPORT, IDM_DOIMPORT };
+       IDM_INTERVALS, IDM_LOG, IDM_NEWSVC, IDM_EXPORT, IDM_DOEXPORT, IDM_BACKUP, IDM_RESTORE, IDM_IMPORT, IDM_DOIMPORT, IDM_SYNC };
 /* The Export page. */
 enum { IDX_FORMAT = 800, IDX_VEH, IDX_YEAR, IDX_PGM, IDX_DEST, IDX_WHERE, IDX_LAST, IDX_AUTO, IDX_KEEP };
 /* The Service Type and Log Service sheets. */
@@ -2706,13 +2707,13 @@ static void RestoreSet(int row)
 
 /* ---- Import ---- */
 
-static void AddFiles(const char *dir, const char *where)
+static void AddFiles(const char *dir, const char *where, int sync)
 {
-    static const char *const ext[3] = { ".csv", ".xlsx", ".xls" };
+    static const char *const ext[4] = { ".csv", ".xlsx", ".xls", ".fuel" };
     char names[24][dirNameLen];
     UInt16 n, i;
     UInt8 e;
-    for (e = 0; e < 3; e++) {
+    for (e = (UInt8)(sync ? 3 : 0); e < (sync ? 4 : 3); e++) {
         n = DirList(dir, 0, ext[e], names, (UInt16)(24 - gImpFileCount));
         for (i = 0; i < n && gImpFileCount < 24; i++) {
             ImportFile *f = &gImpFiles[gImpFileCount++];
@@ -2735,13 +2736,20 @@ static void ChooseOpen(void)
     FindCards();
     DestFolder(0, "Import", dir);
     DirMake(dir);
-    AddFiles(dir, "Import");
+    AddFiles(dir, "Import", 0);
     for (i = 0; i < gCardCount; i++) {
         DestFolder(i + 1, "Import", dir);
         DirMake(dir);
-        AddFiles(dir, gCards[i] + 1);
+        AddFiles(dir, gCards[i] + 1, 0);
     }
-    AddFiles("\\My Documents", "My Documents");
+    AddFiles("\\My Documents", "My Documents", 0);
+    /* sync files, from Sync/, as the Palm's Choose a file lists them */
+    DestFolder(0, "Sync", dir);
+    AddFiles(dir, "Sync", 1);
+    for (i = 0; i < gCardCount; i++) {
+        DestFolder(i + 1, "Sync", dir);
+        AddFiles(dir, gCards[i] + 1, 1);
+    }
     SendMessageW(gFileList, LVM_DELETEALLITEMS, 0, 0);
     for (i = 0; i < gImpFileCount; i++) {
         memset(&it, 0, sizeof it);
@@ -2756,7 +2764,7 @@ static void ChooseOpen(void)
         SendMessageW(gFileList, LVM_SETITEMW, 0, (LPARAM)&it);
     }
     if (!gImpFileCount) {
-        MessageBoxW(gWin, L"No CSV, XLSX or XLS files found.\r\n\r\nPut the file in \\My Documents\\FuelLog\\Import, in My Documents, "
+        MessageBoxW(gWin, L"No CSV, XLSX, XLS or sync files found.\r\n\r\nPut the file in \\My Documents\\FuelLog\\Import, in My Documents, "
             L"or on a card in \\PALM\\Programs\\FuelLog\\Import, as for the Palm.", L"Import", MB_OK | MB_ICONINFORMATION);
         return;
     }
@@ -2813,12 +2821,56 @@ static void ImportPreview(void)
     InvalidateRect(gTextPanel, NULL, FALSE);
 }
 
+/* Writes this device's whole log, with its deletions, as a sync file in dir. */
+static void SyncWrite(const char *dir)
+{
+    char name[40];
+    WCHAR msg[400], wn[40], wd[300];
+    Int32 r = SyncWriteFile(dir, Today(), name);
+    ToWide(name, wn, 40);
+    ToWide(dir, wd, 300);
+    if (r == syncOk) wsprintfW(msg, L"Wrote %s to %s. On the Palm, Export, Choose a file, and pick it; or on another Pocket PC, Import a file.", wn, wd);
+    else wsprintfW(msg, L"The sync file could not be written to %s. Is the card in and unlocked?", wd);
+    MessageBoxW(gWin, msg, L"Sync", MB_OK | (r == syncOk ? MB_ICONINFORMATION : MB_ICONEXCLAMATION));
+}
+
+/* A sync file from a Palm or another Pocket PC: apply it, say what changed, offer to send this side back. */
+static void SyncTake(const ImportFile *file)
+{
+    char dir[300];
+    WCHAR msg[300];
+    SyncStats st;
+    Int32 r;
+    HCURSOR old = SetCursor(LoadCursor(NULL, IDC_WAIT));
+    r = SyncApplyFile(file->path, &st);
+    SetCursor(old);
+    if (r == syncErrNewer) { MessageBoxW(gWin, L"That sync file was written by a newer FuelLog than this one. Nothing was changed.", L"Sync", MB_OK | MB_ICONEXCLAMATION); return; }
+    if (r != syncOk) { MessageBoxW(gWin, L"That file is not a FuelLog sync file, or could not be read. Nothing was changed.", L"Sync", MB_OK | MB_ICONEXCLAMATION); return; }
+    SaveData();
+    ScheduleAlarm();
+    gPrefs.currentVehicle = 255;
+    wsprintfW(msg, L"Synced: %u added, %u updated, %u deleted.\r\n\r\nWrite this device's changes back to a sync file beside it?",
+        (unsigned)st.added, (unsigned)st.updated, (unsigned)st.deleted);
+    if (MessageBoxW(gWin, msg, L"Sync", MB_YESNO | MB_ICONQUESTION) == IDYES) {
+        size_t n;
+        strcpy(dir, file->path);
+        n = strlen(dir);
+        while (n > 0 && dir[n - 1] != '\\') n--;
+        dir[n ? n - 1 : 0] = 0;
+        SyncWrite(dir);
+    }
+    PostMessageW(gWin, WM_SHOWPAGE, pageList, 0);
+}
+
 static void ChooseFile(int row)
 {
     WCHAR msg[300], wn[dirNameLen];
     Int32 r;
     HCURSOR old;
+    size_t len;
     if (row < 0 || row >= gImpFileCount) return;
+    len = strlen(gImpFiles[row].name);
+    if (len > 5 && strcmp(gImpFiles[row].name + len - 5, ".fuel") == 0) { SyncTake(&gImpFiles[row]); return; }
     ImportSetup(&gPrefs);
     old = SetCursor(LoadCursor(NULL, IDC_WAIT));
     r = ImportScan(gImpFiles[row].path, kDataDir);
@@ -2944,7 +2996,7 @@ static void TakePalmSet(void)
 static void About(void)
 {
     WCHAR msg[400];
-    wsprintfW(msg, L"FuelLog for Pocket PC %S\r\nSo far: the fill list, New and Edit Fill with points, Stats, Reports, Graphs, Service, Export, Import and backup, Vehicles, Programmes and Preferences.\r\n\r\n%u fills, %u vehicles, %u programmes, %u service visits\r\n"
+    wsprintfW(msg, L"FuelLog for Pocket PC %S\r\nSo far: the fill list, New and Edit Fill with points, Stats, Reports, Graphs, Service, Export, Import, Sync and backup, Vehicles, Programmes and Preferences.\r\n\r\n%u fills, %u vehicles, %u programmes, %u service visits\r\n"
         L"Data: %s\r\nScreen %d dpi\r\n\r\nFree software under the GNU GPLv3.",
         kVersion, (unsigned)DbCount(dbFills), (unsigned)DbCount(dbVehicles), (unsigned)DbCount(dbProgrammes),
         (unsigned)DbCount(dbServiceVisits), kDataDirW, gDpi);
@@ -2989,7 +3041,8 @@ static void SetMenuBar(int page)
     case pageExport:
         AppendMenuW(menu, MF_STRING, IDM_BACKUP, L"Back up now");
         AppendMenuW(menu, MF_STRING, IDM_RESTORE, L"Restore...");
-        AppendMenuW(menu, MF_STRING, IDM_IMPORT, L"Import a file...");
+        AppendMenuW(menu, MF_STRING, IDM_IMPORT, L"Import or sync a file...");
+        AppendMenuW(menu, MF_STRING, IDM_SYNC, L"Sync to a file");
         AppendMenuW(menu, MF_SEPARATOR, 0, NULL);
         AppendMenuW(menu, MF_STRING, IDM_DONE, L"Done");
         AppendMenuW(bar, MF_STRING, IDM_DOEXPORT, L"Export");
@@ -3123,7 +3176,7 @@ static void ShowPage(int page)
         SetFocus(gSetList);
         break;
     case pageChoose:
-        SetWindowTextW(gWin, L"Import: choose a file");
+        SetWindowTextW(gWin, L"Choose a file");
         SetFocus(gFileList);
         break;
     case pageImport:
@@ -3349,6 +3402,13 @@ static LRESULT CALLBACK Proc(HWND h, UINT m, WPARAM w, LPARAM l)
         case IDM_BACKUP: if (gPage == pageExport) BackupRun(); return 0;
         case IDM_RESTORE: if (gPage == pageExport) RestoreOpen(); return 0;
         case IDM_IMPORT: if (gPage == pageExport) ChooseOpen(); return 0;
+        case IDM_SYNC:
+            if (gPage == pageExport) {
+                char dir[300];
+                DestFolder(SheetGetSel(&gExpSheet, IDX_DEST, 0), "Sync", dir);
+                SyncWrite(dir);
+            }
+            return 0;
         case IDM_DOIMPORT: if (gPage == pageImport) ImportRun(); return 0;
         case IDC_KBCOMBO:
             if (HIWORD(w) == CBN_SELCHANGE) {

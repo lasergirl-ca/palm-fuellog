@@ -4,14 +4,12 @@ A Windows Mobile 5 and 6 version of FuelLog, built on the Palm version's own cor
 record formats, the maths, the dates, stats, reports, service rules, points and sync rules
 are the files in `../src`, compiled unchanged; this folder adds storage and the windows.
 
-Status: **P6b, Import.** It opens the six FuelLog databases, shows the fills with the same
-columns and figures as the Palm's list, adds, edits and deletes fills and charges by the
-Palm form's rules with their points, keeps the vehicles, the rewards programmes and the
-service log, has its own Preferences, shows the Palm's Stats, Reports, Graphs and Service,
-exports CSV, XLSX and PDF, imports CSV, XLSX and XLS, and makes and restores backup sets the
-Palm can use. P1 to P3b ran on a Windows Mobile 5 and a Windows Mobile 6 device (Nov 12,
-2026); P4 onwards have not run on one yet, and from here the slices are built back to back
-and checked on the devices together.
+Status: **P7, Sync.** It does what the Palm version does with one log: the fill list, New
+and Edit Fill with points, vehicles, rewards programmes, the service log and its reminder,
+Preferences, Stats, Reports and Graphs, CSV, XLSX and PDF export, CSV, XLSX and XLS import,
+backup sets either device can restore, and Sync with a Palm or another Pocket PC through a
+`.fuel` file. P1 to P3b ran on a Windows Mobile 5 and a Windows Mobile 6 device (Nov 12,
+2026); P4 onwards have not run on one yet, and are to be checked on the devices together.
 
 ## How it fits with the Palm version
 
@@ -109,6 +107,13 @@ The compiler is CeGCC's `arm-mingw32ce` (GCC 9.3.0) in a Docker volume; see `dev
    and programmes, and each error by line. Import (left soft key) adds the ready rows; a file
    with the paper form's KB Points column has a picker above the preview for the programme
    it counts for.
+13. **Sync.** Export and backup, Menu, Sync to a file writes this device's whole log with
+   its deletions as `FuelLog-YYYYMMDD.fuel` in the Sync folder (on the card, the Palm's
+   `\PALM\Programs\FuelLog\Sync`). The Palm reads it with Export, Choose a file; a Palm's
+   own (Export, Sync, Send to SD card) is listed here in Import or sync a file. Taking one
+   applies the Palm's sync rules (the newer edit wins, deletions travel) and offers to
+   write this side back beside it. Beaming to or from a Palm is not here: Windows Mobile's
+   infrared speaks IrOBEX and the Palm's Exchange Manager beam is untested against it.
 
 Two places where this form deliberately differs from the Palm's, both found while porting:
 the previous odometer shown for an edited fill is that vehicle's fill before it (the Palm
@@ -133,6 +138,7 @@ app/svcview.c        what is due, the Service and History rows, Service Type and
 app/exportfile.c     the Palm's CSV, XLSX and PDF exporters, ported over the store (host-tested)
 app/backupfile.c     backup sets and restore (host-tested)
 app/importfile.c     the Palm's CSV, XLSX and XLS import, ported over the store (host-tested)
+app/syncfile.c       the Palm's sync bundle and its apply, ported over the store (host-tested)
 store/dirs.c         folders and whole files, Windows CE and POSIX
 app/settings.c       Prefs as the bytes kept in the registry (host-tested)
 app/main.c           the window: its pages (list, fill, Points, Stats, Reports, Graphs, Service, Export, Preferences, vehicles, programmes)
@@ -145,6 +151,7 @@ tests/test_views.c     host tests of Stats, Reports and Graphs (VIEWS_DUMP=1 pri
 tests/test_service.c   host tests of the service model
 tests/test_files.c     host tests of export, backup and restore; check_export.py reads the XLSX
 tests/test_import.c    host tests of import: the exporter's CSV and XLSX read back, errors, KB Points, XLS
+tests/test_syncfile.c  host tests of sync files: two logs synced both ways, an empty log, bad files
 hello/, coretest/    the SP9 spike programmes
 ```
 
@@ -160,8 +167,18 @@ hello/, coretest/    the SP9 spike programmes
 | P5 | Service types, visits, the due list and a reminder | Built; device check pending |
 | P6a | CSV, XLSX and PDF export; backup and restore | Built; device check pending |
 | P6b | CSV, XLSX and XLS import | Built; device check pending |
-| P7 | Sync with a Palm or another Pocket PC through a `.fuel` file on a card; beaming if IrOBEX allows | |
+| P7 | Sync with a Palm or another Pocket PC through a `.fuel` file on a card; beaming if IrOBEX allows | Sync files built, device check pending; beaming not attempted |
 | P8 | VGA and landscape pass, an icon, a CAB installer | |
+
+## What to check on the devices (P7)
+
+1. On the Palm (rc10 or later): Export, Sync, Send to SD card. Card into the Pocket PC;
+   Export and backup, Menu, Import or sync a file: the `.fuel` is listed under the card.
+   Taking it says what was added, updated and deleted; Yes writes this side back.
+2. Card back into the Palm: Export, Choose a file, the Pocket PC's `.fuel`: the Palm says
+   0 added, 0 updated, 0 deleted when nothing changed in between.
+3. Edit a fill on the Pocket PC, delete another, Sync to a file, take it on the Palm: the
+   edit and the deletion arrive. The same the other way.
 
 ## What to check on the devices (P6b)
 
