@@ -219,12 +219,22 @@ void XlsxWritePackage(XlsxWriter *w, const char *const *sheetNames, UInt16 nShee
 
 /* ---- sheets ---- */
 
+/* Windows-1252 0x80..0x9F to Unicode, as in csv.c; 0 = unassigned. 0xA0..0xFF map straight to Latin-1. */
+static UInt16 kXCp1252[32] = {   /* plain static: a const table lands in the code section and breaks (see sections.h) */
+    0x20AC, 0, 0x201A, 0x0192, 0x201E, 0x2026, 0x2020, 0x2021, 0x02C6, 0x2030, 0x0160, 0x2039, 0x0152, 0, 0x017D, 0,
+    0, 0x2018, 0x2019, 0x201C, 0x201D, 0x2022, 0x2013, 0x2014, 0x02DC, 0x2122, 0x0161, 0x203A, 0x0153, 0, 0x017E, 0x0178 };
+
+/* Text in an XML part: the five markup characters escaped, and Palm Latin (Windows-1252)
+ * written as the UTF-8 the part declares, so "caf\xE9" reaches Excel as "caf\xC3\xA9". Control
+ * characters XML 1.0 forbids become spaces; tab, line feed and carriage return stay. */
 static void XmlText(XlsxWriter *w, const char *s)
 {
     const char *run = s;
     while (*s) {
         const char *rep = 0;
-        switch (*s) {
+        UInt8 c = (UInt8)*s, b[3];
+        UInt16 u;
+        switch (c) {
         case '&': rep = "&amp;"; break;
         case '<': rep = "&lt;"; break;
         case '>': rep = "&gt;"; break;
@@ -234,6 +244,13 @@ static void XmlText(XlsxWriter *w, const char *s)
         if (rep) {
             XlsxWrite(w, run, (UInt32)(s - run));
             XlsxStr(w, rep);
+            run = s + 1;
+        } else if (c >= 0x80 || (c < 0x20 && c != 9 && c != 10 && c != 13)) {
+            XlsxWrite(w, run, (UInt32)(s - run));
+            u = c < 0x20 ? ' ' : c < 0xA0 ? (kXCp1252[c - 0x80] ? kXCp1252[c - 0x80] : '?') : c;
+            if (u < 0x80) { b[0] = (UInt8)u; XlsxWrite(w, b, 1); }
+            else if (u < 0x800) { b[0] = (UInt8)(0xC0 | (u >> 6)); b[1] = (UInt8)(0x80 | (u & 0x3F)); XlsxWrite(w, b, 2); }
+            else { b[0] = (UInt8)(0xE0 | (u >> 12)); b[1] = (UInt8)(0x80 | ((u >> 6) & 0x3F)); b[2] = (UInt8)(0x80 | (u & 0x3F)); XlsxWrite(w, b, 3); }
             run = s + 1;
         }
         s++;

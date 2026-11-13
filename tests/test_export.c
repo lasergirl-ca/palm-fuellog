@@ -83,7 +83,7 @@ static void WriteWorkbook(const char *path, int seekable)
         XlsxCellNumber(&w, (Int32)f->cents, 2, xlsxStyleCAD);
         XlsxCellText(&w, f->full ? "yes" : "no", xlsxStyleGeneral);
         if (f->l100x10) XlsxCellNumber(&w, f->l100x10, 1, xlsxStyle1dp); else XlsxCellEmpty(&w);
-        XlsxCellText(&w, i == 7 ? "Petro-Canada on 152 St. <pump 6 & card reader down>" : "", xlsxStyleGeneral);
+        XlsxCellText(&w, i == 7 ? "Petro-Canada on 152 St., caf\351 Montr\351al \200 <pump 6 & card reader down>" : "", xlsxStyleGeneral);
         XlsxRowEnd(&w);
     }
     XlsxSheetEnd(&w);
