@@ -279,7 +279,7 @@ static void ResolveProgrammes(Boolean write)
         gKbId = PgmIdByName("KB Points");
         if (!gKbId) gKbId = PgmIdByName("76 / Phillips 66");
         if (gKbId) { PgmGet(gKbId, &gImpPgm); StrCopy(gImport.kbTarget, gImpPgm.name); }
-        else { StrCopy(gImport.kbTarget, "a new KB Points programme"); if (write) gKbId = ResolveProgramme("KB Points", true); else gImport.newProgrammes++; }
+        else { StrCopy(gImport.kbTarget, "new KB Points programme");   /* 23 characters: kbTarget holds 24 */ if (write) gKbId = ResolveProgramme("KB Points", true); else gImport.newProgrammes++; }
         gImport.kbPoints = true;
     }
 }
@@ -315,14 +315,16 @@ static Err Pass(UInt16 vol, Boolean write)
         n = (Int16)len;
         if (!write) gImport.rows++;
         if (CsvRowToFill(&gMap, gFields, n, &gImpFill, veh, why) != 0) { if (!write) AddError(recLine, why); continue; }
-        /* odometer must not fall for the same vehicle within the file */
-        if (!write && gImpFill.odometer) {
+        /* odometer must not fall for the same vehicle within the file: checked in both passes,
+         * so the write skips exactly the rows the preview listed as errors */
+        if (gImpFill.odometer) {
             for (k = 0; k < gSeenCount; k++) if (NameEq(gLastVehName[k], veh)) break;
             if (k == gSeenCount && gSeenCount < impMaxNewVeh + 12) { StrCopy(gLastVehName[k], veh); gLastOdo[k] = 0; gLastLine[k] = 0; gSeenCount++; }
             if (k < gSeenCount) {
                 if (gLastOdo[k] && gImpFill.odometer < gLastOdo[k]) {
                     char w[40]; StrCopy(w, "odometer lower than line "); StrIToA(w + StrLen(w), (Int32)gLastLine[k]);
-                    AddError(recLine, w); continue;
+                    if (!write) AddError(recLine, w);
+                    continue;
                 }
                 gLastOdo[k] = gImpFill.odometer; gLastLine[k] = recLine;
             }
