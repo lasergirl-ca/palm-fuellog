@@ -4,13 +4,13 @@ A Windows Mobile 5 and 6 version of FuelLog, built on the Palm version's own cor
 record formats, the maths, the dates, stats, reports, service rules, points and sync rules
 are the files in `../src`, compiled unchanged; this folder adds storage and the windows.
 
-Status: **P4, Stats, Reports and Graphs.** It opens the six FuelLog databases, shows the
-fills with the same columns and figures as the Palm's list, can take a backup set a Palm
-wrote to a storage card, adds, edits and deletes fills and charges by the Palm form's rules
-with their points, keeps the vehicles and the rewards programmes, has its own Preferences
-for units and currency, and shows the Palm's Stats, Reports and Graphs. P1 to P3b ran on a
-Windows Mobile 5 and a Windows Mobile 6 device (Nov 12, 2026); P4 has not run on one yet,
-and from here the slices are built back to back and checked on the devices together.
+Status: **P5, Service.** It opens the six FuelLog databases, shows the fills with the same
+columns and figures as the Palm's list, can take a backup set a Palm wrote to a storage
+card, adds, edits and deletes fills and charges by the Palm form's rules with their points,
+keeps the vehicles, the rewards programmes and the service log, has its own Preferences for
+units and currency, and shows the Palm's Stats, Reports and Graphs. P1 to P3b ran on a
+Windows Mobile 5 and a Windows Mobile 6 device (Nov 12, 2026); P4 and P5 have not run on one
+yet, and from here the slices are built back to back and checked on the devices together.
 
 ## How it fits with the Palm version
 
@@ -84,6 +84,15 @@ The compiler is CeGCC's `arm-mingw32ce` (GCC 9.3.0) in a Docker volume; see `dev
    vehicle, payment and currency. Graphs plots economy per full-to-full segment, price per
    fill or spend per month, one line per vehicle under All vehicles; a tap names the
    nearest point, and the unit picker over the economy graph sets the Prefs unit.
+10. **Menu, Service** is the Palm's Service screen for one vehicle: each service type with a
+   green, yellow or red badge and when it is due (by distance at the vehicle's pace, or by
+   months), most urgent first; Log (left soft key) records a visit, Menu has New service and
+   History. A service with a visit opens its History (the gaps between visits, flagged when
+   one ran past the interval); one without opens its Service Type. A vehicle's first visit
+   to Service installs the Palm's presets. When a service is Soon or Overdue the fill list
+   shows a banner line that opens Service, and a fill that tips a service over says so once.
+   A service with Alarm when due ticked sets a Windows Mobile reminder for 9 am on its due
+   date (a dialog and a sound, with FuelLog's icon to tap), replaced whenever anything changes.
 
 Two places where this form deliberately differs from the Palm's, both found while porting:
 the previous odometer shown for an edited fill is that vehicle's fill before it (the Palm
@@ -104,14 +113,16 @@ app/pgmedit.c        programme balances, expiry, the list and Edit Programme's r
 app/statsview.c      Stats as lines of text (host-tested)
 app/reportview.c     Reports as lines of text, and the report periods (host-tested)
 app/graphview.c      the graphs' points, ranges and axis labels (host-tested)
+app/svcview.c        what is due, the Service and History rows, Service Type and Log Service (host-tested)
 app/settings.c       Prefs as the bytes kept in the registry (host-tested)
-app/main.c           the window: its pages (list, fill, Points, Stats, Reports, Graphs, Preferences, vehicles, programmes)
+app/main.c           the window: its pages (list, fill, Points, Stats, Reports, Graphs, Service, Preferences, vehicles, programmes)
 app/app.rc           the hi-res flag for VGA devices
 tests/test_store.c   host tests against the fixture set tools/mkpdb writes
 tests/test_filledit.c  host tests of the fill form's rules on a copy of that set
 tests/test_vehedit.c   host tests of the Prefs bytes and the vehicle rules
 tests/test_pgmedit.c   host tests of the programme rules and the presets
 tests/test_views.c     host tests of Stats, Reports and Graphs (VIEWS_DUMP=1 prints the lines)
+tests/test_service.c   host tests of the service model
 hello/, coretest/    the SP9 spike programmes
 ```
 
@@ -124,10 +135,27 @@ hello/, coretest/    the SP9 spike programmes
 | P3 | Vehicles; Prefs (units, currency), kept in the registry | Works on both devices (Nov 12, 2026) |
 | P3b | Programmes and the Points page on a fill | Works on both devices (Nov 12, 2026) |
 | P4 | Stats, reports and graphs | Built; device check pending |
-| P5 | Service types, visits, the due list and a reminder | |
+| P5 | Service types, visits, the due list and a reminder | Built; device check pending |
 | P6 | CSV, XLSX and PDF export; CSV, XLSX and XLS import; backup and restore | |
 | P7 | Sync with a Palm or another Pocket PC through a `.fuel` file on a card; beaming if IrOBEX allows | |
 | P8 | VGA and landscape pass, an icon, a CAB installer | |
+
+## What to check on the devices (P5)
+
+1. Menu on the list has Service. Service shows the vehicle's services with the Palm's badges
+   and dates; the header gives the odometer and pace, the bottom line the last visit.
+2. Log: today's date, the odometer from the last fill ("Odo (last fill)"), one tick box per
+   service. Tick one: the Next line names when it is due again. Save: the list follows.
+3. Tick Other with a new name: Save asks whether to track it; Yes makes it a service type.
+4. A row with a visit opens History; Menu, Intervals opens its Service Type; a tap on a
+   visit opens Edit Visit with Delete in its Menu.
+5. Service Type: the summary lines say when it is due and when the warning starts. A type
+   with visits archives; one without deletes after asking.
+6. A service due within its warning shows the banner over the fill list; tapping it opens
+   Service.
+7. Tick Alarm when due, save: Settings, Sounds & Notifications or the Notifications list
+   shows FuelLog's reminder for 9 am on the due date. (To see it fire, set a short
+   interval so the due date is tomorrow, then change the device date.)
 
 ## What to check on the devices (P4)
 

@@ -19,7 +19,9 @@ enum {
     tvHeading,      /* cell 0 in bold */
     tvTable,        /* cell 0 on the left, cells 1 to 4 right-aligned in the report's columns */
     tvTableBold,
-    tvNote          /* cell 0 across the width */
+    tvNote,         /* cell 0 across the width */
+    tvTriple,       /* cells 0 and 1 from the left and from 36 %, cell 2 on the right */
+    tvTripleBold
 };
 
 typedef struct {

@@ -15,13 +15,15 @@
 #include "settings.h"
 #include "textview.h"
 #include "graphview.h"
+#include "svcview.h"
+#include <notify.h>
 #include "../../src/report.h"
 #include "../store/db.h"
 #include "../../src/datecalc.h"
 #include "../../src/units.h"
 #include "../../src/currency.h"
 
-#define kVersion "0.5"
+#define kVersion "0.6"
 #define kClass L"FuelLogPPC"
 #define kFormClass L"FuelLogForm"
 #define kSheetClass L"FuelLogSheet"
@@ -30,9 +32,14 @@
 #define kDataDirW L"\\My Documents\\FuelLog"
 #define kPalmBackup L"\\PALM\\Programs\\FuelLog\\Backup"
 
-enum { IDC_VEHICLE = 100, IDC_LIST, IDC_AVG, IDC_MONTH, IDC_EMPTY, IDC_VEHLIST, IDC_VEHARCH, IDC_PGMLIST };
+enum { IDC_VEHICLE = 100, IDC_LIST, IDC_AVG, IDC_MONTH, IDC_EMPTY, IDC_VEHLIST, IDC_VEHARCH, IDC_PGMLIST, IDC_BANNER };
 enum { IDM_ABOUT = 200, IDM_PALM, IDM_EXIT, IDM_NEW, IDM_SAVE, IDM_CANCEL, IDM_DELETE, IDM_DONE, IDM_VEHICLES, IDM_PREFS,
-       IDM_PROGRAMMES, IDM_OK, IDM_ARCHIVE, IDM_STATS, IDM_REPORTS, IDM_GRAPHS };
+       IDM_PROGRAMMES, IDM_OK, IDM_ARCHIVE, IDM_STATS, IDM_REPORTS, IDM_GRAPHS, IDM_SERVICE, IDM_HISTORY,
+       IDM_INTERVALS, IDM_LOG, IDM_NEWSVC };
+/* The Service Type and Log Service sheets. */
+enum { IDY_NAME = 700, IDY_DIST, IDY_MONTHS, IDY_WARNDIST, IDY_WARNDAYS, IDY_ALARM, IDY_DETAIL, IDY_SUM1, IDY_SUM2, IDY_SUM3 };
+#define IDS_CHK(i) (742 + (i))
+enum { IDS_DATE = 740, IDS_ODO, IDS_OTHERON = 754, IDS_OTHER, IDS_COST, IDS_CUR, IDS_PAY, IDS_SHOP, IDS_DETAIL, IDS_NOTE, IDS_NEXT };
 /* The Reports and Graphs pages' pickers. */
 enum { IDR_MODE = 600, IDR_PREV, IDR_LABEL, IDR_NEXT, IDR_FROM, IDR_TO, IDG_KIND, IDG_UNIT, IDG_UNITTEXT };
 /* The form's controls, in the order they are laid out. */
@@ -49,7 +56,8 @@ enum { IDE_NAME = 440, IDE_CUR, IDE_MONEY, IDE_EARN, IDE_BASIS, IDE_PREM, IDE_PA
 #define IDT_ROW(i) (500 + 4 * (i))
 enum { IDT_ADD = 520, IDT_TOTAL };
 enum { pageList, pageForm, pagePrefs, pageVehicles, pageVehicle, pagePoints, pageProgrammes, pageProgramme,
-       pageStats, pageReports, pageGraphs };
+       pageStats, pageReports, pageGraphs, pageService, pageHistory, pageSvt, pageVisit };
+#define kRowsClass L"FuelLogRows"
 #define kTextClass L"FuelLogText"
 #define kGraphClass L"FuelLogGraph"
 #define WM_SHOWPAGE (WM_APP + 1)     /* posted, so a menu bar is never replaced inside its own command */
@@ -69,6 +77,17 @@ static ReportPeriod gRptPeriod;
 static GraphData gGraphData;
 static UInt8 gGraphKind;
 static Int16 gGraphSel = -1;
+/* Service. */
+static HWND gRowsPanel, gBanner;
+static TextLine gRowsHead[6];
+static UInt8 gRowsHeadCount, gSvcRowCount, gSvcVehicle, gBannerShown;
+static SvcRow gSvcRows[svcMaxRows];
+static char gRowsFoot[64];
+static int gRowsScroll, gRowsHeight;
+static UInt16 gHistType = 0xFFFF;
+static SvtEdit gSvtEdit;
+static SvlEdit gSvlEdit;
+static int gSvtReturn = pageService, gVisitReturn = pageService;
 static SHACTIVATEINFO gSai;
 static int gDpi = 96, gPage = pageList, gDataOk;
 static FuelPrefs gPrefs;
@@ -99,7 +118,7 @@ static int gFormBack;                /* the form page comes back from Points: fo
 
 /* A sheet is a simple scrolling form, a label and a control per row: Preferences,
  * a vehicle, a programme and the Points page. */
-enum { rowEdit, rowCombo, rowCheck, rowText };
+enum { rowEdit, rowCombo, rowCheck, rowText, rowDate };
 typedef struct {
     int id, kind;
     const WCHAR *label;
@@ -115,8 +134,11 @@ typedef struct {
     void (*changed)(int id);    /* a combo's choice changed */
     void (*edited)(int id);     /* an edit's text changed by the user */
 } Sheet;
-static Sheet gPrefsSheet, gVehSheet, gPgmSheet, gPtsSheet;
+static Sheet gPrefsSheet, gVehSheet, gPgmSheet, gPtsSheet, gSvtSheet, gSvlSheet;
 static void PtsOpen(void);
+static void ScheduleAlarm(void);
+static void Layout(void);
+static void ServiceOpen(void);
 
 /* Layout numbers are for a 96 dpi screen (QVGA); a VGA device reports 192. Windows CE has no MulDiv. */
 static int S(int x) { return (x * gDpi + 48) / 96; }
@@ -260,6 +282,19 @@ static void Refresh(void)
     ShowWindow(gList, gRowCount ? SW_SHOW : SW_HIDE);
     ShowWindow(gEmpty, gRowCount ? SW_HIDE : SW_SHOW);
     InvalidateRect(gList, NULL, TRUE);
+    /* The most urgent service for the vehicle shown; Soon or Overdue earns a banner line, as on the Palm. */
+    {
+        char b[64];
+        UInt8 st = gDataOk ? SvcViewBanner(gPrefs.currentVehicle, Today(), &gPrefs, gPoint, gThousands, b) : svcStatusOK;
+        UInt8 shown = (UInt8)((st == svcStatusSoon || st == svcStatusOverdue) && b[0]);
+        if (shown) { ToWide(b, w, 48); SetWindowTextW(gBanner, w); }
+        if (shown != gBannerShown) {
+            gBannerShown = shown;
+            Layout();
+            if (gPage == pageList) PostMessageW(gWin, WM_SHOWPAGE, pageList, 0);   /* the menu's "Service!" follows */
+        }
+        ShowWindow(gBanner, shown && gPage == pageList ? SW_SHOW : SW_HIDE);
+    }
 }
 
 static void BuildVehicles(void)
@@ -289,8 +324,15 @@ static void Layout(void)
     GetClientRect(gWin, &r);
     w = r.right; h = r.bottom;
     MoveWindow(gVehicle, S(2), S(2), w - S(4), S(140), TRUE);      /* the height is the dropped list's */
-    MoveWindow(gList, 0, top, w, h - top - foot, TRUE);
-    MoveWindow(gEmpty, S(8), top + S(8), w - S(16), h - top - foot - S(16), TRUE);
+    MoveWindow(gBanner, S(2), top, w - S(4), S(20), TRUE);
+    MoveWindow(gRowsPanel, 0, gPage == pageHistory ? 0 : top, w, gPage == pageHistory ? h : h - top, TRUE);
+    MoveWindow(gSvtSheet.panel, 0, 0, w, h, TRUE);
+    MoveWindow(gSvlSheet.panel, 0, 0, w, h, TRUE);
+    {
+        int listTop = top + (gBannerShown ? S(22) : 0);     /* the service banner sits over the list */
+        MoveWindow(gList, 0, listTop, w, h - listTop - foot, TRUE);
+        MoveWindow(gEmpty, S(8), listTop + S(8), w - S(16), h - listTop - foot - S(16), TRUE);
+    }
     MoveWindow(gAvg, S(4), h - foot + S(2), w / 2 - S(4), foot - S(2), TRUE);
     MoveWindow(gMonth, w / 2, h - foot + S(2), w / 2 - S(4), foot - S(2), TRUE);
     MoveWindow(gForm, 0, 0, w, h, TRUE);
@@ -537,8 +579,11 @@ static void FormSave(void)
     WCHAR msg[400];
     UInt16 at = 0;
     Int32 r;
+    char before[64], after[64];
+    UInt8 wasDue, nowDue;
 
     PullTexts();
+    wasDue = SvcViewBanner(gEdit.fill.vehicle, Today(), &gPrefs, gPoint, gThousands, before);
     memset(&in, 0, sizeof in);
     in.date = gEdit.fill.date;
     if (SendMessageW(F(IDF_DATE), DTM_GETSYSTEMTIME, 0, (LPARAM)&st) == GDT_VALID)
@@ -572,6 +617,15 @@ static void FormSave(void)
     } else {
         SaveData();
         StorePrefs();                       /* the last payment, currency and rate */
+        /* One alert when this fill tips a service into Soon or Overdue. */
+        nowDue = SvcViewBanner(gEdit.fill.vehicle, Today(), &gPrefs, gPoint, gThousands, after);
+        if ((nowDue == svcStatusSoon || nowDue == svcStatusOverdue) && nowDue != wasDue && after[0]) {
+            WCHAR w[64];
+            ToWide(after, w, 64);
+            wsprintfW(msg, L"%s. Choose Menu, Service on the fill list for details.", w);
+            MessageBoxW(gWin, msg, L"Service coming up", MB_OK | MB_ICONINFORMATION);
+        }
+        ScheduleAlarm();
         PostMessageW(gWin, WM_SHOWPAGE, pageList, 0);
     }
 }
@@ -583,6 +637,7 @@ static void FormDelete(void)
             MB_YESNO | MB_ICONQUESTION | MB_DEFBUTTON2) != IDYES) return;
     FillEditDelete(&gEdit);
     SaveData();
+    ScheduleAlarm();
     PostMessageW(gWin, WM_SHOWPAGE, pageList, 0);
 }
 
@@ -791,7 +846,7 @@ static void SheetLayout(Sheet *s)
                 MoveWindow(c, S(4), S(y + 1) - s->scroll, S(W - 8), S(18), TRUE);
             } else {
                 MoveWindow(label, S(2), S(y + 3) - s->scroll, S(s->labelW - 4), S(16), TRUE);
-                MoveWindow(c, S(s->labelW), S(y) - s->scroll, S(W - s->labelW - 4), S(row->kind == rowCombo ? 120 : 20), TRUE);
+                MoveWindow(c, S(s->labelW), S(y) - s->scroll, S(W - s->labelW - 4), S(row->kind == rowCombo ? 120 : 20), TRUE);   /* a combo's height is its dropped list's */
             }
             y += kRow;
         }
@@ -844,6 +899,16 @@ static void SheetCreate(Sheet *s, HWND h)
         case rowCheck:
             CreateWindowW(L"BUTTON", row->label, WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_AUTOCHECKBOX, 0, 0, 10, 10, h, (HMENU)row->id, gInst, NULL);
             break;
+        case rowDate: {
+            SYSTEMTIME range[2];
+            CreateWindowW(L"STATIC", row->label, WS_CHILD | WS_VISIBLE | SS_LEFT, 0, 0, 10, 10, h, (HMENU)(row->id + 1000), gInst, NULL);
+            c = CreateWindowW(DATETIMEPICK_CLASSW, L"", WS_CHILD | WS_VISIBLE | WS_TABSTOP | DTS_SHORTDATEFORMAT, 0, 0, 10, 10, h, (HMENU)row->id, gInst, NULL);
+            memset(range, 0, sizeof range);
+            range[0].wYear = 1990; range[0].wMonth = 1; range[0].wDay = 1;
+            range[1].wYear = 2079; range[1].wMonth = 12; range[1].wDay = 31;
+            SendMessageW(c, DTM_SETRANGE, GDTR_MIN | GDTR_MAX, (LPARAM)range);
+            break;
+        }
         default:
             CreateWindowW(L"STATIC", row->label, WS_CHILD | WS_VISIBLE | SS_LEFT, 0, 0, 10, 10, h, (HMENU)row->id, gInst, NULL);
             break;
@@ -854,8 +919,8 @@ static void SheetCreate(Sheet *s, HWND h)
 /* Text set here is not the user's typing: the edited callback does not hear of it. */
 static void SheetSetText(Sheet *s, int id, const char *t)
 {
-    WCHAR w[96];
-    ToWide(t, w, 96);
+    WCHAR w[fillMaxNotes + 2];
+    ToWide(t, w, fillMaxNotes + 2);
     s->quiet++;
     SetWindowTextW(SC(s, id), w);
     s->quiet--;
@@ -885,11 +950,34 @@ static void SheetSetChoices(Sheet *s, int id, const WCHAR *first, char names[][p
 
 static void SheetGetText(Sheet *s, int id, char *t, int cap)
 {
-    WCHAR w[64];
+    WCHAR w[fillMaxNotes + 2];
     w[0] = 0;
-    GetWindowTextW(SC(s, id), w, 64);
+    GetWindowTextW(SC(s, id), w, fillMaxNotes + 2);
     FromWide(w, t, cap);
 }
+
+static void SheetSetDate(Sheet *s, int id, UInt16 days)
+{
+    SYSTEMTIME st;
+    UInt16 y; UInt8 m, d;
+    DateDaysToYmd(days, &y, &m, &d);
+    memset(&st, 0, sizeof st);
+    st.wYear = y; st.wMonth = m; st.wDay = d;
+    s->quiet++;
+    SendMessageW(SC(s, id), DTM_SETSYSTEMTIME, GDT_VALID, (LPARAM)&st);
+    s->quiet--;
+}
+
+/* The picked date, or `otherwise` when the picker has none. */
+static UInt16 SheetGetDate(Sheet *s, int id, UInt16 otherwise)
+{
+    SYSTEMTIME st;
+    if (SendMessageW(SC(s, id), DTM_GETSYSTEMTIME, 0, (LPARAM)&st) != GDT_VALID) return otherwise;
+    return DateYmdToDays((UInt16)st.wYear, (UInt8)st.wMonth, (UInt8)st.wDay);
+}
+
+static int SheetGetCheck(Sheet *s, int id) { return SendMessageW(SC(s, id), BM_GETCHECK, 0, 0) == 1; }
+static void SheetSetCheck(Sheet *s, int id, int on) { SendMessageW(SC(s, id), BM_SETCHECK, on ? 1 : 0, 0); }
 
 static void SheetSetSel(Sheet *s, int id, int sel) { SendMessageW(SC(s, id), CB_SETCURSEL, (WPARAM)sel, 0); }
 /* The chosen row, or `otherwise` when the list somehow has none. */
@@ -907,7 +995,8 @@ static void SheetHide(Sheet *s, int id, int hide)
 static LRESULT CALLBACK SheetProc(HWND h, UINT m, WPARAM w, LPARAM l)
 {
     Sheet *s = h == gPrefsSheet.panel ? &gPrefsSheet : h == gVehSheet.panel ? &gVehSheet
-             : h == gPgmSheet.panel ? &gPgmSheet : h == gPtsSheet.panel ? &gPtsSheet : NULL;
+             : h == gPgmSheet.panel ? &gPgmSheet : h == gPtsSheet.panel ? &gPtsSheet
+             : h == gSvtSheet.panel ? &gSvtSheet : h == gSvlSheet.panel ? &gSvlSheet : NULL;
     if (m == WM_CREATE) {
         SheetCreate((Sheet *)((CREATESTRUCTW *)l)->lpCreateParams, h);
         return 0;
@@ -941,7 +1030,14 @@ static LRESULT CALLBACK SheetProc(HWND h, UINT m, WPARAM w, LPARAM l)
             else if (HIWORD(w) == EN_CHANGE && !s->quiet && s->edited) s->edited(LOWORD(w));
         } else if (s->rows[i].kind == rowCombo && HIWORD(w) == CBN_SELCHANGE && s->changed) {
             s->changed(LOWORD(w));
+        } else if (s->rows[i].kind == rowCheck && HIWORD(w) == BN_CLICKED && s->changed) {
+            s->changed(LOWORD(w));
         }
+        return 0;
+    }
+    case WM_NOTIFY: {
+        NMHDR *n = (NMHDR *)l;
+        if (n->code == (UINT)DTN_DATETIMECHANGE && !s->quiet && s->changed) s->changed((int)n->idFrom);
         return 0;
     }
     }
@@ -1410,19 +1506,14 @@ static void DrawCell(HDC dc, const char *s, int left, int right, int top, int h,
     DrawTextW(dc, w, -1, &rc, align | DT_SINGLELINE | DT_VCENTER | DT_NOPREFIX);
 }
 
-static void TextPaint(HDC dc, int W, int H)
+/* Lines from y down; returns where the next would start. */
+static int PaintLines(HDC dc, const TextLine *lines, UInt16 count, int y, int W, int H)
 {
     static const int edge[4] = { 44, 78, 118, 150 };     /* the Palm report's right edges, of 160 */
-    RECT all;
-    HFONT normal = (HFONT)GetStockObject(SYSTEM_FONT), old;
-    int y = -gTextScroll, i, c;
-    all.left = 0; all.top = 0; all.right = W; all.bottom = H;
-    FillRect(dc, &all, (HBRUSH)GetStockObject(WHITE_BRUSH));
-    SetBkMode(dc, TRANSPARENT);
-    SetTextColor(dc, RGB(0, 0, 0));
-    old = (HFONT)SelectObject(dc, normal);
-    for (i = 0; i < gLineCount; i++) {
-        const TextLine *l = &gLines[i];
+    HFONT normal = (HFONT)GetStockObject(SYSTEM_FONT);
+    int i, c;
+    for (i = 0; i < count; i++) {
+        const TextLine *l = &lines[i];
         int h = LineHeight(l->style);
         if (y + h > 0 && y < H) {
             switch (l->style) {
@@ -1449,6 +1540,12 @@ static void TextPaint(HDC dc, int W, int H)
                 DrawCell(dc, l->cell[0], S(4), W, y, h, DT_LEFT);
                 for (c = 1; c < tvCells; c++) DrawCell(dc, l->cell[c], 0, (W - S(2)) * edge[c - 1] / 160, y, h, DT_RIGHT);
                 break;
+            case tvTriple: case tvTripleBold:
+                SelectObject(dc, l->style == tvTripleBold && gFontBold ? gFontBold : normal);
+                DrawCell(dc, l->cell[0], S(4), W, y, h, DT_LEFT);
+                DrawCell(dc, l->cell[1], W * 36 / 100, W, y, h, DT_LEFT);
+                DrawCell(dc, l->cell[2], 0, W - S(6), y, h, DT_RIGHT);
+                break;
             case tvNote:
                 SelectObject(dc, normal);
                 DrawCell(dc, l->cell[0], S(4), W - S(4), y, h, DT_LEFT);
@@ -1462,6 +1559,19 @@ static void TextPaint(HDC dc, int W, int H)
         }
         y += h;
     }
+    return y;
+}
+
+static void TextPaint(HDC dc, int W, int H)
+{
+    RECT all;
+    HFONT old;
+    all.left = 0; all.top = 0; all.right = W; all.bottom = H;
+    FillRect(dc, &all, (HBRUSH)GetStockObject(WHITE_BRUSH));
+    SetBkMode(dc, TRANSPARENT);
+    SetTextColor(dc, RGB(0, 0, 0));
+    old = (HFONT)SelectObject(dc, GetStockObject(SYSTEM_FONT));
+    PaintLines(dc, gLines, gLineCount, -gTextScroll, W, H);
     SelectObject(dc, old);
 }
 
@@ -1845,6 +1955,463 @@ static void InfoCreate(HWND h)
     gGrUnitText = CreateWindowW(L"STATIC", L"", WS_CHILD | SS_RIGHT, 0, 0, 10, 10, h, (HMENU)IDG_UNITTEXT, gInst, NULL);
 }
 
+/* ---- Service: the reminder ---- */
+
+/* The system notification for the earliest due date of a service with the alarm ticked, at 9 am:
+ * a dialog and a sound, and FuelLog's icon to tap. The handle is kept in the registry, so the
+ * old one is replaced, as the Palm re-sets its alarm. */
+static void ScheduleAlarm(void)
+{
+    HKEY k;
+    DWORD disp, type, len, oldHandle = 0, oldDate = 0, date;
+    UInt16 due = gDataOk ? SvcViewNextAlarm(Today()) : 0;
+    if (RegCreateKeyExW(HKEY_CURRENT_USER, kRegKey, 0, NULL, 0, 0, NULL, &k, &disp) != ERROR_SUCCESS) return;
+    len = sizeof oldHandle;
+    if (RegQueryValueExW(k, L"AlarmHandle", NULL, &type, (LPBYTE)&oldHandle, &len) != ERROR_SUCCESS) oldHandle = 0;
+    len = sizeof oldDate;
+    if (RegQueryValueExW(k, L"AlarmDate", NULL, &type, (LPBYTE)&oldDate, &len) != ERROR_SUCCESS) oldDate = 0;
+    date = due;
+    if (date == oldDate && (oldHandle || !date)) { RegCloseKey(k); return; }
+    if (oldHandle) CeClearUserNotification((HANDLE)oldHandle);
+    oldHandle = 0;
+    if (due) {
+        WCHAR exe[MAX_PATH];
+        SYSTEMTIME st;
+        CE_USER_NOTIFICATION un;
+        UInt16 y; UInt8 m, d;
+        HANDLE hn;
+        GetModuleFileNameW(NULL, exe, MAX_PATH);
+        DateDaysToYmd(due, &y, &m, &d);
+        memset(&st, 0, sizeof st);
+        st.wYear = y; st.wMonth = m; st.wDay = d; st.wHour = 9;
+        memset(&un, 0, sizeof un);
+        un.ActionFlags = PUN_DIALOG | PUN_SOUND;
+        un.pwszDialogTitle = L"FuelLog: service due";
+        un.pwszDialogText = L"A service reaches its due date today. Open FuelLog and choose Menu, Service for details.";
+        un.pwszSound = L"\\Windows\\Alarm1.wav";
+        hn = CeSetUserNotification(NULL, exe, &st, &un);
+        oldHandle = (DWORD)hn;
+    }
+    RegSetValueExW(k, L"AlarmHandle", 0, REG_DWORD, (const BYTE *)&oldHandle, sizeof oldHandle);
+    RegSetValueExW(k, L"AlarmDate", 0, REG_DWORD, (const BYTE *)&date, sizeof date);
+    RegCloseKey(k);
+}
+
+/* ---- Service: two-line rows under a few lines of heading ---- */
+
+#define kSvcRowH 30
+
+static void RowsScrollBar(void)
+{
+    RECT r;
+    SCROLLINFO si;
+    GetClientRect(gRowsPanel, &r);
+    if (gRowsScroll > gRowsHeight - r.bottom) gRowsScroll = gRowsHeight - r.bottom;
+    if (gRowsScroll < 0) gRowsScroll = 0;
+    memset(&si, 0, sizeof si);
+    si.cbSize = sizeof si;
+    si.fMask = SIF_RANGE | SIF_PAGE | SIF_POS;
+    si.nMax = gRowsHeight - 1;
+    si.nPage = (UINT)r.bottom;
+    si.nPos = gRowsScroll;
+    SetScrollInfo(gRowsPanel, SB_VERT, &si, TRUE);
+}
+
+static int RowsHeadHeight(void)
+{
+    int h = S(2);
+    UInt8 i;
+    for (i = 0; i < gRowsHeadCount; i++) h += LineHeight(gRowsHead[i].style);
+    return h;
+}
+
+/* A status badge: green with a tick, yellow with "!", red with a bar, as on the Palm. */
+static void PaintBadge(HDC dc, UInt8 status, int cx, int cy)
+{
+    COLORREF col = status == svcStatusOK ? RGB(0x00, 0x99, 0x33) : status == svcStatusSoon ? RGB(0xFF, 0xCC, 0x00) : RGB(0xDD, 0x22, 0x22);
+    HBRUSH br = CreateSolidBrush(col), ob = (HBRUSH)SelectObject(dc, br);
+    HPEN pen = CreatePen(PS_SOLID, 1, col), op = (HPEN)SelectObject(dc, pen);
+    int r = S(5);
+    Ellipse(dc, cx - r, cy - r, cx + r + 1, cy + r + 1);
+    SelectObject(dc, op); DeleteObject(pen);
+    SelectObject(dc, ob); DeleteObject(br);
+    if (status == svcStatusOK) {
+        HPEN white = CreatePen(PS_SOLID, S(1) > 1 ? S(1) + 1 : 2, RGB(0xFF, 0xFF, 0xFF));
+        POINT pt[3];
+        op = (HPEN)SelectObject(dc, white);
+        pt[0].x = cx - S(3); pt[0].y = cy; pt[1].x = cx - S(1); pt[1].y = cy + S(2); pt[2].x = cx + S(3); pt[2].y = cy - S(2);
+        Polyline(dc, pt, 3);
+        SelectObject(dc, op); DeleteObject(white);
+    } else {
+        RECT bar;
+        HBRUSH mark = CreateSolidBrush(status == svcStatusSoon ? RGB(0, 0, 0) : RGB(0xFF, 0xFF, 0xFF));
+        if (status == svcStatusSoon) {
+            bar.left = cx - S(1) / 2; bar.right = bar.left + (S(1) > 1 ? S(1) : 2);
+            bar.top = cy - S(3); bar.bottom = cy + S(1);
+            FillRect(dc, &bar, mark);
+            bar.top = cy + S(2); bar.bottom = cy + S(3) + 1;
+            FillRect(dc, &bar, mark);
+        } else {
+            bar.left = cx - S(3); bar.right = cx + S(3) + 1; bar.top = cy - S(1); bar.bottom = cy + S(1) + 1;
+            FillRect(dc, &bar, mark);
+        }
+        DeleteObject(mark);
+    }
+}
+
+static void RowsPaint(HDC dc, int W, int H)
+{
+    RECT all;
+    HFONT normal = (HFONT)GetStockObject(SYSTEM_FONT), old;
+    HPEN grey = CreatePen(PS_SOLID, 1, RGB(0xDD, 0xDD, 0xDD)), op;
+    int y = -gRowsScroll;
+    UInt8 i;
+    all.left = 0; all.top = 0; all.right = W; all.bottom = H;
+    FillRect(dc, &all, (HBRUSH)GetStockObject(WHITE_BRUSH));
+    SetBkMode(dc, TRANSPARENT);
+    SetTextColor(dc, RGB(0, 0, 0));
+    old = (HFONT)SelectObject(dc, normal);
+    y = PaintLines(dc, gRowsHead, gRowsHeadCount, y + S(2), W, H);
+    for (i = 0; i < gSvcRowCount; i++, y += S(kSvcRowH)) {
+        const SvcRow *r = &gSvcRows[i];
+        /* Service rows: the name, the due date just before the badge. History rows: the date, the
+         * odometer ending at 60 % and the cost at the right, as the Palm draws them. */
+        int l1 = y + S(1), l2 = y + S(15), edge = W - S(6);
+        int midRight = r->badge ? edge - S(14) : W * 60 / 100;
+        int leftRight = (r->badge || !r->mid[0]) ? W * 58 / 100 : W * 40 / 100;
+        if (y + S(kSvcRowH) < 0 || y > H) continue;
+        SelectObject(dc, gFontBold ? gFontBold : normal);
+        DrawCell(dc, r->left, S(4), leftRight, l1, S(14), DT_LEFT);
+        SelectObject(dc, normal);
+        if (r->badge) PaintBadge(dc, (UInt8)(r->badge - 1), edge - S(5), l1 + S(7));
+        else DrawCell(dc, r->right, 0, edge, l1, S(14), DT_RIGHT);
+        DrawCell(dc, r->mid, 0, midRight, l1, S(14), DT_RIGHT);
+        SelectObject(dc, r->bold2 && gFontBold ? gFontBold : normal);
+        DrawCell(dc, r->line2, S(12), W - S(6), l2, S(14), DT_LEFT);
+        SelectObject(dc, normal);
+        DrawCell(dc, r->right2, 0, W - S(6), l2, S(14), DT_RIGHT);
+        op = (HPEN)SelectObject(dc, grey);
+        {
+            POINT pt[2];
+            pt[0].x = S(4); pt[0].y = y + S(kSvcRowH) - 1; pt[1].x = W - S(4); pt[1].y = pt[0].y;
+            Polyline(dc, pt, 2);
+        }
+        SelectObject(dc, op);
+    }
+    if (gRowsFoot[0]) DrawCell(dc, gRowsFoot, S(4), W - S(4), y + S(4), S(14), DT_LEFT);
+    DeleteObject(grey);
+    SelectObject(dc, old);
+}
+
+static void RowsChanged(void)
+{
+    gRowsHeight = RowsHeadHeight() + gSvcRowCount * S(kSvcRowH) + (gRowsFoot[0] ? S(22) : S(4));
+    RowsScrollBar();
+    InvalidateRect(gRowsPanel, NULL, FALSE);
+}
+
+static void RowTapped(int row);
+
+static LRESULT CALLBACK RowsProc(HWND h, UINT m, WPARAM w, LPARAM l)
+{
+    switch (m) {
+    case WM_PAINT: PaintBuffered(h, RowsPaint); return 0;
+    case WM_ERASEBKGND: return 1;
+    case WM_SIZE: RowsScrollBar(); return 0;
+    case WM_VSCROLL: {
+        RECT r;
+        GetClientRect(h, &r);
+        switch (LOWORD(w)) {
+        case SB_LINEUP: gRowsScroll -= S(kSvcRowH); break;
+        case SB_LINEDOWN: gRowsScroll += S(kSvcRowH); break;
+        case SB_PAGEUP: gRowsScroll -= r.bottom - S(kSvcRowH); break;
+        case SB_PAGEDOWN: gRowsScroll += r.bottom - S(kSvcRowH); break;
+        case SB_THUMBTRACK: case SB_THUMBPOSITION: gRowsScroll = HIWORD(w); break;
+        default: return 0;
+        }
+        RowsScrollBar();
+        InvalidateRect(h, NULL, FALSE);
+        return 0;
+    }
+    case WM_LBUTTONDOWN: {
+        int y = (short)HIWORD(l) + gRowsScroll - RowsHeadHeight() - S(2);
+        if (y >= 0 && y / S(kSvcRowH) < gSvcRowCount) RowTapped(y / S(kSvcRowH));
+        return 0;
+    }
+    }
+    return DefWindowProcW(h, m, w, l);
+}
+
+/* ---- Service: the list and History ---- */
+
+static void ServiceRefresh(void)
+{
+    char head[64];
+    memset(gRowsHead, 0, sizeof gRowsHead);
+    gSvcRowCount = SvcViewList(gSvcVehicle, Today(), &gPrefs, gPoint, gThousands, gSvcRows, svcMaxRows, head, gRowsFoot);
+    gRowsHead[0].style = tvNote;
+    strcpy(gRowsHead[0].cell[0], head);
+    gRowsHeadCount = 1;
+    if (!gSvcRowCount) { gRowsHead[1].style = tvNote; strcpy(gRowsHead[1].cell[0], "No services for this vehicle."); gRowsHeadCount = 2; }
+    RowsChanged();
+}
+
+static void HistoryRefresh(void)
+{
+    memset(gRowsHead, 0, sizeof gRowsHead);
+    gSvcRowCount = SvcViewHistory(gSvcVehicle, gHistType, Today(), &gPrefs, gPoint, gThousands, gSvcRows, svcMaxRows, gRowsHead, &gRowsHeadCount);
+    gRowsFoot[0] = 0;
+    if (!gSvcRowCount && gRowsHeadCount < 6) {
+        gRowsHead[gRowsHeadCount].style = tvNote;
+        strcpy(gRowsHead[gRowsHeadCount].cell[0], "No visits yet: Menu, Log visit.");
+        gRowsHeadCount++;
+    }
+    RowsChanged();
+}
+
+/* The vehicle picker on the Service page names a vehicle, never All. */
+static void ServiceVehiclePick(void)
+{
+    int i;
+    for (i = 0; i <= vehMaxVehicles; i++) if (gVehIds[i] == gSvcVehicle) { SendMessageW(gVehicle, CB_SETCURSEL, (WPARAM)i, 0); return; }
+}
+
+static void ServiceOpen(void)
+{
+    if (!gDataOk) {
+        MessageBoxW(gWin, L"The log in \\My Documents\\FuelLog could not be read.", L"FuelLog", MB_OK | MB_ICONEXCLAMATION);
+        return;
+    }
+    if (FillEditEnsureVehicle()) SaveData();
+    gSvcVehicle = SvcViewVehicle(&gPrefs);
+    if (SvcViewInstallPresets(gSvcVehicle)) SaveData();
+    PostMessageW(gWin, WM_SHOWPAGE, pageService, 0);
+}
+
+/* ---- Service Type ---- */
+
+static const SheetRow kSvtRows[] = {
+    { IDY_NAME, rowEdit, L"Name:", NULL, svtNameLen - 1 },
+    { IDY_DIST, rowEdit, L"Every km:", NULL, 9 },
+    { IDY_MONTHS, rowEdit, L"Or months:", NULL, 3 },
+    { IDY_WARNDIST, rowEdit, L"Warn km:", NULL, 9 },
+    { IDY_WARNDAYS, rowEdit, L"Or days:", NULL, 5 },
+    { IDY_ALARM, rowCheck, L"Alarm when due", NULL, 0 },
+    { IDY_DETAIL, rowEdit, L"Detail:", NULL, svtDetailLen - 1 },
+    { IDY_SUM1, rowText, L"", NULL, 0 },
+    { IDY_SUM2, rowText, L"", NULL, 0 },
+    { IDY_SUM3, rowText, L"", NULL, 0 },
+};
+
+static void SvtOpen(UInt16 index, int back)
+{
+    Sheet *s = &gSvtSheet;
+    SvtForm f;
+    char lines[3][64], b[32];
+    if (!SvtEditBegin(&gSvtEdit, index, gSvcVehicle, &gPrefs, gPoint, &f)) {
+        MessageBoxW(gWin, L"A vehicle keeps up to 31 service types. Archive one first.", L"Service limit", MB_OK | MB_ICONEXCLAMATION);
+        return;
+    }
+    gSvtReturn = back;
+    SheetSetText(s, IDY_NAME, f.name);
+    strcpy(b, "Every "); strcat(b, UnitDistLabel(gPrefs.distanceUnit)); strcat(b, ":");
+    SheetSetLabel(s, IDY_DIST, b);
+    strcpy(b, "Warn "); strcat(b, UnitDistLabel(gPrefs.distanceUnit)); strcat(b, ":");
+    SheetSetLabel(s, IDY_WARNDIST, b);
+    SheetSetText(s, IDY_DIST, f.dist);
+    SheetSetText(s, IDY_MONTHS, f.months);
+    SheetSetText(s, IDY_WARNDIST, f.warnDist);
+    SheetSetText(s, IDY_WARNDAYS, f.warnDays);
+    SheetSetCheck(s, IDY_ALARM, f.alarm);
+    SheetSetText(s, IDY_DETAIL, f.detail);
+    SvtEditSummary(&gSvtEdit, Today(), &gPrefs, gPoint, gThousands, lines);
+    SheetSetText(s, IDY_SUM1, lines[0]);
+    SheetSetText(s, IDY_SUM2, lines[1]);
+    SheetSetText(s, IDY_SUM3, lines[2]);
+    s->scroll = 0;
+    SheetLayout(s);
+    PostMessageW(gWin, WM_SHOWPAGE, pageSvt, 0);
+}
+
+static void SvtSave(void)
+{
+    Sheet *s = &gSvtSheet;
+    SvtForm f;
+    Int32 r;
+    memset(&f, 0, sizeof f);
+    SheetGetText(s, IDY_NAME, f.name, svtNameLen);
+    SheetGetText(s, IDY_DIST, f.dist, sizeof f.dist);
+    SheetGetText(s, IDY_MONTHS, f.months, sizeof f.months);
+    SheetGetText(s, IDY_WARNDIST, f.warnDist, sizeof f.warnDist);
+    SheetGetText(s, IDY_WARNDAYS, f.warnDays, sizeof f.warnDays);
+    f.alarm = (UInt8)SheetGetCheck(s, IDY_ALARM);
+    SheetGetText(s, IDY_DETAIL, f.detail, svtDetailLen);
+    r = SvtEditSave(&gSvtEdit, &f, &gPrefs, gPoint, gThousands);
+    if (r == seNeedName) MessageBoxW(gWin, L"Give the service a name, such as Oil and filter.", L"Name the service", MB_OK | MB_ICONEXCLAMATION);
+    else if (r == seBadNumber) MessageBoxW(gWin, L"A number could not be read. Fix the field with the stray character and choose Save again.", L"Check the numbers", MB_OK | MB_ICONEXCLAMATION);
+    else if (r != seSaved) MessageBoxW(gWin, L"The service was not stored. Free some memory and try again.", L"Could not save", MB_OK | MB_ICONEXCLAMATION);
+    else {
+        SaveData();
+        ScheduleAlarm();
+        PostMessageW(gWin, WM_SHOWPAGE, (WPARAM)gSvtReturn, 0);
+    }
+}
+
+static void SvtArchive(void)
+{
+    const char *what = SvtEditArchiveLabel(&gSvtEdit);
+    if (!what) return;
+    if (strcmp(what, "Delete") == 0 && MessageBoxW(gWin, L"Delete this service?\r\n\r\nNo visit covers it, so nothing else is lost.", L"FuelLog",
+            MB_YESNO | MB_ICONQUESTION | MB_DEFBUTTON2) != IDYES) return;
+    if (SvtEditArchive(&gSvtEdit) != dbOk) {
+        MessageBoxW(gWin, L"The service was not changed. Free some memory and try again.", L"Could not save", MB_OK | MB_ICONEXCLAMATION);
+        return;
+    }
+    SaveData();
+    ScheduleAlarm();
+    PostMessageW(gWin, WM_SHOWPAGE, pageService, 0);
+}
+
+/* ---- Log Service and Edit Visit ---- */
+
+static const SheetRow kSvlRows[] = {
+    { IDS_DATE, rowDate, L"Date:", NULL, 0 },
+    { IDS_ODO, rowEdit, L"Odometer:", NULL, 15 },
+    { IDS_CHK(0), rowCheck, L"", NULL, 0 }, { IDS_CHK(1), rowCheck, L"", NULL, 0 }, { IDS_CHK(2), rowCheck, L"", NULL, 0 },
+    { IDS_CHK(3), rowCheck, L"", NULL, 0 }, { IDS_CHK(4), rowCheck, L"", NULL, 0 }, { IDS_CHK(5), rowCheck, L"", NULL, 0 },
+    { IDS_CHK(6), rowCheck, L"", NULL, 0 }, { IDS_CHK(7), rowCheck, L"", NULL, 0 }, { IDS_CHK(8), rowCheck, L"", NULL, 0 },
+    { IDS_CHK(9), rowCheck, L"", NULL, 0 }, { IDS_CHK(10), rowCheck, L"", NULL, 0 }, { IDS_CHK(11), rowCheck, L"", NULL, 0 },
+    { IDS_OTHERON, rowCheck, L"Other, not on the list:", NULL, 0 },
+    { IDS_OTHER, rowEdit, L"Other item:", NULL, svlOtherLen - 1 },
+    { IDS_COST, rowEdit, L"Cost:", NULL, 15 },
+    { IDS_CUR, rowCombo, L"Currency:", L"USD\0CAD\0EUR\0AUD\0NZD\0GBP\0", 0 },
+    { IDS_PAY, rowCombo, L"Paid by:", L"Cash\0Card\0", 0 },
+    { IDS_SHOP, rowEdit, L"Shop:", NULL, svlShopLen - 1 },
+    { IDS_DETAIL, rowEdit, L"Detail:", NULL, svlDetailLen - 1 },
+    { IDS_NOTE, rowEdit, L"Note:", NULL, fillMaxNotes - 1 },
+    { IDS_NEXT, rowText, L"", NULL, 0 },
+};
+
+static void VisitForm(SvlForm *f)
+{
+    Sheet *s = &gSvlSheet;
+    UInt8 i;
+    memset(f, 0, sizeof *f);
+    f->date = SheetGetDate(s, IDS_DATE, Today());
+    SheetGetText(s, IDS_ODO, f->odo, sizeof f->odo);
+    for (i = 0; i < svlChecks; i++) f->checked[i] = (UInt8)(i < gSvlEdit.count && SheetGetCheck(s, IDS_CHK(i)));
+    f->otherOn = (UInt8)SheetGetCheck(s, IDS_OTHERON);
+    SheetGetText(s, IDS_OTHER, f->other, svlOtherLen);
+    SheetGetText(s, IDS_COST, f->cost, sizeof f->cost);
+    f->currency = (UInt8)SheetGetSel(s, IDS_CUR, 0);
+    f->payment = SheetGetSel(s, IDS_PAY, 0) == 1 ? fillPaymentCard : fillPaymentCash;
+    SheetGetText(s, IDS_SHOP, f->shop, svlShopLen);
+    SheetGetText(s, IDS_DETAIL, f->detail, svlDetailLen);
+    SheetGetText(s, IDS_NOTE, f->notes, fillMaxNotes);
+}
+
+static void VisitNextLine(void)
+{
+    SvlForm f;
+    char b[64];
+    VisitForm(&f);
+    SvlEditNextLine(&gSvlEdit, &f, &gPrefs, gPoint, gThousands, b);
+    SheetSetText(&gSvlSheet, IDS_NEXT, b);
+}
+
+static void VisitChanged(int id)
+{
+    if (id == IDS_DATE || (id >= IDS_CHK(0) && id <= IDS_CHK(svlChecks - 1))) VisitNextLine();
+}
+
+static void VisitEdited(int id)
+{
+    if (id == IDS_ODO) VisitNextLine();
+}
+
+static void VisitOpen(UInt16 index, int back)
+{
+    Sheet *s = &gSvlSheet;
+    SvlForm f;
+    UInt8 i;
+    WCHAR w[svtNameLen + 2];
+    SvlEditBegin(&gSvlEdit, index, gSvcVehicle, Today(), &gPrefs, gPoint, &f);
+    gVisitReturn = back;
+    SheetSetDate(s, IDS_DATE, f.date);
+    SheetSetText(s, IDS_ODO, f.odo);
+    SheetSetLabel(s, IDS_ODO, gSvlEdit.prefilledOdo ? "Odo (last fill):" : "Odometer:");
+    for (i = 0; i < svlChecks; i++) {
+        if (i < gSvlEdit.count) { ToWide(gSvlEdit.names[i], w, svtNameLen + 2); SetWindowTextW(SC(s, IDS_CHK(i)), w); }
+        SheetSetCheck(s, IDS_CHK(i), i < gSvlEdit.count && f.checked[i]);
+        SheetHide(s, IDS_CHK(i), i >= gSvlEdit.count);
+    }
+    SheetSetCheck(s, IDS_OTHERON, f.otherOn);
+    SheetSetText(s, IDS_OTHER, f.other);
+    SheetSetText(s, IDS_COST, f.cost);
+    SheetSetSel(s, IDS_CUR, f.currency);
+    SheetSetSel(s, IDS_PAY, f.payment == fillPaymentCard ? 1 : 0);
+    SheetSetText(s, IDS_SHOP, f.shop);
+    SheetSetText(s, IDS_DETAIL, f.detail);
+    SheetSetText(s, IDS_NOTE, f.notes);
+    SheetSetText(s, IDS_NEXT, "");
+    s->scroll = 0;
+    SheetLayout(s);
+    if (index != svtEditNew) VisitNextLine();
+    PostMessageW(gWin, WM_SHOWPAGE, pageVisit, 0);
+}
+
+static void VisitSave(void)
+{
+    SvlForm f;
+    UInt8 choice = svOtherAsk;
+    Int32 r;
+    WCHAR msg[200], name[svlOtherLen + 2];
+    VisitForm(&f);
+    for (;;) {
+        int hit;
+        r = SvlEditSave(&gSvlEdit, &f, choice, &gPrefs, gPoint, gThousands);
+        if (r != svAskTrack) break;
+        ToWide(f.other, name, svlOtherLen + 2);
+        wsprintfW(msg, L"Make \"%s\" a service type for this vehicle, so it can have an interval and a history?\r\n\r\nYes: track it.\r\nNo: just this once.", name);
+        hit = MessageBoxW(gWin, msg, L"Track this service?", MB_YESNOCANCEL | MB_ICONQUESTION);
+        if (hit == IDYES) choice = svOtherTrack;
+        else if (hit == IDNO) choice = svOtherOnce;
+        else return;
+    }
+    if (r == svNothing) MessageBoxW(gWin, L"Tick what was done at this visit, or Other with a few words.", L"Nothing ticked", MB_OK | MB_ICONEXCLAMATION);
+    else if (r == svBadNumber) MessageBoxW(gWin, L"A number could not be read. Fix the field with the stray character and choose Save again.", L"Check the numbers", MB_OK | MB_ICONEXCLAMATION);
+    else if (r != svSaved) MessageBoxW(gWin, L"The visit was not stored. Free some memory and try again.", L"Could not save", MB_OK | MB_ICONEXCLAMATION);
+    else {
+        SaveData();
+        StorePrefs();
+        ScheduleAlarm();
+        PostMessageW(gWin, WM_SHOWPAGE, (WPARAM)gVisitReturn, 0);
+    }
+}
+
+static void VisitDelete(void)
+{
+    if (gSvlEdit.index == svtEditNew) return;
+    if (MessageBoxW(gWin, L"Delete this visit?\r\n\r\nThe services it covered will count from the visit before it.", L"FuelLog",
+            MB_YESNO | MB_ICONQUESTION | MB_DEFBUTTON2) != IDYES) return;
+    SvlEditDelete(&gSvlEdit);
+    SaveData();
+    ScheduleAlarm();
+    PostMessageW(gWin, WM_SHOWPAGE, (WPARAM)gVisitReturn, 0);
+}
+
+/* A row with a visit opens its History; one without goes to its Service Type. On History a row opens the visit. */
+static void RowTapped(int row)
+{
+    const SvcRow *r = &gSvcRows[row];
+    if (gPage == pageService) {
+        if (r->hasVisit) { gHistType = r->dbIndex; PostMessageW(gWin, WM_SHOWPAGE, pageHistory, 0); }
+        else SvtOpen(r->dbIndex, pageService);
+    } else if (gPage == pageHistory) {
+        VisitOpen(r->dbIndex, pageHistory);
+    }
+}
+
 /* ---- a backup set from a Palm, on a storage card ---- */
 
 /* The newest set (their names are dates, so the greatest name) under
@@ -1918,7 +2485,7 @@ static void TakePalmSet(void)
 static void About(void)
 {
     WCHAR msg[400];
-    wsprintfW(msg, L"FuelLog for Pocket PC %S\r\nSo far: the fill list, New and Edit Fill with points, Stats, Reports, Graphs, Vehicles, Programmes and Preferences.\r\n\r\n%u fills, %u vehicles, %u programmes, %u service visits\r\n"
+    wsprintfW(msg, L"FuelLog for Pocket PC %S\r\nSo far: the fill list, New and Edit Fill with points, Stats, Reports, Graphs, Service, Vehicles, Programmes and Preferences.\r\n\r\n%u fills, %u vehicles, %u programmes, %u service visits\r\n"
         L"Data: %s\r\nScreen %d dpi\r\n\r\nFree software under the GNU GPLv3.",
         kVersion, (unsigned)DbCount(dbFills), (unsigned)DbCount(dbVehicles), (unsigned)DbCount(dbProgrammes),
         (unsigned)DbCount(dbServiceVisits), kDataDirW, gDpi);
@@ -1936,11 +2503,13 @@ static void SetMenuBar(int page)
     HMENU bar = CreateMenu(), menu = CreatePopupMenu();
     if (gMenuBar) { CommandBar_Destroy(gMenuBar); gMenuBar = NULL; }
     switch (page) {
-    case pageForm: case pageVehicle: case pageProgramme:
-        if (page == pageProgramme) {
-            const char *what = PgmEditArchiveLabel(&gPgmEdit);
+    case pageForm: case pageVehicle: case pageProgramme: case pageSvt: case pageVisit:
+        if (page == pageProgramme || page == pageSvt) {
+            const char *what = page == pageSvt ? SvtEditArchiveLabel(&gSvtEdit) : PgmEditArchiveLabel(&gPgmEdit);
             WCHAR w[16];
             if (what) { ToWide(what, w, 16); AppendMenuW(menu, MF_STRING, IDM_ARCHIVE, w); }
+        } else if (page == pageVisit) {
+            if (gSvlEdit.index != svtEditNew) AppendMenuW(menu, MF_STRING, IDM_DELETE, L"Delete");
         } else if (page == pageForm ? gEdit.index != fillEditNew : VehEditCanDelete(&gVehEdit)) {
             AppendMenuW(menu, MF_STRING, IDM_DELETE, L"Delete");
         }
@@ -1958,6 +2527,20 @@ static void SetMenuBar(int page)
         AppendMenuW(bar, MF_STRING, IDM_DONE, L"Done");
         AppendMenuW(bar, MF_STRING, IDM_NEW, L"New");
         break;
+    case pageService:
+        AppendMenuW(menu, MF_STRING, IDM_NEWSVC, L"New service");
+        AppendMenuW(menu, MF_STRING, IDM_HISTORY, L"History");
+        AppendMenuW(menu, MF_SEPARATOR, 0, NULL);
+        AppendMenuW(menu, MF_STRING, IDM_DONE, L"Done");
+        AppendMenuW(bar, MF_STRING, IDM_LOG, L"Log");
+        AppendMenuW(bar, MF_POPUP, (UINT_PTR)menu, L"Menu");
+        break;
+    case pageHistory:
+        if (gHistType != 0xFFFF) AppendMenuW(menu, MF_STRING, IDM_INTERVALS, L"Intervals");
+        AppendMenuW(menu, MF_STRING, IDM_LOG, L"Log visit");
+        AppendMenuW(bar, MF_STRING, IDM_DONE, L"Done");
+        AppendMenuW(bar, MF_POPUP, (UINT_PTR)menu, L"Menu");
+        break;
     case pageStats: case pageReports: case pageGraphs:
         AppendMenuW(menu, MF_STRING | (page == pageStats ? MF_CHECKED : 0), IDM_STATS, L"Stats");
         AppendMenuW(menu, MF_STRING | (page == pageReports ? MF_CHECKED : 0), IDM_REPORTS, L"Reports");
@@ -1969,6 +2552,7 @@ static void SetMenuBar(int page)
         AppendMenuW(menu, MF_STRING, IDM_STATS, L"Stats");
         AppendMenuW(menu, MF_STRING, IDM_REPORTS, L"Reports");
         AppendMenuW(menu, MF_STRING, IDM_GRAPHS, L"Graphs");
+        AppendMenuW(menu, MF_STRING, IDM_SERVICE, gBannerShown ? L"Service!" : L"Service");
         AppendMenuW(menu, MF_SEPARATOR, 0, NULL);
         AppendMenuW(menu, MF_STRING, IDM_VEHICLES, L"Vehicles");
         AppendMenuW(menu, MF_STRING, IDM_PROGRAMMES, L"Programmes");
@@ -2006,9 +2590,13 @@ static void ShowPage(int page)
     ShowWindow(gPgmList, page == pageProgrammes ? SW_SHOW : SW_HIDE);
     ShowWindow(gTextPanel, page == pageStats || page == pageReports ? SW_SHOW : SW_HIDE);
     ShowWindow(gGraph, page == pageGraphs ? SW_SHOW : SW_HIDE);
+    ShowWindow(gRowsPanel, page == pageService || page == pageHistory ? SW_SHOW : SW_HIDE);
+    ShowWindow(gSvtSheet.panel, page == pageSvt ? SW_SHOW : SW_HIDE);
+    ShowWindow(gSvlSheet.panel, page == pageVisit ? SW_SHOW : SW_HIDE);
+    if (!list) ShowWindow(gBanner, SW_HIDE);
     ReportControls();                       /* each shows its pickers only on its own page */
     GraphControls();
-    ShowWindow(gVehicle, list || page == pageStats || page == pageReports || page == pageGraphs ? SW_SHOW : SW_HIDE);
+    ShowWindow(gVehicle, list || page == pageStats || page == pageReports || page == pageGraphs || page == pageService ? SW_SHOW : SW_HIDE);
     ShowWindow(gAvg, list ? SW_SHOW : SW_HIDE);
     ShowWindow(gMonth, list ? SW_SHOW : SW_HIDE);
     if (!list) {
@@ -2029,6 +2617,25 @@ static void ShowPage(int page)
         if (gFormBack) { SHSipPreference(gWin, SIP_FORCEDOWN); SetFocus(F(IDF_PTS)); }
         else SetFocus(gEdit.index == fillEditNew ? F(IDF_ODO) : gForm);
         gFormBack = 0;
+        break;
+    case pageService: case pageHistory:
+        SHSipPreference(gWin, SIP_FORCEDOWN);
+        SetWindowTextW(gWin, page == pageService ? L"Service" : L"History");
+        Layout();                           /* History has no vehicle picker */
+        gRowsScroll = 0;
+        if (page == pageService) { BuildVehicles(); ServiceVehiclePick(); ServiceRefresh(); }
+        else HistoryRefresh();
+        SetFocus(gRowsPanel);
+        break;
+    case pageSvt:
+        SetWindowTextW(gWin, gSvtEdit.index == svtEditNew ? L"New Service" : L"Service Type");
+        SheetLayout(&gSvtSheet);
+        SetFocus(gSvtEdit.index == svtEditNew ? SC(&gSvtSheet, IDY_NAME) : gSvtSheet.panel);
+        break;
+    case pageVisit:
+        SetWindowTextW(gWin, gSvlEdit.index == svtEditNew ? L"Log Service" : L"Edit Visit");
+        SheetLayout(&gSvlSheet);
+        SetFocus(gSvlSheet.panel);
         break;
     case pageStats: case pageReports: case pageGraphs:
         SHSipPreference(gWin, SIP_FORCEDOWN);
@@ -2137,6 +2744,14 @@ static void Create(HWND h)
     AddColumn(gPgmList, 1, 66, 1, L"Balance");
     AddColumn(gPgmList, 2, 170, 0, L"Rule or expiry");
     InfoCreate(h);
+    gRowsPanel = CreateWindowW(kRowsClass, L"", WS_CHILD | WS_VSCROLL, 0, 0, 10, 10, h, NULL, gInst, NULL);
+    gBanner = CreateWindowW(L"BUTTON", L"", WS_CHILD | BS_PUSHBUTTON, 0, 0, 10, 10, h, (HMENU)IDC_BANNER, gInst, NULL);
+    gSvtSheet.rows = kSvtRows; gSvtSheet.count = sizeof kSvtRows / sizeof kSvtRows[0]; gSvtSheet.labelW = 84;
+    CreateWindowW(kSheetClass, L"", WS_CHILD | WS_VSCROLL | WS_CLIPCHILDREN, 0, 0, 10, 10, h, NULL, gInst, &gSvtSheet);
+    gSvlSheet.rows = kSvlRows; gSvlSheet.count = sizeof kSvlRows / sizeof kSvlRows[0]; gSvlSheet.labelW = 84;
+    gSvlSheet.changed = VisitChanged;
+    gSvlSheet.edited = VisitEdited;
+    CreateWindowW(kSheetClass, L"", WS_CHILD | WS_VSCROLL | WS_CLIPCHILDREN, 0, 0, 10, 10, h, NULL, gInst, &gSvlSheet);
 }
 
 static LRESULT CALLBACK Proc(HWND h, UINT m, WPARAM w, LPARAM l)
@@ -2170,8 +2785,10 @@ static LRESULT CALLBACK Proc(HWND h, UINT m, WPARAM w, LPARAM l)
                 InfoOpen(LOWORD(w) == IDM_STATS ? pageStats : LOWORD(w) == IDM_REPORTS ? pageReports : pageGraphs);
             return 0;
         case IDM_DONE:
-            if (gPage == pageVehicles || gPage == pageProgrammes || gPage == pageStats || gPage == pageReports || gPage == pageGraphs)
+            if (gPage == pageVehicles || gPage == pageProgrammes || gPage == pageStats || gPage == pageReports || gPage == pageGraphs
+                || gPage == pageService)
                 PostMessageW(h, WM_SHOWPAGE, pageList, 0);
+            else if (gPage == pageHistory) PostMessageW(h, WM_SHOWPAGE, pageService, 0);
             return 0;
         case IDR_MODE:
             if (HIWORD(w) == CBN_SELCHANGE) {
@@ -2205,18 +2822,32 @@ static LRESULT CALLBACK Proc(HWND h, UINT m, WPARAM w, LPARAM l)
             else if (gPage == pagePrefs) PrefsSaveSheet();
             else if (gPage == pageVehicle) VehSave();
             else if (gPage == pageProgramme) PgmSave();
+            else if (gPage == pageSvt) SvtSave();
+            else if (gPage == pageVisit) VisitSave();
             return 0;
         case IDM_OK: if (gPage == pagePoints) PtsClose(1); return 0;
-        case IDM_ARCHIVE: if (gPage == pageProgramme) PgmArchive(); return 0;
+        case IDM_SERVICE: if (gPage == pageList) ServiceOpen(); return 0;
+        case IDC_BANNER: if (HIWORD(w) == BN_CLICKED && gPage == pageList) ServiceOpen(); return 0;
+        case IDM_NEWSVC: if (gPage == pageService) SvtOpen(svtEditNew, pageService); return 0;
+        case IDM_HISTORY: if (gPage == pageService) { gHistType = 0xFFFF; PostMessageW(h, WM_SHOWPAGE, pageHistory, 0); } return 0;
+        case IDM_INTERVALS: if (gPage == pageHistory && gHistType != 0xFFFF) SvtOpen(gHistType, pageHistory); return 0;
+        case IDM_LOG: if (gPage == pageService || gPage == pageHistory) VisitOpen(svtEditNew, gPage); return 0;
+        case IDM_ARCHIVE:
+            if (gPage == pageProgramme) PgmArchive();
+            else if (gPage == pageSvt) SvtArchive();
+            return 0;
         case IDM_DELETE:
             if (gPage == pageForm) FormDelete();
             else if (gPage == pageVehicle) VehDelete();
+            else if (gPage == pageVisit) VisitDelete();
             return 0;
         case IDM_CANCEL:
             if (gPage == pageForm || gPage == pagePrefs) PostMessageW(h, WM_SHOWPAGE, pageList, 0);
             else if (gPage == pageVehicle) PostMessageW(h, WM_SHOWPAGE, pageVehicles, 0);
             else if (gPage == pageProgramme) PostMessageW(h, WM_SHOWPAGE, pageProgrammes, 0);
             else if (gPage == pagePoints) PtsClose(0);
+            else if (gPage == pageSvt) PostMessageW(h, WM_SHOWPAGE, (WPARAM)gSvtReturn, 0);
+            else if (gPage == pageVisit) PostMessageW(h, WM_SHOWPAGE, (WPARAM)gVisitReturn, 0);
             return 0;
         case IDC_VEHICLE:
             if (HIWORD(w) == CBN_SELCHANGE) {
@@ -2224,7 +2855,16 @@ static LRESULT CALLBACK Proc(HWND h, UINT m, WPARAM w, LPARAM l)
                 if (sel >= 0 && sel <= vehMaxVehicles) {
                     gPrefs.currentVehicle = gVehIds[sel];
                     StorePrefs();
-                    if (gPage == pageList) Refresh(); else InfoRefresh(0);
+                    if (gPage == pageService) {
+                        /* Service names a vehicle: All goes to the first in use, as on the Palm. */
+                        if (gPrefs.currentVehicle == 255) gPrefs.currentVehicle = SvcViewVehicle(&gPrefs);
+                        gSvcVehicle = gPrefs.currentVehicle;
+                        StorePrefs();
+                        ServiceVehiclePick();
+                        if (SvcViewInstallPresets(gSvcVehicle)) SaveData();
+                        gRowsScroll = 0;
+                        ServiceRefresh();
+                    } else if (gPage == pageList) Refresh(); else InfoRefresh(0);
                 }
             }
             return 0;
@@ -2334,6 +2974,9 @@ int WINAPI WinMain(HINSTANCE inst, HINSTANCE prev, LPWSTR cmd, int show)
     wc.lpfnWndProc = TextProc;
     wc.lpszClassName = kTextClass;
     if (!RegisterClassW(&wc)) return 1;
+    wc.lpfnWndProc = RowsProc;
+    wc.lpszClassName = kRowsClass;
+    if (!RegisterClassW(&wc)) return 1;
     wc.lpfnWndProc = GraphProc;
     wc.lpszClassName = kGraphClass;
     if (!RegisterClassW(&wc)) return 1;
@@ -2352,6 +2995,7 @@ int WINAPI WinMain(HINSTANCE inst, HINSTANCE prev, LPWSTR cmd, int show)
     }
     BuildVehicles();
     Refresh();
+    ScheduleAlarm();                    /* the reminder for what is due, as the Palm re-sets its alarm at launch */
     ShowWindow(win, show);
     UpdateWindow(win);
     if (e == dbErrNewerSchema)
