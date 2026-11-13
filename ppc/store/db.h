@@ -63,5 +63,7 @@ Int32 DbGetFill(UInt16 index, FillRecord *r);
 Int32 DbGetVehicle(UInt16 index, VehicleRecord *r);
 /* The vehicle with this id; 0 when there is none. */
 int   DbVehicleById(UInt8 id, VehicleRecord *r);
+Int32 DbGetProgramme(UInt16 index, ProgrammeRecord *r);
+int   DbProgrammeById(UInt8 id, ProgrammeRecord *r);
 
 #endif

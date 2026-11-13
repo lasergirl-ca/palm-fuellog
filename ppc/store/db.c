@@ -316,3 +316,16 @@ int DbVehicleById(UInt8 id, VehicleRecord *r)
     for (i = 0; i < n; i++) if (DbGetVehicle(i, r) == dbOk && r->id == id) return 1;
     return 0;
 }
+
+Int32 DbGetProgramme(UInt16 index, ProgrammeRecord *r)
+{
+    if (!gOpen || index >= gDb[dbProgrammes].count) return dbErrRange;
+    return ProgrammeUnpack(gDb[dbProgrammes].recs[index].data, gDb[dbProgrammes].recs[index].len, r) == 0 ? dbOk : dbErrCorrupt;
+}
+
+int DbProgrammeById(UInt8 id, ProgrammeRecord *r)
+{
+    UInt16 i, n = DbCount(dbProgrammes);
+    for (i = 0; i < n; i++) if (DbGetProgramme(i, r) == dbOk && r->id == id) return 1;
+    return 0;
+}

@@ -36,14 +36,14 @@ $(OUT)/coretest.exe: coretest/coretest.c coretest/ct.h $(SUITE_OBJS) $(CORE_OBJS
 	$(CC) $(CFLAGS) -std=gnu99 $(LDFLAGS) -Wl,--stack,0x40000 -o $@ coretest/coretest.c $(SUITE_OBJS) $(CORE_OBJS) -lcoredll
 	$(STRIP) $@
 
-# FuelLog for Pocket PC: the window (app/main.c) over the fill list model, the
-# .pdb store and the shared core.
+# FuelLog for Pocket PC: the window (app/main.c) over the fill list and fill form
+# models, the .pdb store and the shared core.
 APP_CORE = calc records presets units currency prefs text datecalc
-APP_OBJS = $(OBJ)/app_main.o $(OBJ)/app_fillview.o $(OBJ)/store_pdbfile.o $(OBJ)/store_db.o $(OBJ)/app_rc.o $(APP_CORE:%=$(OBJ)/%.o)
+APP_OBJS = $(OBJ)/app_main.o $(OBJ)/app_fillview.o $(OBJ)/app_filledit.o $(OBJ)/store_pdbfile.o $(OBJ)/store_db.o $(OBJ)/app_rc.o $(APP_CORE:%=$(OBJ)/%.o)
 
 # _WIN32_IE: the CE headers hide the list view's owner-data and full-row styles
 # and InitCommonControlsEx below 0x0500.
-$(OBJ)/app_%.o: app/%.c app/fillview.h store/db.h store/pdbfile.h
+$(OBJ)/app_%.o: app/%.c app/fillview.h app/filledit.h store/db.h store/pdbfile.h
 	@mkdir -p $(OBJ)
 	$(CC) $(CFLAGS) -D_WIN32_IE=0x0500 -Wextra -std=gnu99 -c -o $@ $<
 
@@ -79,5 +79,9 @@ host-test:
 	$(HOSTCC) -Wall -Wextra -o $(HOST)/test_store tests/test_store.c store/pdbfile.c store/db.c app/fillview.c $(SHARED)
 	$(HOST)/test_store $(HOST)/pdb $(HOST)/work
 	@if command -v go >/dev/null; then (cd ../tools/fuellogdump && go build -o ../../ppc/$(HOST)/fuellogdump .) && $(HOST)/fuellogdump dump $(HOST)/work | diff - ../tests/expected_dump.csv && echo "ok   Go reader reads the set the store wrote"; else echo "skip Go reader (go not installed)"; fi
+	@rm -rf $(HOST)/work2 $(HOST)/empty && cp -R $(HOST)/pdb $(HOST)/work2 && mkdir -p $(HOST)/empty
+	$(HOSTCC) -Wall -Wextra -o $(HOST)/test_filledit tests/test_filledit.c store/pdbfile.c store/db.c app/filledit.c $(SHARED)
+	$(HOST)/test_filledit $(HOST)/work2 $(HOST)/empty
+	@if command -v go >/dev/null; then $(HOST)/fuellogdump dump $(HOST)/work2 >/dev/null && $(HOST)/fuellogdump dump $(HOST)/empty >/dev/null && echo "ok   Go reader reads the sets the fill form wrote"; fi
 
 .PHONY: host-test
