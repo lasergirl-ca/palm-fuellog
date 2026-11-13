@@ -11,13 +11,14 @@
 #include "fillview.h"
 #include "filledit.h"
 #include "vehedit.h"
+#include "pgmedit.h"
 #include "settings.h"
 #include "../store/db.h"
 #include "../../src/datecalc.h"
 #include "../../src/units.h"
 #include "../../src/currency.h"
 
-#define kVersion "0.3"
+#define kVersion "0.4"
 #define kClass L"FuelLogPPC"
 #define kFormClass L"FuelLogForm"
 #define kSheetClass L"FuelLogSheet"
@@ -26,8 +27,9 @@
 #define kDataDirW L"\\My Documents\\FuelLog"
 #define kPalmBackup L"\\PALM\\Programs\\FuelLog\\Backup"
 
-enum { IDC_VEHICLE = 100, IDC_LIST, IDC_AVG, IDC_MONTH, IDC_EMPTY, IDC_VEHLIST, IDC_VEHARCH };
-enum { IDM_ABOUT = 200, IDM_PALM, IDM_EXIT, IDM_NEW, IDM_SAVE, IDM_CANCEL, IDM_DELETE, IDM_DONE, IDM_VEHICLES, IDM_PREFS };
+enum { IDC_VEHICLE = 100, IDC_LIST, IDC_AVG, IDC_MONTH, IDC_EMPTY, IDC_VEHLIST, IDC_VEHARCH, IDC_PGMLIST };
+enum { IDM_ABOUT = 200, IDM_PALM, IDM_EXIT, IDM_NEW, IDM_SAVE, IDM_CANCEL, IDM_DELETE, IDM_DONE, IDM_VEHICLES, IDM_PREFS,
+       IDM_PROGRAMMES, IDM_OK, IDM_ARCHIVE };
 /* The form's controls, in the order they are laid out. */
 enum { IDF_LVEH = 300, IDF_VEH, IDF_DATE, IDF_TIME, IDF_LODO, IDF_ODO, IDF_ODOHINT, IDF_LTRIP, IDF_TRIP, IDF_TRIPHINT,
        IDF_LVOL, IDF_VOL, IDF_UNIT, IDF_LPRICE, IDF_PRICE, IDF_CALC, IDF_LTOTAL, IDF_TOTAL, IDF_CUR,
@@ -36,14 +38,19 @@ enum { IDF_LVEH = 300, IDF_VEH, IDF_DATE, IDF_TIME, IDF_LODO, IDF_ODO, IDF_ODOHI
 /* The rows of the two sheets (label ids are these plus 1000). */
 enum { IDP_DIST = 400, IDP_VOL, IDP_ECO, IDP_PRICE, IDP_FORMAT, IDP_HOME, IDP_NEW };
 enum { IDV_NAME = 420, IDV_POWER, IDV_UNIT, IDV_START, IDV_TANK, IDV_HOME, IDV_GRADE, IDV_CUR, IDV_TRIP, IDV_ARCH, IDV_STATUS };
-enum { pageList, pageForm, pagePrefs, pageVehicles, pageVehicle };
+enum { IDE_NAME = 440, IDE_CUR, IDE_MONEY, IDE_EARN, IDE_BASIS, IDE_PREM, IDE_PAY, IDE_AUTO, IDE_REDEEM, IDE_BLOCK,
+       IDE_VALUE, IDE_VOLUNIT, IDE_MAXVOL, IDE_CAP, IDE_EXPIRY, IDE_MONTHS, IDE_OPEN, IDE_ALIAS, IDE_STATUS };
+/* The Points page: four ids per row (programme, earned, redeemed, hint), then Add and the total. */
+#define IDT_ROW(i) (500 + 4 * (i))
+enum { IDT_ADD = 520, IDT_TOTAL };
+enum { pageList, pageForm, pagePrefs, pageVehicles, pageVehicle, pagePoints, pageProgrammes, pageProgramme };
 #define WM_SHOWPAGE (WM_APP + 1)     /* posted, so a menu bar is never replaced inside its own command */
 
 #define kMaxRows 4096
 #define kRow 22                      /* the form's row pitch at 96 dpi */
 
 static HINSTANCE gInst;
-static HWND gWin, gMenuBar, gVehicle, gList, gAvg, gMonth, gEmpty, gForm, gVehList, gVehArch;
+static HWND gWin, gMenuBar, gVehicle, gList, gAvg, gMonth, gEmpty, gForm, gVehList, gVehArch, gPgmList;
 static SHACTIVATEINFO gSai;
 static int gDpi = 96, gPage = pageList, gDataOk;
 static FuelPrefs gPrefs;
@@ -64,23 +71,34 @@ static int gShowArchived;
 /* Prefs as last written to the registry, so they are written only when they change. */
 static UInt8 gStoredPrefs[settingsSize];
 
-/* A sheet is a simple scrolling form, a label and a control per row: Preferences and a vehicle. */
+/* Programmes and the Points page. */
+static PgmEdit gPgmEdit;
+static UInt16 gPgmIdx[pgmMaxProgrammes], gPgmCount;
+static FillEdit gEditSaved;          /* the fill as it was when the Points page opened: Cancel puts it back */
+static UInt8 gPtsIds[pgmMaxProgrammes], gPtsChoices;
+static char gPtsNames[pgmMaxProgrammes][pgmNameLen];
+static int gFormBack;                /* the form page comes back from Points: focus the Points button */
+
+/* A sheet is a simple scrolling form, a label and a control per row: Preferences,
+ * a vehicle, a programme and the Points page. */
 enum { rowEdit, rowCombo, rowCheck, rowText };
 typedef struct {
     int id, kind;
     const WCHAR *label;
-    const WCHAR *choices;       /* a combo's rows, each ended by a NUL */
+    const WCHAR *choices;       /* a combo's rows, each ended by a NUL; NULL when filled at run time */
     int limit;                  /* an edit's longest text */
 } SheetRow;
-#define kSheetRows 12
+#define kSheetRows 24
 typedef struct {
     HWND panel;
     const SheetRow *rows;
-    int count, labelW, scroll, busy;
+    int count, labelW, scroll, busy, quiet;
     UInt8 hidden[kSheetRows];
     void (*changed)(int id);    /* a combo's choice changed */
+    void (*edited)(int id);     /* an edit's text changed by the user */
 } Sheet;
-static Sheet gPrefsSheet, gVehSheet;
+static Sheet gPrefsSheet, gVehSheet, gPgmSheet, gPtsSheet;
+static void PtsOpen(void);
 
 /* Layout numbers are for a 96 dpi screen (QVGA); a VGA device reports 192. Windows CE has no MulDiv. */
 static int S(int x) { return (x * gDpi + 48) / 96; }
@@ -139,7 +157,9 @@ static Int32 OpenData(void)
     e = DbOpenAll(kDataDir, &clock);
     gDataOk = e == dbOk;
     if (e != dbOk) return e;
-    if (DbEnsureUids() || DbDirty()) DbSave();
+    DbEnsureUids();
+    PgmInstallPresets(gPrefs.homeCurrency);     /* a new log starts with the Palm's six programmes, as on the Palm */
+    if (DbDirty()) DbSave();
     return dbOk;
 }
 
@@ -260,6 +280,9 @@ static void Layout(void)
     MoveWindow(gVehSheet.panel, 0, 0, w, h, TRUE);
     MoveWindow(gVehList, 0, 0, w, h - S(24), TRUE);
     MoveWindow(gVehArch, S(4), h - S(22), w - S(8), S(20), TRUE);
+    MoveWindow(gPgmSheet.panel, 0, 0, w, h, TRUE);
+    MoveWindow(gPtsSheet.panel, 0, 0, w, h, TRUE);
+    MoveWindow(gPgmList, 0, 0, w, h, TRUE);
 }
 
 /* ---- the form: New Fill and Edit Fill ---- */
@@ -345,7 +368,7 @@ static void FormLayout(void)
         Place(IDF_LGRADE, 2, y + 3, 72, 16); Place(IDF_GRADE, 76, y, W - 80, 120); y += kRow;
         Place(IDF_FULL, 4, y + 1, 108, 18); Place(IDF_MISSED, 114, y + 1, W - 116, 18); y += kRow;
         Place(IDF_LPAY, 2, y + 3, 72, 16); Place(IDF_CASH, 76, y + 1, 64, 18); Place(IDF_CARD, 142, y + 1, 64, 18); y += kRow;
-        Place(IDF_LPTS, 2, y + 3, 72, 16); Place(IDF_PTS, 76, y + 3, W - 78, 16); y += kRow;
+        Place(IDF_LPTS, 2, y + 3, 72, 16); Place(IDF_PTS, 76, y, W - 80, 20); y += kRow;
         Place(IDF_LNOTE, 2, y + 3, 72, 16); Place(IDF_NOTE, 76, y, W - 80, 20);
         memset(&si, 0, sizeof si);
         si.cbSize = sizeof si;
@@ -572,7 +595,7 @@ static void FormCreate(HWND h)
     Ctl(L"BUTTON", L"Cash", WS_TABSTOP | WS_GROUP | BS_AUTORADIOBUTTON, IDF_CASH);
     Ctl(L"BUTTON", L"Card", BS_AUTORADIOBUTTON, IDF_CARD);
     Ctl(L"STATIC", L"Points:", SS_LEFT, IDF_LPTS);
-    Ctl(L"STATIC", L"", SS_LEFT, IDF_PTS);
+    Ctl(L"BUTTON", L"", WS_TABSTOP | BS_PUSHBUTTON, IDF_PTS);    /* opens the Points page */
     Ctl(L"STATIC", L"Note:", SS_LEFT, IDF_LNOTE);
     Ctl(L"EDIT", L"", WS_BORDER | WS_TABSTOP | ES_AUTOHSCROLL, IDF_NOTE);
 
@@ -648,6 +671,9 @@ static void FormCommand(int id, int code, HWND ctl)
             FillEditSetGrade(&gEdit, gGradeMap[sel], &gText);
             FormChanged();
         }
+        break;
+    case IDF_PTS:
+        if (code == BN_CLICKED) PtsOpen();
         break;
     case IDF_CASH: case IDF_CARD:
         if (code == BN_CLICKED) {
@@ -780,7 +806,7 @@ static void SheetCreate(Sheet *s, HWND h)
         case rowCombo:
             CreateWindowW(L"STATIC", row->label, WS_CHILD | WS_VISIBLE | SS_LEFT, 0, 0, 10, 10, h, (HMENU)(row->id + 1000), gInst, NULL);
             c = CreateWindowW(L"COMBOBOX", L"", WS_CHILD | WS_VISIBLE | WS_VSCROLL | WS_TABSTOP | CBS_DROPDOWNLIST, 0, 0, 10, 10, h, (HMENU)row->id, gInst, NULL);
-            for (o = row->choices; *o; o += wcslen(o) + 1) SendMessageW(c, CB_ADDSTRING, 0, (LPARAM)o);
+            for (o = row->choices; o && *o; o += wcslen(o) + 1) SendMessageW(c, CB_ADDSTRING, 0, (LPARAM)o);
             break;
         case rowCheck:
             CreateWindowW(L"BUTTON", row->label, WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_AUTOCHECKBOX, 0, 0, 10, 10, h, (HMENU)row->id, gInst, NULL);
@@ -792,11 +818,36 @@ static void SheetCreate(Sheet *s, HWND h)
     }
 }
 
+/* Text set here is not the user's typing: the edited callback does not hear of it. */
 static void SheetSetText(Sheet *s, int id, const char *t)
 {
-    WCHAR w[64];
-    ToWide(t, w, 64);
+    WCHAR w[96];
+    ToWide(t, w, 96);
+    s->quiet++;
     SetWindowTextW(SC(s, id), w);
+    s->quiet--;
+}
+
+static void SheetSetLabel(Sheet *s, int id, const char *t)
+{
+    WCHAR w[32];
+    ToWide(t, w, 32);
+    SetWindowTextW(SC(s, id + 1000), w);
+}
+
+/* A combo's rows from Palm text: `first` (if any), then names. */
+static void SheetSetChoices(Sheet *s, int id, const WCHAR *first, char names[][pgmNameLen], int count, int sel)
+{
+    WCHAR w[pgmNameLen + 2];
+    HWND c = SC(s, id);
+    int i;
+    SendMessageW(c, CB_RESETCONTENT, 0, 0);
+    if (first) SendMessageW(c, CB_ADDSTRING, 0, (LPARAM)first);
+    for (i = 0; i < count; i++) {
+        ToWide(names[i], w, pgmNameLen + 2);
+        SendMessageW(c, CB_ADDSTRING, 0, (LPARAM)w);
+    }
+    SendMessageW(c, CB_SETCURSEL, (WPARAM)sel, 0);
 }
 
 static void SheetGetText(Sheet *s, int id, char *t, int cap)
@@ -822,7 +873,8 @@ static void SheetHide(Sheet *s, int id, int hide)
 
 static LRESULT CALLBACK SheetProc(HWND h, UINT m, WPARAM w, LPARAM l)
 {
-    Sheet *s = h == gPrefsSheet.panel ? &gPrefsSheet : h == gVehSheet.panel ? &gVehSheet : NULL;
+    Sheet *s = h == gPrefsSheet.panel ? &gPrefsSheet : h == gVehSheet.panel ? &gVehSheet
+             : h == gPgmSheet.panel ? &gPgmSheet : h == gPtsSheet.panel ? &gPtsSheet : NULL;
     if (m == WM_CREATE) {
         SheetCreate((Sheet *)((CREATESTRUCTW *)l)->lpCreateParams, h);
         return 0;
@@ -853,6 +905,7 @@ static LRESULT CALLBACK SheetProc(HWND h, UINT m, WPARAM w, LPARAM l)
         if (s->rows[i].kind == rowEdit) {
             if (HIWORD(w) == EN_SETFOCUS) { SHSipPreference(gWin, SIP_UP); SheetReveal(s, (HWND)l); }
             else if (HIWORD(w) == EN_KILLFOCUS) SHSipPreference(gWin, SIP_DOWN);
+            else if (HIWORD(w) == EN_CHANGE && !s->quiet && s->edited) s->edited(LOWORD(w));
         } else if (s->rows[i].kind == rowCombo && HIWORD(w) == CBN_SELCHANGE && s->changed) {
             s->changed(LOWORD(w));
         }
@@ -1035,6 +1088,260 @@ static void VehDelete(void)
     PostMessageW(gWin, WM_SHOWPAGE, pageVehicles, 0);
 }
 
+/* ---- Programmes ---- */
+
+static void ProgrammesRefresh(void)
+{
+    char name[48], bal[48], note[48];
+    WCHAR w[48];
+    LVITEMW it;
+    UInt16 i, today = Today();
+    SendMessageW(gPgmList, LVM_DELETEALLITEMS, 0, 0);
+    gPgmCount = PgmListCollect(gPgmIdx, pgmMaxProgrammes);
+    for (i = 0; i < gPgmCount; i++) {
+        const char *col[3];
+        int c;
+        if (!PgmListRow(gPgmIdx[i], today, gPoint, gThousands, name, bal, note)) name[0] = bal[0] = note[0] = 0;
+        col[0] = name; col[1] = bal; col[2] = note;
+        for (c = 0; c < 3; c++) {
+            ToWide(col[c], w, 48);
+            memset(&it, 0, sizeof it);
+            it.mask = LVIF_TEXT;
+            it.iItem = i;
+            it.iSubItem = c;
+            it.pszText = w;
+            SendMessageW(gPgmList, c == 0 ? LVM_INSERTITEMW : LVM_SETITEMW, 0, (LPARAM)&it);
+        }
+    }
+}
+
+static const SheetRow kPgmRows[] = {
+    { IDE_NAME, rowEdit, L"Name:", NULL, pgmNameLen - 1 },
+    { IDE_CUR, rowCombo, L"Currency:", L"USD\0CAD\0EUR\0AUD\0NZD\0GBP\0", 0 },
+    { IDE_MONEY, rowCombo, L"Counts in:", L"Points\0Money\0", 0 },
+    { IDE_EARN, rowEdit, L"Earn pts:", NULL, 7 },
+    { IDE_BASIS, rowCombo, L"Per:", L"none\0litre\0US gal\0dollar\0", 0 },
+    { IDE_PREM, rowEdit, L"Premium %:", NULL, 4 },
+    { IDE_PAY, rowCombo, L"Only on:", L"Any payment\0Cash\0Card\0", 0 },
+    { IDE_AUTO, rowCheck, L"Add to new fills", NULL, 0 },
+    { IDE_REDEEM, rowCombo, L"Redeem:", L"None\0Money off\0Per volume\0", 0 },
+    { IDE_BLOCK, rowEdit, L"Points:", NULL, 9 },
+    { IDE_VALUE, rowEdit, L"= $:", NULL, 8 },
+    { IDE_VOLUNIT, rowCombo, L"Per:", L"litre\0US gal\0", 0 },
+    { IDE_MAXVOL, rowEdit, L"Up to:", NULL, 4 },
+    { IDE_CAP, rowEdit, L"Cap c/unit:", NULL, 6 },
+    { IDE_EXPIRY, rowCombo, L"Expires:", L"Never\0Month after\0After months\0", 0 },
+    { IDE_MONTHS, rowEdit, L"Months:", NULL, 3 },
+    { IDE_OPEN, rowEdit, L"Opening pts:", NULL, 12 },
+    { IDE_ALIAS, rowEdit, L"Aliases:", NULL, pgmAliasLen - 1 },
+    { IDE_STATUS, rowText, L"", NULL, 0 },
+};
+
+/* Labels and rows that follow Counts in, Redeem and Expires. */
+static void PgmSheetRows(void)
+{
+    Sheet *s = &gPgmSheet;
+    int money = SheetGetSel(s, IDE_MONEY, 0) == 1;
+    UInt8 redeem = (UInt8)SheetGetSel(s, IDE_REDEEM, 0), expiry = (UInt8)SheetGetSel(s, IDE_EXPIRY, 0);
+    SheetSetLabel(s, IDE_EARN, PgmEditEarnLabel(money));
+    SheetSetLabel(s, IDE_OPEN, PgmEditOpeningLabel(money));
+    SheetSetLabel(s, IDE_VALUE, PgmEditValueLabel(redeem));
+    SheetHide(s, IDE_BLOCK, redeem == pgmRedeemNone);
+    SheetHide(s, IDE_VALUE, redeem == pgmRedeemNone);
+    SheetHide(s, IDE_VOLUNIT, redeem != pgmRedeemPerVolume);
+    SheetHide(s, IDE_MAXVOL, redeem != pgmRedeemPerVolume);
+    SheetHide(s, IDE_CAP, redeem != pgmRedeemPerVolume);
+    SheetHide(s, IDE_MONTHS, expiry != pgmExpiryMonths);
+    SheetLayout(s);
+}
+
+static void PgmSheetChanged(int id)
+{
+    if (id == IDE_MONEY || id == IDE_REDEEM || id == IDE_EXPIRY) PgmSheetRows();
+}
+
+static void PgmOpen(UInt16 index)
+{
+    Sheet *s = &gPgmSheet;
+    PgmEditForm f;
+    char status[64];
+    if (gPage == pageProgramme) return;
+    if (!gDataOk) {
+        MessageBoxW(gWin, L"The log in \\My Documents\\FuelLog could not be read, so nothing can be added to it.", L"FuelLog", MB_OK | MB_ICONEXCLAMATION);
+        return;
+    }
+    if (!PgmEditBegin(&gPgmEdit, index, gPrefs.homeCurrency, gPoint, gThousands, &f)) {
+        MessageBoxW(gWin, L"FuelLog keeps up to 16 programmes. Archive one you no longer use first.", L"Programme limit", MB_OK | MB_ICONEXCLAMATION);
+        return;
+    }
+    SheetSetText(s, IDE_NAME, f.name);
+    SheetSetSel(s, IDE_CUR, f.currency);
+    SheetSetSel(s, IDE_MONEY, f.money);
+    SheetSetText(s, IDE_EARN, f.earn);
+    SheetSetSel(s, IDE_BASIS, f.basis);
+    SheetSetText(s, IDE_PREM, f.premium);
+    SheetSetSel(s, IDE_PAY, f.payment);
+    SendMessageW(SC(s, IDE_AUTO), BM_SETCHECK, f.autoApply, 0);
+    SheetSetSel(s, IDE_REDEEM, f.redeem);
+    SheetSetText(s, IDE_BLOCK, f.block);
+    SheetSetText(s, IDE_VALUE, f.value);
+    SheetSetSel(s, IDE_VOLUNIT, f.volUnit);
+    SheetSetText(s, IDE_MAXVOL, f.maxVol);
+    SheetSetText(s, IDE_CAP, f.cap);
+    SheetSetSel(s, IDE_EXPIRY, f.expiry);
+    SheetSetText(s, IDE_MONTHS, f.months);
+    SheetSetText(s, IDE_OPEN, f.opening);
+    SheetSetText(s, IDE_ALIAS, f.aliases);
+    PgmEditStatus(&gPgmEdit, gPoint, gThousands, status);
+    SheetSetText(s, IDE_STATUS, status);
+    s->scroll = 0;
+    PgmSheetRows();
+    PostMessageW(gWin, WM_SHOWPAGE, pageProgramme, 0);
+}
+
+static void PgmSave(void)
+{
+    Sheet *s = &gPgmSheet;
+    PgmEditForm f;
+    Int32 r;
+    memset(&f, 0, sizeof f);
+    SheetGetText(s, IDE_NAME, f.name, pgmNameLen);
+    f.currency = (UInt8)SheetGetSel(s, IDE_CUR, 0);
+    f.money = (UInt8)SheetGetSel(s, IDE_MONEY, 0);
+    SheetGetText(s, IDE_EARN, f.earn, peText);
+    f.basis = (UInt8)SheetGetSel(s, IDE_BASIS, 0);
+    SheetGetText(s, IDE_PREM, f.premium, peText);
+    f.payment = (UInt8)SheetGetSel(s, IDE_PAY, 0);
+    f.autoApply = (UInt8)(SendMessageW(SC(s, IDE_AUTO), BM_GETCHECK, 0, 0) == 1);
+    f.redeem = (UInt8)SheetGetSel(s, IDE_REDEEM, 0);
+    SheetGetText(s, IDE_BLOCK, f.block, peText);
+    SheetGetText(s, IDE_VALUE, f.value, peText);
+    f.volUnit = (UInt8)SheetGetSel(s, IDE_VOLUNIT, 0);
+    SheetGetText(s, IDE_MAXVOL, f.maxVol, peText);
+    SheetGetText(s, IDE_CAP, f.cap, peText);
+    f.expiry = (UInt8)SheetGetSel(s, IDE_EXPIRY, 0);
+    SheetGetText(s, IDE_MONTHS, f.months, peText);
+    SheetGetText(s, IDE_OPEN, f.opening, peText);
+    SheetGetText(s, IDE_ALIAS, f.aliases, pgmAliasLen);
+    r = PgmEditSave(&gPgmEdit, &f, gPoint, gThousands);
+    if (r == peNeedName) {
+        MessageBoxW(gWin, L"Give the programme a name so it can be picked on a fill.", L"Name the programme", MB_OK | MB_ICONEXCLAMATION);
+    } else if (r == peBadNumber) {
+        MessageBoxW(gWin, L"A number could not be read. Fix the field with the stray character and choose Save again.", L"Check the numbers", MB_OK | MB_ICONEXCLAMATION);
+    } else if (r != peSaved) {
+        MessageBoxW(gWin, L"The programme was not stored. Free some memory and try again.", L"Could not save", MB_OK | MB_ICONEXCLAMATION);
+    } else {
+        SaveData();
+        PostMessageW(gWin, WM_SHOWPAGE, pageProgrammes, 0);
+    }
+}
+
+/* Archive, Restore, or Delete when no fill uses it; on the programme as stored. */
+static void PgmArchive(void)
+{
+    const char *what = PgmEditArchiveLabel(&gPgmEdit);
+    if (!what) return;
+    if (strcmp(what, "Delete") == 0 && MessageBoxW(gWin, L"Delete this programme?\r\n\r\nNo fill uses it, so nothing else is lost.", L"FuelLog",
+            MB_YESNO | MB_ICONQUESTION | MB_DEFBUTTON2) != IDYES) return;
+    if (PgmEditArchive(&gPgmEdit) != dbOk) {
+        MessageBoxW(gWin, L"The programme was not changed. Free some memory and try again.", L"Could not save", MB_OK | MB_ICONEXCLAMATION);
+        return;
+    }
+    SaveData();
+    PostMessageW(gWin, WM_SHOWPAGE, pageProgrammes, 0);
+}
+
+/* ---- the Points page: the programmes on the fill being edited ---- */
+
+static const SheetRow kPtsRows[] = {
+    { IDT_ROW(0), rowCombo, L"Programme:", NULL, 0 }, { IDT_ROW(0) + 1, rowEdit, L"Earned:", NULL, 9 },
+    { IDT_ROW(0) + 2, rowEdit, L"Redeemed:", NULL, 9 }, { IDT_ROW(0) + 3, rowText, L"", NULL, 0 },
+    { IDT_ROW(1), rowCombo, L"Programme:", NULL, 0 }, { IDT_ROW(1) + 1, rowEdit, L"Earned:", NULL, 9 },
+    { IDT_ROW(1) + 2, rowEdit, L"Redeemed:", NULL, 9 }, { IDT_ROW(1) + 3, rowText, L"", NULL, 0 },
+    { IDT_ROW(2), rowCombo, L"Programme:", NULL, 0 }, { IDT_ROW(2) + 1, rowEdit, L"Earned:", NULL, 9 },
+    { IDT_ROW(2) + 2, rowEdit, L"Redeemed:", NULL, 9 }, { IDT_ROW(2) + 3, rowText, L"", NULL, 0 },
+    { IDT_ROW(3), rowCombo, L"Programme:", NULL, 0 }, { IDT_ROW(3) + 1, rowEdit, L"Earned:", NULL, 9 },
+    { IDT_ROW(3) + 2, rowEdit, L"Redeemed:", NULL, 9 }, { IDT_ROW(3) + 3, rowText, L"", NULL, 0 },
+    { IDT_ADD, rowCombo, L"Add:", NULL, 0 },
+    { IDT_TOTAL, rowText, L"", NULL, 0 },
+};
+
+/* The hints and the total line, from what the rows hold now. */
+static void PtsHints(void)
+{
+    char b[64];
+    UInt8 i;
+    for (i = 0; i < fillMaxPoints; i++) { FillEditPtsHint(&gEdit, i, b); SheetSetText(&gPtsSheet, IDT_ROW(i) + 3, b); }
+    if (!gPtsChoices) strcpy(b, "No programmes yet: add them under Menu, Programmes.");
+    else FillEditPtsTotal(&gEdit, b);
+    SheetSetText(&gPtsSheet, IDT_TOTAL, b);
+}
+
+/* Every row from the fill being edited. */
+static void PtsFill(void)
+{
+    Sheet *s = &gPtsSheet;
+    char b[16];
+    UInt8 i, k;
+    gPtsChoices = FillEditPtsChoices(&gEdit, gPtsIds, gPtsNames);
+    for (i = 0; i < fillMaxPoints; i++) {
+        int used = i < gEdit.ptsCount, sel = 0;
+        for (k = 0; used && k < gPtsChoices; k++) if (gPtsIds[k] == gEdit.pts[i].pgm) sel = k + 1;
+        SheetSetChoices(s, IDT_ROW(i), L"(none)", gPtsNames, gPtsChoices, sel);
+        FillEditPtsEarnedText(&gEdit, i, b); SheetSetText(s, IDT_ROW(i) + 1, b);
+        FillEditPtsRedeemedText(&gEdit, i, b); SheetSetText(s, IDT_ROW(i) + 2, b);
+        for (k = 0; k < 4; k++) SheetHide(s, IDT_ROW(i) + k, !used);
+    }
+    SheetSetChoices(s, IDT_ADD, L"Add a programme", gPtsNames, gPtsChoices, 0);
+    SheetHide(s, IDT_ADD, gEdit.ptsCount >= fillMaxPoints || !gPtsChoices);
+    PtsHints();
+    SheetLayout(s);
+}
+
+static void PtsChanged(int id)
+{
+    int sel = SheetGetSel(&gPtsSheet, id, 0);
+    UInt8 row = id == IDT_ADD ? gEdit.ptsCount : (UInt8)((id - IDT_ROW(0)) / 4);
+    UInt8 pgm = sel > 0 && sel <= gPtsChoices ? gPtsIds[sel - 1] : 0;
+    if (id == IDT_ADD && !pgm) return;
+    if (!FillEditPtsSetProgramme(&gEdit, row, pgm))
+        MessageBoxW(gWin, L"That programme is on this fill already.", L"FuelLog", MB_OK | MB_ICONINFORMATION);
+    PtsFill();
+}
+
+static void PtsEdited(int id)
+{
+    char b[16];
+    UInt8 row = (UInt8)((id - IDT_ROW(0)) / 4), which = (UInt8)((id - IDT_ROW(0)) % 4);
+    SheetGetText(&gPtsSheet, id, b, sizeof b);
+    if (which == 1) FillEditPtsSetEarned(&gEdit, row, b);
+    else if (which == 2) FillEditPtsSetRedeemed(&gEdit, row, b);
+    PtsHints();
+}
+
+static void PtsOpen(void)
+{
+    if (gPage != pageForm) return;
+    PullTexts();
+    gEditSaved = gEdit;
+    FillEditPtsOpen(&gEdit, &gText);
+    gPtsSheet.scroll = 0;
+    PtsFill();
+    PostMessageW(gWin, WM_SHOWPAGE, pagePoints, 0);
+}
+
+static void PtsClose(int ok)
+{
+    if (ok) {
+        gEdit.ptsTouched = 1;           /* chosen by hand: a currency or payment change no longer resets them */
+        FormChanged();                  /* the total follows the redemptions */
+    } else {
+        gEdit = gEditSaved;
+    }
+    gFormBack = 1;
+    PostMessageW(gWin, WM_SHOWPAGE, pageForm, 0);
+}
+
 /* ---- a backup set from a Palm, on a storage card ---- */
 
 /* The newest set (their names are dates, so the greatest name) under
@@ -1108,7 +1415,7 @@ static void TakePalmSet(void)
 static void About(void)
 {
     WCHAR msg[400];
-    wsprintfW(msg, L"FuelLog for Pocket PC %S\r\nSo far: the fill list, New and Edit Fill, Vehicles and Preferences.\r\n\r\n%u fills, %u vehicles, %u programmes, %u service visits\r\n"
+    wsprintfW(msg, L"FuelLog for Pocket PC %S\r\nSo far: the fill list, New and Edit Fill with points, Vehicles, Programmes and Preferences.\r\n\r\n%u fills, %u vehicles, %u programmes, %u service visits\r\n"
         L"Data: %s\r\nScreen %d dpi\r\n\r\nFree software under the GNU GPLv3.",
         kVersion, (unsigned)DbCount(dbFills), (unsigned)DbCount(dbVehicles), (unsigned)DbCount(dbProgrammes),
         (unsigned)DbCount(dbServiceVisits), kDataDirW, gDpi);
@@ -1117,32 +1424,40 @@ static void About(void)
 
 /* ---- the window ---- */
 
-/* The soft keys: New and Menu over the list, Save and Menu over a fill or a vehicle,
- * Save and Cancel over Preferences, Done and New over the vehicle list. */
+/* The soft keys: New and Menu over the list; Save and Menu over a fill, a vehicle or a
+ * programme; Save and Cancel over Preferences, OK and Cancel over Points; Done and New
+ * over the vehicle and programme lists. */
 static void SetMenuBar(int page)
 {
     SHMENUBARINFO mbi;
     HMENU bar = CreateMenu(), menu = CreatePopupMenu();
     if (gMenuBar) { CommandBar_Destroy(gMenuBar); gMenuBar = NULL; }
     switch (page) {
-    case pageForm: case pageVehicle:
-        if (page == pageForm ? gEdit.index != fillEditNew : VehEditCanDelete(&gVehEdit)) AppendMenuW(menu, MF_STRING, IDM_DELETE, L"Delete");
+    case pageForm: case pageVehicle: case pageProgramme:
+        if (page == pageProgramme) {
+            const char *what = PgmEditArchiveLabel(&gPgmEdit);
+            WCHAR w[16];
+            if (what) { ToWide(what, w, 16); AppendMenuW(menu, MF_STRING, IDM_ARCHIVE, w); }
+        } else if (page == pageForm ? gEdit.index != fillEditNew : VehEditCanDelete(&gVehEdit)) {
+            AppendMenuW(menu, MF_STRING, IDM_DELETE, L"Delete");
+        }
         AppendMenuW(menu, MF_STRING, IDM_CANCEL, L"Cancel");
         AppendMenuW(bar, MF_STRING, IDM_SAVE, L"Save");
         AppendMenuW(bar, MF_POPUP, (UINT_PTR)menu, L"Menu");
         break;
-    case pagePrefs:                         /* two plain keys, no menu */
+    case pagePrefs: case pagePoints:        /* two plain keys, no menu */
         DestroyMenu(menu);
-        AppendMenuW(bar, MF_STRING, IDM_SAVE, L"Save");
+        AppendMenuW(bar, MF_STRING, page == pagePoints ? IDM_OK : IDM_SAVE, page == pagePoints ? L"OK" : L"Save");
         AppendMenuW(bar, MF_STRING, IDM_CANCEL, L"Cancel");
         break;
-    case pageVehicles:
+    case pageVehicles: case pageProgrammes:
         DestroyMenu(menu);
         AppendMenuW(bar, MF_STRING, IDM_DONE, L"Done");
         AppendMenuW(bar, MF_STRING, IDM_NEW, L"New");
         break;
     default:
         AppendMenuW(menu, MF_STRING, IDM_VEHICLES, L"Vehicles");
+        AppendMenuW(menu, MF_STRING, IDM_PROGRAMMES, L"Programmes");
         AppendMenuW(menu, MF_STRING, IDM_PREFS, L"Preferences");
         AppendMenuW(menu, MF_SEPARATOR, 0, NULL);
         AppendMenuW(menu, MF_STRING, IDM_PALM, L"Use Palm backup...");
@@ -1172,6 +1487,9 @@ static void ShowPage(int page)
     ShowWindow(gVehSheet.panel, page == pageVehicle ? SW_SHOW : SW_HIDE);
     ShowWindow(gVehList, page == pageVehicles ? SW_SHOW : SW_HIDE);
     ShowWindow(gVehArch, page == pageVehicles ? SW_SHOW : SW_HIDE);
+    ShowWindow(gPgmSheet.panel, page == pageProgramme ? SW_SHOW : SW_HIDE);
+    ShowWindow(gPtsSheet.panel, page == pagePoints ? SW_SHOW : SW_HIDE);
+    ShowWindow(gPgmList, page == pageProgrammes ? SW_SHOW : SW_HIDE);
     ShowWindow(gVehicle, list ? SW_SHOW : SW_HIDE);
     ShowWindow(gAvg, list ? SW_SHOW : SW_HIDE);
     ShowWindow(gMonth, list ? SW_SHOW : SW_HIDE);
@@ -1188,9 +1506,27 @@ static void ShowPage(int page)
         SetFocus(gList);
         break;
     case pageForm:
-        FormLayout();
+        FormLabels(NULL);                   /* the title, and the points summary after the Points page */
         /* A new fill starts in the odometer, keyboard up; an edit waits for a tap. */
-        SetFocus(gEdit.index == fillEditNew ? F(IDF_ODO) : gForm);
+        if (gFormBack) { SHSipPreference(gWin, SIP_FORCEDOWN); SetFocus(F(IDF_PTS)); }
+        else SetFocus(gEdit.index == fillEditNew ? F(IDF_ODO) : gForm);
+        gFormBack = 0;
+        break;
+    case pagePoints:
+        SetWindowTextW(gWin, L"Points");
+        SheetLayout(&gPtsSheet);
+        SetFocus(gPtsSheet.panel);
+        break;
+    case pageProgrammes:
+        SHSipPreference(gWin, SIP_FORCEDOWN);
+        SetWindowTextW(gWin, L"Programmes");
+        ProgrammesRefresh();
+        SetFocus(gPgmList);
+        break;
+    case pageProgramme:
+        SetWindowTextW(gWin, gPgmEdit.index == pgmEditNew ? L"New Programme" : L"Edit Programme");
+        SheetLayout(&gPgmSheet);
+        SetFocus(gPgmEdit.index == pgmEditNew ? SC(&gPgmSheet, IDE_NAME) : gPgmSheet.panel);
         break;
     case pagePrefs:
         SetWindowTextW(gWin, L"Preferences");
@@ -1260,6 +1596,20 @@ static void Create(HWND h)
     AddColumn(gVehList, 2, 32, 1, L"Fills");
     AddColumn(gVehList, 3, 56, 1, L"Odo");
     gVehArch = CreateWindowW(L"BUTTON", L"Show archived", WS_CHILD | WS_TABSTOP | BS_AUTOCHECKBOX, 0, 0, 10, 10, h, (HMENU)IDC_VEHARCH, gInst, NULL);
+
+    gPgmSheet.rows = kPgmRows; gPgmSheet.count = sizeof kPgmRows / sizeof kPgmRows[0]; gPgmSheet.labelW = 84;
+    gPgmSheet.changed = PgmSheetChanged;
+    CreateWindowW(kSheetClass, L"", WS_CHILD | WS_VSCROLL | WS_CLIPCHILDREN, 0, 0, 10, 10, h, NULL, gInst, &gPgmSheet);
+    gPtsSheet.rows = kPtsRows; gPtsSheet.count = sizeof kPtsRows / sizeof kPtsRows[0]; gPtsSheet.labelW = 74;
+    gPtsSheet.changed = PtsChanged;
+    gPtsSheet.edited = PtsEdited;
+    CreateWindowW(kSheetClass, L"", WS_CHILD | WS_VSCROLL | WS_CLIPCHILDREN, 0, 0, 10, 10, h, NULL, gInst, &gPtsSheet);
+    gPgmList = CreateWindowW(WC_LISTVIEWW, L"", WS_CHILD | LVS_REPORT | LVS_SINGLESEL | LVS_SHOWSELALWAYS | LVS_NOSORTHEADER,
+        0, 0, 10, 10, h, (HMENU)IDC_PGMLIST, gInst, NULL);
+    SendMessageW(gPgmList, LVM_SETEXTENDEDLISTVIEWSTYLE, 0, LVS_EX_FULLROWSELECT);
+    AddColumn(gPgmList, 0, 92, 0, L"Programme");
+    AddColumn(gPgmList, 1, 66, 1, L"Balance");
+    AddColumn(gPgmList, 2, 170, 0, L"Rule or expiry");
 }
 
 static LRESULT CALLBACK Proc(HWND h, UINT m, WPARAM w, LPARAM l)
@@ -1286,17 +1636,22 @@ static LRESULT CALLBACK Proc(HWND h, UINT m, WPARAM w, LPARAM l)
         case IDM_PALM: if (gPage == pageList) TakePalmSet(); return 0;
         case IDM_EXIT: SendMessageW(h, WM_CLOSE, 0, 0); return 0;
         case IDM_VEHICLES: if (gPage == pageList) PostMessageW(h, WM_SHOWPAGE, pageVehicles, 0); return 0;
+        case IDM_PROGRAMMES: if (gPage == pageList) PostMessageW(h, WM_SHOWPAGE, pageProgrammes, 0); return 0;
         case IDM_PREFS: if (gPage == pageList) PrefsOpen(); return 0;
-        case IDM_DONE: if (gPage == pageVehicles) PostMessageW(h, WM_SHOWPAGE, pageList, 0); return 0;
+        case IDM_DONE: if (gPage == pageVehicles || gPage == pageProgrammes) PostMessageW(h, WM_SHOWPAGE, pageList, 0); return 0;
         case IDM_NEW:
             if (gPage == pageList) FormOpen(fillEditNew);
             else if (gPage == pageVehicles) VehOpen(vehEditNew);
+            else if (gPage == pageProgrammes) PgmOpen(pgmEditNew);
             return 0;
         case IDM_SAVE:
             if (gPage == pageForm) FormSave();
             else if (gPage == pagePrefs) PrefsSaveSheet();
             else if (gPage == pageVehicle) VehSave();
+            else if (gPage == pageProgramme) PgmSave();
             return 0;
+        case IDM_OK: if (gPage == pagePoints) PtsClose(1); return 0;
+        case IDM_ARCHIVE: if (gPage == pageProgramme) PgmArchive(); return 0;
         case IDM_DELETE:
             if (gPage == pageForm) FormDelete();
             else if (gPage == pageVehicle) VehDelete();
@@ -1304,6 +1659,8 @@ static LRESULT CALLBACK Proc(HWND h, UINT m, WPARAM w, LPARAM l)
         case IDM_CANCEL:
             if (gPage == pageForm || gPage == pagePrefs) PostMessageW(h, WM_SHOWPAGE, pageList, 0);
             else if (gPage == pageVehicle) PostMessageW(h, WM_SHOWPAGE, pageVehicles, 0);
+            else if (gPage == pageProgramme) PostMessageW(h, WM_SHOWPAGE, pageProgrammes, 0);
+            else if (gPage == pagePoints) PtsClose(0);
             return 0;
         case IDC_VEHICLE:
             if (HIWORD(w) == CBN_SELCHANGE) {
@@ -1326,6 +1683,15 @@ static LRESULT CALLBACK Proc(HWND h, UINT m, WPARAM w, LPARAM l)
             if (n->code == (UINT)NM_CLICK || n->code == (UINT)NM_RETURN) {
                 int row = n->code == (UINT)NM_CLICK ? TappedRow(gVehList) : (int)SendMessageW(gVehList, LVM_GETNEXTITEM, (WPARAM)-1, LVNI_SELECTED);
                 if (gPage == pageVehicles && row >= 0 && row < (int)gVehCount) VehOpen(gVehIdx[row]);
+                return 0;
+            }
+            break;
+        }
+        if (n->idFrom == IDC_PGMLIST) {
+            /* A tap on a programme opens it. */
+            if (n->code == (UINT)NM_CLICK || n->code == (UINT)NM_RETURN) {
+                int row = n->code == (UINT)NM_CLICK ? TappedRow(gPgmList) : (int)SendMessageW(gPgmList, LVM_GETNEXTITEM, (WPARAM)-1, LVNI_SELECTED);
+                if (gPage == pageProgrammes && row >= 0 && row < (int)gPgmCount) PgmOpen(gPgmIdx[row]);
                 return 0;
             }
             break;

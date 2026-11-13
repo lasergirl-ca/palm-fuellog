@@ -221,6 +221,55 @@ int main(int argc, char **argv)
     FillEditSetPayment(&e, fillPaymentCard);
     check("payment kept", e.fill.payment, fillPaymentCard);
 
+    /* The Points dialog on a new fill: 40 L at 175.9. */
+    {
+        UInt8 ids[pgmMaxProgrammes];
+        char names[pgmMaxProgrammes][pgmNameLen];
+        New();
+        strcpy(t.volume, "40"); FillEditTyped(&e, feVolume, &t, hint);
+        strcpy(t.price, "175.9"); FillEditTyped(&e, fePrice, &t, hint);
+        FillEditPtsOpen(&e, &t);
+        check("points dialog: gross", (long)e.dlgGross, 7036);
+        check("  one programme to choose", FillEditPtsChoices(&e, ids, names), 1);
+        checkStr("  its name", names[0], "Petro-Points");
+        FillEditPtsHint(&e, 0, buf);
+        checkStr("  auto hint", buf, "auto: 10 pts/L x 40.00 L");
+        FillEditPtsEarnedText(&e, 0, buf);
+        checkStr("  400 earned", buf, "400");
+        FillEditPtsRedeemedText(&e, 0, buf);
+        checkStr("  none redeemed", buf, "");
+        check("redeem 1,000", FillEditPtsSetRedeemed(&e, 0, "1,000"), 1);
+        FillEditPtsHint(&e, 0, buf);
+        checkStr("  a dollar off", buf, "redeem: $1.00 off");
+        FillEditPtsTotal(&e, buf);
+        checkStr("  total line", buf, "Total less $1.00 in points");
+        check("  earned still auto", (long)e.pts[0].earned, 400);
+        check("type the earned points", FillEditPtsSetEarned(&e, 0, "500"), 1);
+        check("  kept", (long)e.pts[0].earned, 500);
+        check("  off auto", e.pts[0].autoEarned, 0);
+        check("an unreadable number", FillEditPtsSetEarned(&e, 0, "5x"), -1);
+        check("  earned unchanged", (long)e.pts[0].earned, 500);
+        FillEditPtsSetRedeemed(&e, 0, "");
+        FillEditPtsHint(&e, 0, buf);
+        checkStr("  typed hint", buf, "typed");
+        check("the same programme twice is refused", FillEditPtsSetProgramme(&e, 1, 2), 0);
+        check("  one row", e.ptsCount, 1);
+        check("remove the row", FillEditPtsSetProgramme(&e, 0, 0), 1);
+        check("  none", e.ptsCount, 0);
+        check("  no discount", (long)e.discount, 0);
+        check("add it back", FillEditPtsSetProgramme(&e, 0, 2), 1);
+        check("  on auto again", (long)e.pts[0].earned, 400);
+        FillEditPtsSetRedeemed(&e, 0, "2000");
+        e.ptsTouched = 1;                     /* OK */
+        check("after OK the total follows", FillEditRecompute(&e, &t, hint), feTotal);
+        checkStr("  70.36 less 2.00", t.total, "68.36");
+        checkStr("  hint", hint, "total less points");
+        FillEditPointsText(&e, buf);
+        checkStr("  the form's summary", buf, "Petro-Points -1,600 pts");
+        FillEditSetCurrency(&e, curUSD, &t);
+        check("  a touched set stays on a currency change", e.ptsCount, 1);
+    }
+
     /* A stored redemption comes off the total. */
     memset(&f, 0, sizeof f);
     f.date = DateYmdToDays(2026, 11, 13); f.time = fillTimeUnknown; f.flags = fillFlagFullTank; f.vehicle = 1; f.odometer = 830000;

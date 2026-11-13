@@ -4,11 +4,12 @@ A Windows Mobile 5 and 6 version of FuelLog, built on the Palm version's own cor
 record formats, the maths, the dates, stats, reports, service rules, points and sync rules
 are the files in `../src`, compiled unchanged; this folder adds storage and the windows.
 
-Status: **P3, Vehicles and Preferences.** It opens the six FuelLog databases, shows the
+Status: **P3b, Programmes and Points.** It opens the six FuelLog databases, shows the
 fills with the same columns and figures as the Palm's list, can take a backup set a Palm
-wrote to a storage card, adds, edits and deletes fills and charges by the Palm form's rules,
-keeps the vehicles, and has its own Preferences for units and currency. P1 and P2 ran on a
-Windows Mobile 5 and a Windows Mobile 6 device (Nov 12, 2026); P3 has not run on one yet.
+wrote to a storage card, adds, edits and deletes fills and charges by the Palm form's rules
+with their points, keeps the vehicles and the rewards programmes, and has its own
+Preferences for units and currency. P1 to P3 ran on a Windows Mobile 5 and a Windows
+Mobile 6 device (Nov 12, 2026); P3b has not run on one yet.
 
 ## How it fits with the Palm version
 
@@ -63,9 +64,17 @@ The compiler is CeGCC's `arm-mingw32ce` (GCC 9.3.0) in a Docker volume; see `dev
    opens one, New makes one (sixteen at most), and Show archived brings back the hidden
    ones. A vehicle with fills can be archived but not deleted, as on the Palm.
 
-Points: a new fill earns its auto-apply programmes as on the Palm, and an edited fill keeps
-the points stored on it; the programmes and the dialog that changes a fill's points come
-with P3b.
+7. **Menu, Programmes** lists the rewards programmes, most used first, with the balance
+   and either what expires by the end of next month or the earn rule. A tap opens Edit
+   Programme (the Palm's form: earn rule, payment, auto-apply, redemption, expiry,
+   opening balance, import aliases); Menu there archives a programme with fills, restores
+   an archived one, or deletes one no fill uses. A new, empty log starts with the Palm's
+   six presets, as the Palm does.
+8. **Points** on the fill form is a button: it opens the Points page for that fill, up to
+   four programmes, each with earned and redeemed points and a hint ("auto: 10 pts/L x
+   40.00 L", "redeem: $1.00 off"). OK keeps the rows and takes the redemptions off the
+   total; Cancel puts them back as they were. A new fill starts with its auto-apply
+   programmes for its payment and currency, as on the Palm.
 
 Two places where this form deliberately differs from the Palm's, both found while porting:
 the previous odometer shown for an edited fill is that vehicle's fill before it (the Palm
@@ -82,12 +91,14 @@ store/db.c           FuelLog's six databases over those files
 app/fillview.c       what the fill list shows (plain C, host-tested)
 app/filledit.c       New and Edit Fill's rules (plain C, host-tested)
 app/vehedit.c        the vehicle list's rows and Edit Vehicle's rules (host-tested)
+app/pgmedit.c        programme balances, expiry, the list and Edit Programme's rules (host-tested)
 app/settings.c       Prefs as the bytes kept in the registry (host-tested)
-app/main.c           the window: its pages (list, fill, Preferences, vehicles) and soft keys
+app/main.c           the window: its pages (list, fill, Points, Preferences, vehicles, programmes) and soft keys
 app/app.rc           the hi-res flag for VGA devices
 tests/test_store.c   host tests against the fixture set tools/mkpdb writes
 tests/test_filledit.c  host tests of the fill form's rules on a copy of that set
 tests/test_vehedit.c   host tests of the Prefs bytes and the vehicle rules
+tests/test_pgmedit.c   host tests of the programme rules and the presets
 hello/, coretest/    the SP9 spike programmes
 ```
 
@@ -97,15 +108,36 @@ hello/, coretest/    the SP9 spike programmes
 |---|---|---|
 | P1 | The .pdb store; the fill list; taking a Palm backup set | Works on both devices (Nov 12, 2026) |
 | P2 | New and Edit Fill, with any two of volume, price and total giving the third; delete | Works on both devices (Nov 12, 2026) |
-| P3 | Vehicles; Prefs (units, currency), kept in the registry | Built; device check pending |
-| P3b | Programmes and the Points dialog on a fill | |
+| P3 | Vehicles; Prefs (units, currency), kept in the registry | Works on both devices (Nov 12, 2026) |
+| P3b | Programmes and the Points page on a fill | Built; device check pending |
 | P4 | Stats, reports and graphs | |
 | P5 | Service types, visits, the due list and a reminder | |
 | P6 | CSV, XLSX and PDF export; CSV, XLSX and XLS import; backup and restore | |
 | P7 | Sync with a Palm or another Pocket PC through a `.fuel` file on a card; beaming if IrOBEX allows | |
 | P8 | VGA and landscape pass, an icon, a CAB installer | |
 
-## What to check on the devices (P3)
+## What to check on the devices (P3b)
+
+1. Menu reads Vehicles, Programmes, Preferences, Use Palm backup, About, Exit.
+2. Programmes: the Palm's programmes with the same balances as the Palm's Programmes
+   list; soft keys Done and New. Swipe the list sideways to see the rule or expiry column.
+3. A tap opens Edit Programme with the Palm's figures. Redeem None hides the Points and
+   value rows; Per volume shows Per, Up to and Cap; Expires After months shows Months;
+   Counts in Money relabels Earn and Opening.
+4. Change a programme's earn rate, Save: the list's rule follows. Menu, Archive on one
+   with fills: it moves to the bottom marked archived; Menu, Restore brings it back.
+5. New Fill: the Points button names the auto-apply programme and its points, and follows
+   the volume as it is typed (10 a litre for Petro-Points).
+6. Tap Points: one row per programme with Earned, Redeemed and a hint. Type 1000 in
+   Redeemed for Petro-Points: the hint reads "redeem: $1.00 off" and the line at the
+   bottom "Total less $1.00 in points". OK: the fill's total is a dollar less and its hint
+   reads "total less points". Save, and edit the fill again: the redemption is kept.
+7. On the Points page, Add a programme, then set its Programme back to (none): the row
+   goes. Cancel: the fill's points are as before the page opened.
+8. A US-dollar fill starts without Petro-Points; a Card-only programme comes and goes
+   with Cash and Card.
+
+## What was checked on the devices (P3, Nov 12, 2026: works on both)
 
 1. Menu now reads Vehicles, Preferences, Use Palm backup, About, Exit.
 2. Preferences: seven pickers, soft keys Save and Cancel. Change Economy to MPG (US) and

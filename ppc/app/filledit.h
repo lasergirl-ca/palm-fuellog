@@ -40,6 +40,7 @@ typedef struct {
     FillEditPoints pts[fillMaxPoints];
     UInt8 ptsCount, ptsTouched;
     UInt32 discount;            /* cents taken off by redemptions */
+    UInt32 dlgMl, dlgGross;     /* the volume and gross price the Points dialog works from */
     FuelPrefs *prefs;           /* Save keeps the last payment, currency and rate here */
     char point, thousands;
 } FillEdit;
@@ -83,6 +84,25 @@ int  FillEditSetGrade(FillEdit *e, UInt8 grade, FillEditText *t);
 void FillEditSetCurrency(FillEdit *e, UInt8 currency, FillEditText *t);
 void FillEditSetEntryUnit(FillEdit *e, UInt8 unit, FillEditText *t);
 void FillEditSetPayment(FillEdit *e, UInt8 payment);
+
+/* ---- the Points dialog: up to four programmes on a fill ---- */
+
+/* Opens it on the volume and price the fields hold now. The caller keeps a copy of
+ * the FillEdit to put back on Cancel; on OK it sets ptsTouched and recomputes. */
+void  FillEditPtsOpen(FillEdit *e, const FillEditText *t);
+/* The programmes a row can pick: those in use, and any archived one already on this fill. */
+UInt8 FillEditPtsChoices(const FillEdit *e, UInt8 ids[pgmMaxProgrammes], char names[pgmMaxProgrammes][pgmNameLen]);
+/* Row `row` (or a new row at ptsCount) to programme id, back on auto; id 0 removes the row.
+ * Returns 0 when that programme is on another row already. */
+int   FillEditPtsSetProgramme(FillEdit *e, UInt8 row, UInt8 id);
+/* Typed earned (then it stays as typed) or redeemed points: 1, 0 for empty, -1 unreadable. */
+Int32 FillEditPtsSetEarned(FillEdit *e, UInt8 row, const char *text);
+Int32 FillEditPtsSetRedeemed(FillEdit *e, UInt8 row, const char *text);
+void  FillEditPtsEarnedText(const FillEdit *e, UInt8 row, char *buf);     /* 16 bytes */
+void  FillEditPtsRedeemedText(const FillEdit *e, UInt8 row, char *buf);   /* empty when none */
+/* "auto: 10 pts/L x 45.20 L", "typed", "Card fills only", "redeem: $2.00 off"; 48 bytes. */
+void  FillEditPtsHint(const FillEdit *e, UInt8 row, char *buf);
+void  FillEditPtsTotal(const FillEdit *e, char *buf);     /* "Total less $2.00 in points", or empty; 48 bytes */
 
 /* ---- save and delete ---- */
 #define feSaved       0

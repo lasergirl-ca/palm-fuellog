@@ -1,6 +1,7 @@
 /* New Fill and Edit Fill without the window (filledit.h). Follows the Palm
  * form, src/fill_form.c, rule for rule; where the two differ it says so. */
 #include "filledit.h"
+#include "pgmedit.h"
 #include "../store/db.h"
 #include "../../src/calc.h"
 #include "../../src/units.h"
@@ -82,6 +83,12 @@ static void AutoApply(FillEdit *e)
     }
 }
 
+static void RuleOf(const ProgrammeRecord *p, CalcRedeemRule *r)
+{
+    r->kind = p->redeemKind; r->block = p->redeemBlock; r->value = p->redeemValue;
+    r->volUnit = p->redeemVolUnit; r->maxVol = p->redeemMaxVol; r->maxPerUnit = p->redeemMaxPerUnit;
+}
+
 /* Auto-earned points and the discount for this volume (mL) and gross price
  * (cents before any discount). */
 static void PointsRecompute(FillEdit *e, UInt32 ml, UInt32 gross)
@@ -95,8 +102,7 @@ static void PointsRecompute(FillEdit *e, UInt32 ml, UInt32 gross)
                 ? (Int32)CalcEarnedPoints(gPgm.earnRate, gPgm.earnBasis, ml, gross, e->fill.grade == fillGradePremium ? gPgm.premiumMult : 100) : 0;
         if (e->pts[i].redeemed > 0) {
             CalcRedeemRule r;
-            r.kind = gPgm.redeemKind; r.block = gPgm.redeemBlock; r.value = gPgm.redeemValue;
-            r.volUnit = gPgm.redeemVolUnit; r.maxVol = gPgm.redeemMaxVol; r.maxPerUnit = gPgm.redeemMaxPerUnit;
+            RuleOf(&gPgm, &r);
             e->discount += CalcDiscountCents(&r, (UInt32)e->pts[i].redeemed, ml, gross > e->discount ? gross - e->discount : 0);
         }
     }
@@ -106,18 +112,9 @@ void FillEditPointsText(const FillEdit *e, char *buf)
 {
     if (e->ptsCount == 0) { strcpy(buf, "none"); return; }
     if (e->ptsCount == 1 && DbProgrammeById(e->pts[0].pgm, &gPgm)) {
-        Int32 v = e->pts[0].earned - e->pts[0].redeemed;
-        size_t n;
         strncpy(buf, gPgm.name, pgmNameLen - 1); buf[pgmNameLen - 1] = 0;
         strcat(buf, " ");
-        n = strlen(buf);
-        if (gPgm.valuePerPoint == 1000) {           /* a programme counted in money */
-            strcpy(buf + n, v < 0 ? "-$" : "$");
-            TextFixed(buf + strlen(buf), v < 0 ? -v : v, 2, e->point, e->thousands);
-        } else {
-            TextFixed(buf + n, v, 0, e->point, e->thousands);
-            strcat(buf, " pts");
-        }
+        PgmValueText(buf + strlen(buf), &gPgm, e->pts[0].earned - e->pts[0].redeemed, e->point, e->thousands);
         return;
     }
     TextFixed(buf, e->ptsCount, 0, e->point, 0);
@@ -428,6 +425,131 @@ void FillEditSetPayment(FillEdit *e, UInt8 payment)
 {
     e->fill.payment = payment == fillPaymentCard ? fillPaymentCard : fillPaymentCash;
     if (e->index == fillEditNew && !e->ptsTouched) AutoApply(e);
+}
+
+/* ---- the Points dialog ---- */
+
+void FillEditPtsOpen(FillEdit *e, const FillEditText *t)
+{
+    UInt32 ml = 0, price = 0, cents = 0;
+    ReadVolume(e, t, &ml);
+    if (ReadPrice(e, t, &price) == 1 && ml) e->dlgGross = CalcTotalCents(price, ml);
+    else e->dlgGross = (ReadTotal(e, t, &cents) == 1 ? cents : 0) + e->discount;
+    e->dlgMl = ml;
+    PointsRecompute(e, e->dlgMl, e->dlgGross);
+}
+
+UInt8 FillEditPtsChoices(const FillEdit *e, UInt8 ids[pgmMaxProgrammes], char names[pgmMaxProgrammes][pgmNameLen])
+{
+    UInt16 n = DbCount(dbProgrammes), i;
+    UInt8 count = 0, k;
+    for (i = 0; i < n && count < pgmMaxProgrammes; i++) {
+        int onFill = 0;
+        if (DbGetProgramme(i, &gPgm) != dbOk) continue;
+        for (k = 0; k < e->ptsCount; k++) if (e->pts[k].pgm == gPgm.id) onFill = 1;
+        if (gPgm.archived && !onFill) continue;
+        strcpy(names[count], gPgm.name);
+        ids[count++] = gPgm.id;
+    }
+    return count;
+}
+
+int FillEditPtsSetProgramme(FillEdit *e, UInt8 row, UInt8 id)
+{
+    UInt8 k;
+    if (row > e->ptsCount || row >= fillMaxPoints) return 0;
+    e->ptsTouched = 1;
+    if (id == 0) {
+        if (row < e->ptsCount) {
+            for (k = row; k + 1 < e->ptsCount; k++) e->pts[k] = e->pts[k + 1];
+            e->ptsCount--;
+        }
+    } else {
+        for (k = 0; k < e->ptsCount; k++) if (k != row && e->pts[k].pgm == id) return 0;
+        if (row == e->ptsCount) { e->pts[row].earned = 0; e->pts[row].redeemed = 0; e->ptsCount++; }
+        e->pts[row].pgm = id;
+        e->pts[row].autoEarned = 1;
+    }
+    PointsRecompute(e, e->dlgMl, e->dlgGross);
+    return 1;
+}
+
+/* A whole number with an optional leading minus. 0 empty, 1 ok, -1 bad. */
+static Int32 ParseSigned(const FillEdit *e, const char *t, Int32 *out)
+{
+    int neg = 0;
+    UInt32 v;
+    Int32 r;
+    while (*t == ' ') t++;
+    if (*t == '-') { neg = 1; t++; }
+    r = TextParseFixed(t, 0, e->point, e->thousands, &v);
+    if (r == 1) *out = neg ? -(Int32)v : (Int32)v;
+    return r;
+}
+
+Int32 FillEditPtsSetEarned(FillEdit *e, UInt8 row, const char *text)
+{
+    Int32 v = 0, r;
+    if (row >= e->ptsCount) return -1;
+    r = ParseSigned(e, text, &v);
+    if (r >= 0) { e->pts[row].earned = v; e->pts[row].autoEarned = 0; e->ptsTouched = 1; }
+    PointsRecompute(e, e->dlgMl, e->dlgGross);
+    return r;
+}
+
+Int32 FillEditPtsSetRedeemed(FillEdit *e, UInt8 row, const char *text)
+{
+    Int32 v = 0, r;
+    if (row >= e->ptsCount) return -1;
+    r = ParseSigned(e, text, &v);
+    if (r >= 0) { e->pts[row].redeemed = v; e->ptsTouched = 1; }
+    PointsRecompute(e, e->dlgMl, e->dlgGross);
+    return r;
+}
+
+void FillEditPtsEarnedText(const FillEdit *e, UInt8 row, char *buf)
+{
+    buf[0] = 0;
+    if (row < e->ptsCount) TextFixed(buf, e->pts[row].earned, 0, e->point, 0);
+}
+
+void FillEditPtsRedeemedText(const FillEdit *e, UInt8 row, char *buf)
+{
+    buf[0] = 0;
+    if (row < e->ptsCount && e->pts[row].redeemed) TextFixed(buf, e->pts[row].redeemed, 0, e->point, 0);
+}
+
+void FillEditPtsHint(const FillEdit *e, UInt8 row, char *buf)
+{
+    static const char *const unit[] = { "", "/L", "/gal", "/$" };
+    char num[16];
+    buf[0] = 0;
+    if (row >= e->ptsCount || !DbProgrammeById(e->pts[row].pgm, &gPgm)) return;
+    if (e->pts[row].redeemed > 0) {
+        CalcRedeemRule r;
+        RuleOf(&gPgm, &r);
+        strcpy(buf, "redeem: $");
+        TextFixed(buf + strlen(buf), (Int32)CalcDiscountCents(&r, (UInt32)e->pts[row].redeemed, e->dlgMl, e->dlgGross), 2, e->point, 0);
+        strcat(buf, " off");
+    } else if (!e->pts[row].autoEarned) strcpy(buf, "typed");
+    else if (!PaymentOk(e, &gPgm)) strcpy(buf, gPgm.requiresPayment == pgmPaymentCard ? "Card fills only" : "Cash fills only");
+    else if (gPgm.earnBasis == pgmEarnNone || gPgm.earnRate == 0) strcpy(buf, "no earn rule: type it");
+    else {
+        PgmRateText(num, gPgm.earnRate, e->point);
+        strcpy(buf, "auto: "); strcat(buf, num); strcat(buf, PgmIsMoney(&gPgm) ? "c" : " pts");
+        strcat(buf, unit[gPgm.earnBasis < 4 ? gPgm.earnBasis : 0]);
+        if (gPgm.earnBasis == pgmEarnPerLitre) { strcat(buf, " x "); TextFixed(buf + strlen(buf), (Int32)((e->dlgMl + 5) / 10), 2, e->point, 0); strcat(buf, " L"); }
+        else if (gPgm.earnBasis == pgmEarnPerCurrency) { strcat(buf, " x $"); TextFixed(buf + strlen(buf), (Int32)e->dlgGross, 2, e->point, 0); }
+    }
+}
+
+void FillEditPtsTotal(const FillEdit *e, char *buf)
+{
+    buf[0] = 0;
+    if (!e->discount) return;
+    strcpy(buf, "Total less $");
+    TextFixed(buf + strlen(buf), (Int32)e->discount, 2, e->point, 0);
+    strcat(buf, " in points");
 }
 
 /* ---- save and delete ---- */
