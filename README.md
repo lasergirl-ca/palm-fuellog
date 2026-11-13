@@ -27,7 +27,7 @@ is under way in `ppc/` (see `ppc/README.md`): so far the fill list, New and Edit
 Vehicles, Preferences, Programmes and Points, which run on both kinds of device, and Stats,
 Reports, Graphs, Service, export, import, backup, and sync with a Palm through a `.fuel` file.
 
-Current state: `v1.0-rc10`. Everything builds and passes the host tests; the M5 to M8
+Current state: `v1.0-rc11`. Everything builds and passes the host tests; the M5 to M8
 features are waiting on their device pass (see the end of `docs/M8.md`).
 
 ## Build

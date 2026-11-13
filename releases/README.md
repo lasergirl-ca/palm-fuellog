@@ -5,6 +5,7 @@ and tap it in the Launcher's card view, or install it with `pilot-xfer -i`.
 
 | File | Tag | Notes |
 |---|---|---|
+| FuelLog-1.0rc11.prc | v1.0-rc11 | XLSX exports with accented text (café, Montréal, €) open in Excel again. Import no longer writes a row its preview listed as "odometer lower than line N", and a file with a KB Points column no longer overruns its preview text. Built-in ECB rates refreshed. |
 | FuelLog-1.0rc10.prc | v1.0-rc10 | The economy graph names its unit and has a popup to change it (L/100 km, km/L, MPG US, MPG Imp); it sets the Prefs economy unit, so Stats and the list follow. Built-in ECB rates refreshed. |
 | FuelLog-1.0rc9.prc | v1.0-rc9 | Auto-apply adds only programmes in the fill's currency. Each fill and visit carries the clock shift its date was established under, so a restore or sync onto a DateFix Palm never moves a real old record and the migration only touches unmarked ones. |
 | FuelLog-1.0rc8.prc | v1.0-rc8 | The fill form's price label reads "Price c/gal:" with gallons, so it no longer runs into its field. |
