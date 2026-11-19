@@ -62,6 +62,13 @@ int VehListRow(UInt16 dbIndex, const FuelPrefs *p, char point, char thousands, c
     return 1;
 }
 
+int VehHasNote(UInt16 dbIndex)
+{
+    UInt8 raw[vehMaxSize];
+    UInt32 len;
+    return DbGet(dbVehicles, dbIndex, raw, sizeof raw, &len) == dbOk && RecExtHas(recKindVehicle, raw, len, recExtVehNote);
+}
+
 /* ---- the form ---- */
 
 int VehEditBegin(VehEdit *e, UInt16 index, char point, VehEditForm *f)
@@ -70,7 +77,14 @@ int VehEditBegin(VehEdit *e, UInt16 index, char point, VehEditForm *f)
     memset(f, 0, sizeof *f);
     e->index = vehEditNew;
     if (index != vehEditNew && DbGetVehicle(index, &e->veh) == dbOk) {
+        UInt8 raw[vehMaxSize];
+        UInt32 len;
         e->index = index;
+        if (DbGet(dbVehicles, index, raw, sizeof raw, &len) == dbOk) {
+            RecExtGet(recKindVehicle, raw, len, recExtPlate, f->plate, sizeof f->plate);
+            RecExtGet(recKindVehicle, raw, len, recExtVin, f->vin, sizeof f->vin);
+            RecExtGet(recKindVehicle, raw, len, recExtVehNote, f->note, sizeof f->note);
+        }
     } else {
         memset(&e->veh, 0, sizeof e->veh);
         e->veh.id = VehNextId();
@@ -114,7 +128,7 @@ void VehEditStatus(const VehEdit *e, char *buf)
 
 Int32 VehEditSave(VehEdit *e, const VehEditForm *f, char point, char thousands, FuelPrefs *prefs)
 {
-    UInt8 buf[vehRecordSize + recTrailerSize + 8];
+    UInt8 buf[vehMaxSize];
     UInt32 v = 0, n;
     Int32 r, err;
     const char *name = f->name;
@@ -143,6 +157,9 @@ Int32 VehEditSave(VehEdit *e, const VehEditForm *f, char point, char thousands, 
     e->veh.tripMode = f->tripMode < 3 ? f->tripMode : 0;
     e->veh.archived = f->archived ? 1 : 0;
     n = VehiclePack(&e->veh, buf);
+    n = RecExtSet(recKindVehicle, buf, n, recExtPlate, f->plate);
+    n = RecExtSet(recKindVehicle, buf, n, recExtVin, f->vin);
+    n = RecExtSet(recKindVehicle, buf, n, recExtVehNote, f->note);
     if (e->index == vehEditNew) {
         err = DbAppend(dbVehicles, buf, n);
         if (err == dbOk) e->index = (UInt16)(DbCount(dbVehicles) - 1);

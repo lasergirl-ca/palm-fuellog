@@ -10,6 +10,11 @@
 #define beamKindRecords 1
 #define beamKindFile    2
 #define beamKindSync    3      /* every record with its trailer, then the deletion log */
+/* Posted by the receive launch when FuelLog is running: the inbox is applied
+ * from the event loop, after the exchange library has finished, never inside
+ * the receive itself (a Send back from there starts a second exchange while
+ * the first is still open, and the alerts nest on the library's stack). */
+#define beamInboxEvent  ((eventsEnum)(firstUserEvent + 1))
 
 /* Send the whole log (or one vehicle's) as a .fuel bundle: beamKindRecords
  * for Merge/Replace on the other side, beamKindSync to make both logs the same. */

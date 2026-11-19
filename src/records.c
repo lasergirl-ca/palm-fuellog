@@ -12,6 +12,7 @@ static const UInt8 *Get32(const UInt8 *p, UInt32 *v) EXPORT_SEC;
 static const UInt8 *GetStr(const UInt8 *p, char *s, UInt32 n) EXPORT_SEC;
 static UInt32 CStrLen(const char *s, UInt32 max) EXPORT_SEC;
 static UInt8 *PutTrailer(UInt8 *p, UInt32 uid, UInt32 modified, UInt16 shift) EXPORT_SEC;
+static void MemMoveBytes(UInt8 *to, const UInt8 *from, UInt32 n) EXPORT_SEC;
 static void GetTrailer(const UInt8 *p, const UInt8 *end, UInt32 *uid, UInt32 *modified, UInt16 *shift) EXPORT_SEC;
 
 static UInt8 *Put8(UInt8 *p, UInt8 v) { *p++ = v; return p; }
@@ -48,6 +49,13 @@ static UInt32 CStrLen(const char *s, UInt32 max)
     UInt32 n = 0;
     while (n < max - 1 && s[n]) n++;
     return n;
+}
+
+/* Overlapping copy, either direction (no libc on the Palm). */
+static void MemMoveBytes(UInt8 *to, const UInt8 *from, UInt32 n)
+{
+    if (to < from) { while (n--) *to++ = *from++; }
+    else { to += n; from += n; while (n--) *--to = *--from; }
 }
 
 static UInt8 *PutTrailer(UInt8 *p, UInt32 uid, UInt32 modified, UInt16 shift)
@@ -410,6 +418,93 @@ UInt32 RecTrailerWrite(UInt8 kind, UInt8 *buf, UInt32 len, UInt32 uid, UInt32 mo
     if (have >= recTrailerCore) return (UInt32)pos + recTrailerCore;
     Put16(buf + pos + recTrailerCore, recShiftUnknown);
     return (UInt32)pos + recTrailerSize;
+}
+
+/* ---- extension text ---- */
+
+static Int32 ExtStart(UInt8 kind, const UInt8 *buf, UInt32 len) EXPORT_SEC;
+static UInt32 ExtLimit(UInt8 kind, UInt8 which) EXPORT_SEC;
+
+/* Where the strings begin: after a full trailer, on a vehicle or service type only. */
+static Int32 ExtStart(UInt8 kind, const UInt8 *buf, UInt32 len)
+{
+    Int32 pos;
+    if (kind != recKindVehicle && kind != recKindServiceType) return -1;
+    pos = RecTrailerPos(kind, buf, len);
+    if (pos < 0 || len < (UInt32)pos + recTrailerSize) return -1;
+    return pos + recTrailerSize;
+}
+
+static UInt32 ExtLimit(UInt8 kind, UInt8 which)
+{
+    if (kind == recKindVehicle) return which == recExtPlate ? vehPlateLen : which == recExtVin ? vehVinLen : which == recExtVehNote ? fillMaxNotes : 0;
+    if (kind == recKindServiceType) return which == recExtTypeNote ? fillMaxNotes : 0;
+    return 0;
+}
+
+UInt32 RecExtGet(UInt8 kind, const UInt8 *buf, UInt32 len, UInt8 which, char *out, UInt32 cap)
+{
+    Int32 at = ExtStart(kind, buf, len);
+    UInt32 p, n = 0;
+    UInt8 k;
+    if (cap) out[0] = 0;
+    if (at < 0 || !cap) return 0;
+    p = (UInt32)at;
+    for (k = 0; k < which && p < len; k++) { while (p < len && buf[p]) p++; p++; }
+    while (p < len && buf[p] && n < cap - 1) out[n++] = (char)buf[p++];
+    out[n] = 0;
+    return n;
+}
+
+Int32 RecExtHas(UInt8 kind, const UInt8 *buf, UInt32 len, UInt8 which)
+{
+    char c[2];
+    return RecExtGet(kind, buf, len, which, c, 2) != 0;
+}
+
+UInt32 RecExtSet(UInt8 kind, UInt8 *buf, UInt32 len, UInt8 which, const char *s)
+{
+    Int32 at = RecTrailerPos(kind, buf, len);
+    UInt32 p, q, start, limit = ExtLimit(kind, which), n, oldN, i;
+    UInt8 k;
+    if (at < 0 || !limit) return len;
+    if (len < (UInt32)at + recTrailerSize) {
+        /* no trailer, or the short rc6 one: complete it first */
+        if (len < (UInt32)at + recTrailerCore) { Put32(Put32(buf + at, 0), 0); }
+        Put16(buf + at + recTrailerCore, recShiftUnknown);
+        len = (UInt32)at + recTrailerSize;
+    }
+    start = (UInt32)at + recTrailerSize;
+    p = start;
+    for (k = 0; k < which; k++) {
+        if (p >= len) { buf[len++] = 0; p = len; }   /* an absent earlier string becomes empty */
+        else { while (p < len && buf[p]) p++; p++; if (p > len) { buf[len++] = 0; p = len; } }
+    }
+    /* string `which` runs from p to its NUL at q (or is absent) */
+    q = p;
+    while (q < len && buf[q]) q++;
+    oldN = q < len ? q - p + 1 : q - p;
+    n = 0;
+    while (s[n] && n < limit - 1) n++;
+    if (p + oldN < len) MemMoveBytes(buf + p + n + 1, buf + p + oldN, len - p - oldN);
+    for (i = 0; i < n; i++) buf[p + i] = (UInt8)s[i];
+    buf[p + n] = 0;
+    len = len - oldN + n + 1;
+    /* drop trailing empty strings, so a record with none has no extension */
+    while (len > start && buf[len - 1] == 0 && (len - 1 == start || buf[len - 2] == 0)) len--;
+    return len;
+}
+
+UInt32 RecExtCopy(UInt8 kind, const UInt8 *from, UInt32 fromLen, UInt8 *to, UInt32 toLen)
+{
+    Int32 a = ExtStart(kind, from, fromLen), b = ExtStart(kind, to, toLen);
+    UInt32 i, n;
+    if (a < 0 || b < 0 || (UInt32)a >= fromLen) return toLen;
+    n = fromLen - (UInt32)a;
+    i = kind == recKindVehicle ? vehMaxSize - (vehRecordSize + recTrailerSize) : svtMaxSize - (svtRecordSize + recTrailerSize);
+    if (n > i) n = i;
+    for (i = 0; i < n; i++) to[(UInt32)b + i] = from[(UInt32)a + i];
+    return (UInt32)b + n;
 }
 
 /* ---- app info ---- */

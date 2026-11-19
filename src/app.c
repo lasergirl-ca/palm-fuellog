@@ -407,6 +407,14 @@ static Boolean NoteDialogHandleEvent(EventType *e)
     return false;
 }
 
+/* A short bar in the 4 px left of every list's first column. */
+void AppNoteMark(Coord y)
+{
+    RectangleType r;
+    r.topLeft.x = 0; r.topLeft.y = (Coord)(y + 2); r.extent.x = 2; r.extent.y = 7;
+    WinDrawRectangle(&r, 0);
+}
+
 void AppNoteDialog(char *notes)
 {
     FormType *dlg = FrmInitForm(NoteForm);

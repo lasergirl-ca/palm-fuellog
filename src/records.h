@@ -255,6 +255,29 @@ Int32  RecTrailerPos(UInt8 kind, const UInt8 *buf, UInt32 len) EXPORT_SEC;
 Int32  RecTrailerRead(UInt8 kind, const UInt8 *buf, UInt32 len, UInt32 *uid, UInt32 *modified) EXPORT_SEC;
 UInt32 RecTrailerWrite(UInt8 kind, UInt8 *buf, UInt32 len, UInt32 uid, UInt32 modified) EXPORT_SEC;
 
+/* Extension text (rc12): a vehicle or service type may carry NUL-terminated
+ * strings after its full 10-byte trailer: a vehicle its plate, VIN and note,
+ * a service type its note. The structs stay as they were (the Palm's globals
+ * have no room for 290 more bytes in each copy), so these work on packed
+ * bytes. A build before rc12 reads the record as before and never sees the
+ * strings, but drops them when it rewrites the record. Get copies string
+ * `which` (empty when absent) and returns its length; Set replaces it,
+ * truncated to its limit, and returns the new length (buf must have room for
+ * the largest record, vehMaxSize or svtMaxSize); Copy puts the strings of
+ * `from` after the trailer of a freshly packed `to`. */
+#define recExtPlate     0
+#define recExtVin       1
+#define recExtVehNote   2
+#define recExtTypeNote  0
+#define vehPlateLen 16           /* bytes including the terminator */
+#define vehVinLen   20
+#define vehMaxSize (vehRecordSize + recTrailerSize + vehPlateLen + vehVinLen + fillMaxNotes)
+#define svtMaxSize (svtRecordSize + recTrailerSize + fillMaxNotes)
+UInt32 RecExtGet(UInt8 kind, const UInt8 *buf, UInt32 len, UInt8 which, char *out, UInt32 cap) EXPORT_SEC;
+UInt32 RecExtSet(UInt8 kind, UInt8 *buf, UInt32 len, UInt8 which, const char *s) EXPORT_SEC;
+UInt32 RecExtCopy(UInt8 kind, const UInt8 *from, UInt32 fromLen, UInt8 *to, UInt32 toLen) EXPORT_SEC;
+Int32  RecExtHas(UInt8 kind, const UInt8 *buf, UInt32 len, UInt8 which) EXPORT_SEC;
+
 UInt32 AppInfoPack(const AppInfoBlock *a, UInt8 *buf) EXPORT_SEC;
 Int32  AppInfoUnpack(const UInt8 *buf, UInt32 len, AppInfoBlock *a) EXPORT_SEC;
 

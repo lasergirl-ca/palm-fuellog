@@ -108,6 +108,24 @@ int main(int argc, char **argv)
         if (f) { fseek(f, -6, SEEK_END); fread(tail, 1, 6, f); fclose(f); }
         check("  ends with %%EOF", strstr(tail, "%%EOF") != NULL, 1);
     }
+    check("service log PDF", ExportFile(dir, exportServicePdf, 1, 0, 255, today, name, &bytes), exportOk);
+    checkStr("  named", name, "FuelLog-20261112-service.pdf");
+    PathJoin(path, dir, name);
+    ReadHead(path, head, sizeof head, &lines);
+    check("  a PDF", strncmp(head, "%PDF-", 5), 0);
+    {
+        /* the text is uncompressed: look for the headings and the visit */
+        FILE *f = fopen(path, "rb");
+        static char all[60000];
+        size_t got = 0;
+        if (f) { got = fread(all, 1, sizeof all - 1, f); fclose(f); }
+        all[got] = 0;
+        check("  titled for the Outback", strstr(all, "(Service log: Outback)") != NULL, 1);
+        check("  its services", strstr(all, "(Services)") != NULL, 1);
+        check("  its visits", strstr(all, "(Visits)") != NULL, 1);
+        check("  a total line", strstr(all, " in all)") != NULL, 1);
+    }
+    check("service log of every vehicle", ExportFile(dir, exportServicePdf, 255, 0, 255, today, name, &bytes), exportOk);
     check("a folder that cannot be made", ExportFile("/no/such/place/at/all", exportCsv, 255, 0, 255, today, name, &bytes), exportErrFolder);
 
     /* Backup sets. */

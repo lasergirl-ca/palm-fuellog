@@ -38,6 +38,8 @@ const char *DbName(UInt8 which);     /* "FuelLog-ZFlg" */
 Err DbAdd(UInt8 which, const UInt8 *packed, UInt32 len, UInt16 *indexOut);
 Err DbReplace(UInt8 which, UInt16 index, const UInt8 *packed, UInt32 len);
 Err DbGet(UInt8 which, UInt16 index, UInt8 *buf, UInt32 bufLen, UInt32 *lenOut);
+Err DbGetPart(UInt8 which, UInt16 index, UInt8 *buf, UInt32 bufLen, UInt32 *lenOut);
+Boolean DbExtHas(UInt8 which, UInt16 index, UInt8 ext);
 Err DbRemove(UInt8 which, UInt16 index);           /* no tombstone: edits remove and re-add */
 Err DbAppend(UInt8 which, const UInt8 *packed, UInt32 len);   /* at the end, unsorted: sync adds, then DbSort */
 void DbSort(UInt8 which);

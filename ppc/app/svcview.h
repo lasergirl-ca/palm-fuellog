@@ -37,6 +37,7 @@ typedef struct {
     UInt8 bold2;                         /* the second line in bold: a gap past its interval */
     UInt16 dbIndex;                      /* the service type's or visit's database index */
     UInt8 hasVisit;                      /* Service list: the row opens History, else the Service Type */
+    UInt8 note;                          /* the type or visit has a note: the row is marked */
 } SvcRow;
 
 #define svcMaxRows 64
@@ -57,6 +58,7 @@ void SvcViewDueDate(char *buf, UInt16 days, UInt16 today);
 
 typedef struct {
     char name[svtNameLen], dist[16], months[16], warnDist[16], warnDays[16], detail[svtDetailLen];
+    char note[fillMaxNotes];    /* kept after the record's trailer (records.h, extension text) */
     UInt8 alarm;
 } SvtForm;
 

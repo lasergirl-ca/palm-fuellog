@@ -215,6 +215,8 @@ static Boolean Sp4FormHandleEvent(EventType *event)
     return false;
 }
 
+static Boolean gInboxPending;   /* a bundle came in while running; see beamInboxEvent */
+
 static Boolean AppHandleEvent(EventType *event)
 {
     if (event->eType == frmLoadEvent) {
@@ -317,6 +319,17 @@ static Boolean AppHandleEvent(EventType *event)
     return false;
 }
 
+/* Apply at once only on a list form: an open edit form holds a record
+ * index that a merge or sync would move. Otherwise the fill list picks the
+ * inbox up when it next opens. */
+static void InboxArrived(void)
+{
+    UInt16 id = FrmGetActiveFormID();
+    if (id != FillListForm && id != ExportForm && id != ServiceForm) return;
+    gInboxPending = false;
+    if (BeamProcessInbox()) FrmUpdateForm(id, frmRedrawUpdateCode);
+}
+
 static void AppEventLoop(void)
 {
     EventType event;
@@ -324,10 +337,13 @@ static void AppEventLoop(void)
 
     do {
         EvtGetEvent(&event, evtWaitForever);
+        /* The event only wakes the loop: a modal alert's own loop may eat it. */
+        if (event.eType == beamInboxEvent) { if (gInboxPending) InboxArrived(); continue; }
         if (!SysHandleEvent(&event))
             if (!MenuHandleEvent(0, &event, &error))
                 if (!AppHandleEvent(&event))
                     FrmDispatchEvent(&event);
+        if (gInboxPending && event.eType != appStopEvent) InboxArrived();
     } while (event.eType != appStopEvent);
 }
 
@@ -453,11 +469,14 @@ static void ReceiveBeam(ExgSocketType *sock, Boolean running)
             }
         }
         MemHandleFree(h);
-        /* Apply at once only on a list form: an open edit form holds a record
-         * index that a merge or sync would move. Otherwise the fill list
-         * picks the inbox up when it next opens. */
-        if (running && (FrmGetActiveFormID() == FillListForm || FrmGetActiveFormID() == ExportForm || FrmGetActiveFormID() == ServiceForm)) {
-            if (BeamProcessInbox()) FrmUpdateForm(FrmGetActiveFormID(), frmRedrawUpdateCode);
+        /* Running: the event loop applies it once this launch has returned
+         * (see beamInboxEvent). Not running: the next launch does. */
+        if (running) {
+            EventType e;
+            gInboxPending = true;
+            MemSet(&e, sizeof e, 0);
+            e.eType = beamInboxEvent;
+            EvtAddUniqueEventToQueue(&e, 0, true);
         }
     }
 }

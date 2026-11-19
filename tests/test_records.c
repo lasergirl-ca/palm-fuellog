@@ -229,6 +229,66 @@ int main(void)
         check("empty notes: trailer right after the NUL", RecTrailerPos(recKindServiceVisit, buf + 0, 0) < 0, 1);
     }
 
+    /* Extension text after the trailer: plate, VIN and note on a vehicle, a note on a service type. */
+    {
+        VehicleRecord v, w;
+        ServiceTypeRecord t, u;
+        UInt8 b2[512];
+        char out[300];
+        UInt32 m;
+        memset(&v, 0, sizeof v); memset(&t, 0, sizeof t);
+        v.id = 1; strcpy(v.name, "Bolt"); v.uid = 11; v.modified = 22;
+        n = VehiclePack(&v, buf);
+        check("vehicle with no strings: no extension", n, vehRecordSize + recTrailerSize);
+        check("  plate empty", RecExtGet(recKindVehicle, buf, n, recExtPlate, out, sizeof out), 0);
+        n = RecExtSet(recKindVehicle, buf, n, recExtVehNote, "Winter tires in the garage");
+        check("a note alone pads plate and VIN", n, vehRecordSize + recTrailerSize + 2 + 27);
+        RecExtGet(recKindVehicle, buf, n, recExtVehNote, out, sizeof out);
+        checkStr("  note back", out, "Winter tires in the garage");
+        n = RecExtSet(recKindVehicle, buf, n, recExtPlate, "CKXW 123");
+        n = RecExtSet(recKindVehicle, buf, n, recExtVin, "1G1FZ6S08N4100001");
+        RecExtGet(recKindVehicle, buf, n, recExtPlate, out, sizeof out); checkStr("  plate", out, "CKXW 123");
+        RecExtGet(recKindVehicle, buf, n, recExtVin, out, sizeof out); checkStr("  VIN", out, "1G1FZ6S08N4100001");
+        RecExtGet(recKindVehicle, buf, n, recExtVehNote, out, sizeof out); checkStr("  note kept", out, "Winter tires in the garage");
+        check("  unpack still reads the trailer", (VehicleUnpack(buf, n, &w), (long)w.modified), 22);
+        check("  and the name", strcmp(w.name, "Bolt"), 0);
+        n = RecExtSet(recKindVehicle, buf, n, recExtPlate, "LONGER PLATE 99");
+        RecExtGet(recKindVehicle, buf, n, recExtVin, out, sizeof out); checkStr("  a longer plate moves the VIN", out, "1G1FZ6S08N4100001");
+        n = RecExtSet(recKindVehicle, buf, n, recExtPlate, "THIS PLATE IS FAR TOO LONG");
+        RecExtGet(recKindVehicle, buf, n, recExtPlate, out, sizeof out); checkStr("  plate cut at 15", out, "THIS PLATE IS F");
+        check("  has a note", RecExtHas(recKindVehicle, buf, n, recExtVehNote), 1);
+        /* a stamp keeps the strings */
+        n = RecTrailerWrite(recKindVehicle, buf, n, 99, 100);
+        RecExtGet(recKindVehicle, buf, n, recExtVehNote, out, sizeof out); checkStr("  stamped, note kept", out, "Winter tires in the garage");
+        /* repacked from the struct, the strings come across with Copy */
+        w.archived = 1;
+        m = VehiclePack(&w, b2);
+        m = RecExtCopy(recKindVehicle, buf, n, b2, m);
+        check("  copy: same length", m, n);
+        RecExtGet(recKindVehicle, b2, m, recExtVin, out, sizeof out); checkStr("  copy: VIN", out, "1G1FZ6S08N4100001");
+        /* cleared one by one: no extension left */
+        n = RecExtSet(recKindVehicle, buf, n, recExtVehNote, "");
+        n = RecExtSet(recKindVehicle, buf, n, recExtPlate, "");
+        check("  only the VIN left", n, vehRecordSize + recTrailerSize + 1 + 18);
+        n = RecExtSet(recKindVehicle, buf, n, recExtVin, "");
+        check("  none left", n, vehRecordSize + recTrailerSize);
+        /* an rc6 record with the short trailer gets the full one */
+        n = VehiclePack(&v, buf) - 2;
+        n = RecExtSet(recKindVehicle, buf, n, recExtPlate, "ABC");
+        check("  short trailer completed", n, vehRecordSize + recTrailerSize + 4);
+        check("  uid kept", (VehicleUnpack(buf, n, &w), (long)w.uid), 11);
+        /* the note never shows on a fill */
+        check("  no extension on a fill", RecExtSet(recKindFill, buf, 50, 0, "x"), 50);
+
+        t.id = 2; t.vehicle = 1; strcpy(t.name, "Oil"); t.uid = 5;
+        n = ServiceTypePack(&t, buf);
+        n = RecExtSet(recKindServiceType, buf, n, recExtTypeNote, "0W-20, 4.2 L, filter PF63");
+        check("type note size", n, svtRecordSize + recTrailerSize + 26);
+        RecExtGet(recKindServiceType, buf, n, recExtTypeNote, out, sizeof out); checkStr("  type note back", out, "0W-20, 4.2 L, filter PF63");
+        check("  type unpacks", (ServiceTypeUnpack(buf, n, &u), (long)u.uid), 5);
+        check("  only one string on a type", RecExtSet(recKindServiceType, buf, n, 1, "x"), n);
+    }
+
     /* AppInfo. */
     {
         AppInfoBlock a, b;

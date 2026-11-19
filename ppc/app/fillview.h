@@ -24,6 +24,8 @@ const char *FillViewEcoHeader(int electric, const FuelPrefs *p);
 int FillViewElectric(const FuelPrefs *p);
 /* The row's columns for the fill at database index k; returns 0 when it cannot be read. */
 int FillViewRow(UInt16 k, const FuelPrefs *p, char point, char thousands, char col[fillViewCols][fillViewText]);
+/* 1 when the fill at database index k has a note: its row is marked. */
+int FillViewHasNote(UInt16 k);
 /* "Avg 11.8 KPL" (empty when unknown) and "Nov $85.71" for today's month. */
 void FillViewFooter(const FuelPrefs *p, UInt16 today, char point, char thousands, char *avg, char *month);
 

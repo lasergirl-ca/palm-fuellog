@@ -65,6 +65,11 @@ int FillViewElectric(const FuelPrefs *p)
     return p->currentVehicle != 255 && DbVehicleById(p->currentVehicle, &gVeh) && gVeh.powertrain == vehPowerElectric;
 }
 
+int FillViewHasNote(UInt16 k)
+{
+    return DbGetFill(k, &gRow) == dbOk && gRow.notes[0] != 0;
+}
+
 int FillViewRow(UInt16 k, const FuelPrefs *p, char point, char thousands, char col[fillViewCols][fillViewText])
 {
     FillRecord *f = &gRow;

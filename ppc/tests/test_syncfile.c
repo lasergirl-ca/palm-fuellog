@@ -19,6 +19,12 @@ static void check(const char *name, long got, long want)
     else { printf("FAIL %s: got %ld want %ld\n", name, got, want); failures++; }
 }
 
+static void checkStr(const char *name, const char *got, const char *want)
+{
+    if (strcmp(got, want) == 0) printf("ok   %s = \"%s\"\n", name, got);
+    else { printf("FAIL %s: got \"%s\" want \"%s\"\n", name, got, want); failures++; }
+}
+
 static UInt32 gNow = 3877000000UL;
 static UInt32 Now(void) { return gNow; }
 
@@ -59,6 +65,15 @@ int main(int argc, char **argv)
     }
     check("A: delete the charge", DbDelete(dbFills, 2), dbOk);
     check("  A has three fills", DbCount(dbFills), 3);
+    {
+        /* the Outback gets a plate and a note: they travel after the trailer */
+        UInt8 raw[vehMaxSize];
+        UInt32 len, n;
+        DbGet(dbVehicles, 0, raw, sizeof raw, &len);
+        n = RecExtSet(recKindVehicle, raw, len, recExtPlate, "CKXW 123");
+        n = RecExtSet(recKindVehicle, raw, n, recExtVehNote, "Winter tires in the garage");
+        check("A: the Outback's note", DbReplace(dbVehicles, 0, raw, n), dbOk);
+    }
     check("A writes its sync file", SyncWriteFile(sync, today, name), syncOk);
     check("  named for the day", strcmp(name, "FuelLog-20261112.fuel"), 0);
     PathJoin(path, sync, name);
@@ -72,7 +87,7 @@ int main(int argc, char **argv)
     check("  B has the three original fills", fillsB, 3);
     check("B applies A's file", SyncApplyFile(path, &st), syncOk);
     check("  one added", st.added, 1);
-    check("  one updated", st.updated, 1);
+    check("  two updated (the fill and the Outback)", st.updated, 2);
     check("  one deleted", st.deleted, 1);
     check("  B has three fills now", DbCount(dbFills), 3);
     DbGetFill(1, &f);
@@ -80,6 +95,16 @@ int main(int argc, char **argv)
     DbGetFill(2, &f);
     check("  the new fill, in date order", f.date, DateYmdToDays(2026, 8, 20));
     check("  the deletion is kept to pass on", DbCount(dbDeleted), 1);
+    {
+        UInt8 raw[vehMaxSize];
+        char out[300];
+        UInt32 len;
+        DbGet(dbVehicles, 0, raw, sizeof raw, &len);
+        RecExtGet(recKindVehicle, raw, len, recExtVehNote, out, sizeof out);
+        checkStr("  the vehicle's note arrived", out, "Winter tires in the garage");
+        RecExtGet(recKindVehicle, raw, len, recExtPlate, out, sizeof out);
+        checkStr("  and its plate", out, "CKXW 123");
+    }
     check("B writes its side back", SyncWriteFile(sync, today, name), syncOk);
     DbSave();
     DbCloseAll();

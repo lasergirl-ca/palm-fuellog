@@ -123,6 +123,26 @@ int main(int argc, char **argv)
     check("  same id", v.id, 1);
     check("  uid kept", (long)(v.uid == e.veh.uid && v.uid != 0), 1);
     check("  not taken as the only vehicle", p.currentVehicle, 255);
+    /* Plate, VIN and note ride after the trailer. */
+    checkStr("  no plate yet", f.plate, "");
+    strcpy(f.plate, "CKXW 123"); strcpy(f.vin, "JF2SKAEC1MH400001"); strcpy(f.note, "Winter tires in the garage");
+    check("  saves the plate, VIN and note", VehEditSave(&e, &f, '.', ',', &p), veSaved);
+    check("  marked as noted", VehHasNote(0), 1);
+    check("  the Ioniq is not", VehHasNote(1), 0);
+    DbGetVehicle(0, &v);
+    checkStr("  the record still reads", v.name, "Outback XT");
+    VehEditBegin(&e, 0, '.', &f);
+    checkStr("  plate back", f.plate, "CKXW 123");
+    checkStr("  VIN back", f.vin, "JF2SKAEC1MH400001");
+    checkStr("  note back", f.note, "Winter tires in the garage");
+    f.note[0] = 0;
+    VehEditSave(&e, &f, '.', ',', &p);
+    check("  a cleared note unmarks it", VehHasNote(0), 0);
+    VehEditBegin(&e, 0, '.', &f);
+    checkStr("  plate kept", f.plate, "CKXW 123");
+    strcpy(f.note, "Winter tires in the garage");
+    VehEditSave(&e, &f, '.', ',', &p);
+    VehEditBegin(&e, 0, '.', &f);
     strcpy(f.name, "  ");
     check("a blank name", VehEditSave(&e, &f, '.', ',', &p), veNeedName);
     strcpy(f.name, "Outback"); strcpy(f.start, "8o650");

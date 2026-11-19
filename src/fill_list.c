@@ -167,6 +167,7 @@ static void DrawRows(void)
             WinFillRectangle(&stripe, 0);
             WinSetForeColor(UIColorGetTableEntryIndex(UIObjectForeground));
         }
+        if (fp->notes[0]) AppNoteMark(y);
         FntSetFont(stdFont);
         DateShortText(buf, fp->date);
         WinDrawChars(buf, StrLen(buf), kColDate, y);

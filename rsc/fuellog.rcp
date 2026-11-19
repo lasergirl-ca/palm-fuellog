@@ -256,12 +256,16 @@ BEGIN
     POPUPTRIGGER "Reset each fill" ID VehTripTrigger AT (66 121 90 12) LEFTANCHOR
     LIST "Reset each fill" "Never reset" "Not used" ID VehTripList AT (66 121 90 33) NONUSABLE VISIBLEITEMS 3
     POPUPLIST ID VehTripTrigger VehTripList
-    CHECKBOX "Archived" ID VehArchivedCheckbox AT (64 133 60 12)
-    LABEL "                   " ID VehStatusLabel AT (90 147) FONT 0
-    BUTTON "Done" ID VehDoneButton AT (4 146 36 12)
-    BUTTON "Cancel" ID VehCancelButton AT (46 146 40 12)
-    BUTTON "Delete" ID VehDeleteButton AT (110 146 40 12)
-    GRAFFITISTATEINDICATOR AT (152 150)
+    CHECKBOX "Archived" ID VehArchivedCheckbox AT (64 133 56 12)
+    BUTTON "Note" ID VehNoteButton AT (122 133 30 12)
+    LABEL "Plate:" AUTOID AT (38 146) FONT 0
+    FIELD ID VehPlateField AT (66 146 70 12) UNDERLINED MAXCHARS 15
+    LABEL "VIN:" AUTOID AT (46 159) FONT 0
+    FIELD ID VehVinField AT (66 159 86 12) UNDERLINED MAXCHARS 19
+    LABEL "                   " ID VehStatusLabel AT (90 173) FONT 0
+    BUTTON "Done" ID VehDoneButton AT (4 172 36 12)
+    BUTTON "Cancel" ID VehCancelButton AT (46 172 40 12)
+    BUTTON "Delete" ID VehDeleteButton AT (110 172 40 12)
     SCROLLBAR ID VehScrollBar AT (153 15 7 130) VALUE 0 MIN 0 MAX 0 PAGESIZE 100
 END
 
@@ -552,9 +556,10 @@ BEGIN
     LABEL "                                        " ID SvtSummary1 AT (4 113) FONT 0
     LABEL "                                        " ID SvtSummary2 AT (4 124) FONT 0
     LABEL "                                        " ID SvtSummary3 AT (4 135) FONT 0
-    BUTTON "Done" ID SvtDoneButton AT (4 146 36 12)
-    BUTTON "Cancel" ID SvtCancelButton AT (46 146 40 12)
-    BUTTON "Archive" ID SvtArchiveButton AT (108 146 48 12)
+    BUTTON "Done" ID SvtDoneButton AT (4 146 32 12)
+    BUTTON "Cancel" ID SvtCancelButton AT (40 146 38 12)
+    BUTTON "Note" ID SvtNoteButton AT (82 146 28 12)
+    BUTTON "Archive" ID SvtArchiveButton AT (114 146 42 12)
     SCROLLBAR ID SvtScrollBar AT (153 15 7 130) VALUE 0 MIN 0 MAX 0 PAGESIZE 100
 END
 
@@ -643,6 +648,7 @@ BEGIN
     TITLE "History"
     BUTTON "Done" ID HistDoneButton AT (4 146 36 12)
     BUTTON "Intervals" ID HistIntervalsButton AT (46 146 48 12)
+    BUTTON "PDF" ID HistPdfButton AT (100 146 30 12)
     SCROLLBAR ID HistScrollBar AT (152 15 7 130) VALUE 0 MIN 0 MAX 0 PAGESIZE 100
 END
 

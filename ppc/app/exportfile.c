@@ -335,7 +335,7 @@ static void ServicesSheet(UInt8 vehicle)
         names[0] = 0;
         for (t = 0; t < nt; t++) {
             static UInt8 tp[svtRecordSize + 4 + recTrailerSize];
-            if (DbGet(dbServiceTypes, t, tp, sizeof tp, &len) != errNone || ServiceTypeUnpack(tp, len, &gXType) != 0) continue;
+            if (DbGetPart(dbServiceTypes, t, tp, sizeof tp, &len) != errNone || ServiceTypeUnpack(tp, len, &gXType) != 0) continue;
             if (gXType.vehicle != gXVisit.vehicle || !(gXVisit.services & (1UL << gXType.id))) continue;
             if (StrLen(names) + StrLen(gXType.name) + 2 >= sizeof names) break;
             if (names[0]) StrCat(names, "; ");
@@ -537,6 +537,271 @@ void ExportPdfTo(OutStream *out, UInt8 vehicle, UInt16 year)
 
 /* ---- the file ---- */
 
+/* ---- Service log PDF: one vehicle (or each in turn), its plate, VIN and
+ * note, every service type with when it was last done and is next due, then
+ * every visit with its note. The same code runs on the Pocket PC. ---- */
+
+#define kSlBottom 44
+#define kSlMaxPages (pdfMaxPages - 1)
+#define kSlRight 756
+
+typedef struct {
+    UInt8 count;
+    UInt8 id[svtMaxPerVehicle];
+    char name[svtMaxPerVehicle][svtNameLen];
+    UInt8 raw[dbMaxRecord];
+    UInt8 vraw[dbMaxRecord];
+    char note[fillMaxNotes];
+    char title[48];
+    Int16 y;
+    UInt8 table;            /* 0 none, 1 services, 2 visits: column heads to repeat on a new page */
+    Boolean open, full;
+} SvcLog;
+
+static void SlHeads(SvcLog *s) XP_SEC;
+static void SlPage(SvcLog *s) XP_SEC;
+static Boolean SlRoom(SvcLog *s, Int16 need) XP_SEC;
+static void SlWrap(SvcLog *s, UInt8 font, UInt16 size, Int16 x, const char *text, UInt16 perLine) XP_SEC;
+static void SlDist(char *b, UInt32 kmX10) XP_SEC;
+static void SlDate(char *b, UInt16 days) XP_SEC;
+static Boolean SlLast(SvcLog *s, UInt8 vehicle, UInt8 typeId, UInt16 *date, UInt32 *odo) XP_SEC;
+static void SlVehicle(SvcLog *s, UInt16 vIndex) XP_SEC;
+
+static void SlHeads(SvcLog *s)
+{
+    static Int16 svcX[4] = { kPdfLeft, 220, 360, 520 };
+    static Int16 visX[6] = { kPdfLeft, 110, 200, 420, 570, 680 };
+    static const char *svcH[4] = { "Service", "Every", "Last done", "Next due" };
+    static const char *visH[6] = { "Date", "Odometer", "Services", "Detail", "Shop", "Cost" };
+    UInt8 k;
+    if (s->table == 1) for (k = 0; k < 4; k++) PdfText(&gPw, pdfFontBold, 10, svcX[k], s->y - 10, svcH[k]);
+    else if (s->table == 2) for (k = 0; k < 6; k++) PdfText(&gPw, pdfFontBold, 10, visX[k], s->y - 10, visH[k]);
+    else return;
+    PdfLineWidth(&gPw, 5);
+    PdfLine(&gPw, kPdfLeft, s->y - 14, kSlRight, s->y - 14);
+    s->y -= 18;
+}
+
+static void SlPage(SvcLog *s)
+{
+    PdfPageBegin(&gPw);
+    s->open = true;
+    PdfText(&gPw, pdfFontBold, 16, kPdfLeft, kPdfTop, s->title);
+    s->y = kPdfTop - 14;
+    SlHeads(s);
+}
+
+/* Room for need points more on this page, else a new page (with the column
+ * heads again); false once the PDF has as many pages as it can hold. */
+static Boolean SlRoom(SvcLog *s, Int16 need)
+{
+    if (s->full) return false;
+    if (s->y - need >= kSlBottom) return true;
+    if (gPw.nPages >= kSlMaxPages) {
+        PdfText(&gPw, pdfFontRegular, 9, kPdfLeft, 28, "The rest did not fit in one file: export one vehicle at a time.");
+        s->full = true;
+        return false;
+    }
+    PdfPageEnd(&gPw);
+    SlPage(s);
+    return true;
+}
+
+/* Text over as many lines as it needs, broken at spaces and at its own line breaks. */
+static void SlWrap(SvcLog *s, UInt8 font, UInt16 size, Int16 x, const char *text, UInt16 perLine)
+{
+    char line[160];
+    UInt16 n, cut, i;
+    if (perLine > sizeof line - 1) perLine = sizeof line - 1;
+    while (*text) {
+        for (n = 0; text[n] && text[n] != '\n' && n <= perLine; n++) ;
+        if (n > perLine) {
+            for (cut = perLine; cut > 0 && text[cut] != ' '; cut--) ;
+            if (cut == 0) cut = perLine;
+        } else cut = n;
+        for (i = 0; i < cut; i++) line[i] = text[i] == '\t' ? ' ' : text[i];
+        line[cut] = 0;
+        if (!SlRoom(s, (Int16)(size + 3))) return;
+        if (cut) PdfText(&gPw, font, size, x, (Int16)(s->y - size), line);
+        s->y -= (Int16)(size + 3);
+        text += cut;
+        if (*text == '\n') text++;
+        else while (*text == ' ') text++;
+    }
+}
+
+static void SlDist(char *b, UInt32 kmX10)
+{
+    TextFixed(b, (Int32)(UnitDistToDisplay(kmX10, gPrefs.distanceUnit) / 10), 0, gPoint, gThousands);
+    StrCat(b, " "); StrCat(b, UnitDistLabel(gPrefs.distanceUnit));
+}
+
+/* "May 14 2026": a service log runs over years. */
+static void SlDate(char *b, UInt16 days)
+{
+    UInt16 y; UInt8 m, d;
+    DateShortText(b, days);
+    DateDaysToYmd(days, &y, &m, &d);
+    StrCat(b, " "); StrIToA(b + StrLen(b), y);
+}
+
+/* The latest visit of the vehicle that covered the type. */
+static Boolean SlLast(SvcLog *s, UInt8 vehicle, UInt8 typeId, UInt16 *date, UInt32 *odo)
+{
+    UInt16 n = DbCount(dbServiceVisits), i;
+    UInt32 len;
+    Boolean found = false;
+    for (i = 0; i < n; i++) {
+        if (DbGet(dbServiceVisits, i, s->vraw, sizeof s->vraw, &len) != errNone || ServiceVisitUnpack(s->vraw, len, &gXVisit) != 0) continue;
+        if (gXVisit.vehicle != vehicle || !(gXVisit.services & (1UL << typeId))) continue;
+        if (!found || gXVisit.date >= *date) { *date = gXVisit.date; *odo = gXVisit.odometer; found = true; }
+    }
+    return found;
+}
+
+static void SlVehicle(SvcLog *s, UInt16 vIndex)
+{
+    char b[120], n[32];
+    UInt16 nt = DbCount(dbServiceTypes), nv = DbCount(dbServiceVisits), nf = DbCount(dbFills), i, t, visits = 0;
+    UInt32 len, cents = 0, odoNow = 0;
+    UInt8 k;
+    if (s->full || DbGetVehicle(vIndex, &gXVeh) != errNone) return;
+    if (s->open) { PdfPageEnd(&gPw); s->open = false; }
+    if (gPw.nPages >= kSlMaxPages) { s->full = true; return; }
+    StrCopy(s->title, "Service log: "); StrCat(s->title, gXVeh.name);
+    s->table = 0;
+    SlPage(s);
+
+    /* Plate, VIN, the odometer now, and the vehicle's note. */
+    for (i = nf; i-- > 0; ) if (DbGetFill(i, &gXFill) == errNone && gXFill.vehicle == gXVeh.id) { odoNow = gXFill.odometer; break; }
+    for (i = 0; i < nv; i++)
+        if (DbGet(dbServiceVisits, i, s->vraw, sizeof s->vraw, &len) == errNone && ServiceVisitUnpack(s->vraw, len, &gXVisit) == 0
+            && gXVisit.vehicle == gXVeh.id && gXVisit.odometer > odoNow) odoNow = gXVisit.odometer;
+    if (DbGet(dbVehicles, vIndex, s->raw, sizeof s->raw, &len) != errNone) len = 0;
+    b[0] = 0;
+    RecExtGet(recKindVehicle, s->raw, len, recExtPlate, n, sizeof n);
+    if (n[0]) { StrCat(b, "Plate "); StrCat(b, n); }
+    RecExtGet(recKindVehicle, s->raw, len, recExtVin, n, sizeof n);
+    if (n[0]) { if (b[0]) StrCat(b, "      "); StrCat(b, "VIN "); StrCat(b, n); }
+    if (odoNow) { if (b[0]) StrCat(b, "      "); StrCat(b, "Odometer "); SlDist(n, odoNow); StrCat(b, n); }
+    if (b[0]) { PdfText(&gPw, pdfFontRegular, 11, kPdfLeft, (Int16)(s->y - 11), b); s->y -= 16; }
+    RecExtGet(recKindVehicle, s->raw, len, recExtVehNote, s->note, sizeof s->note);
+    if (s->note[0]) SlWrap(s, pdfFontRegular, 10, kPdfLeft, s->note, 150);
+    s->y -= 10;
+
+    /* The service types, with when each was last done and is next due. */
+    s->count = 0;
+    if (SlRoom(s, 40)) {
+        PdfText(&gPw, pdfFontBold, 13, kPdfLeft, (Int16)(s->y - 13), "Services");
+        s->y -= 20;
+        s->table = 1;
+        SlHeads(s);
+    }
+    for (t = 0; t < nt; t++) {
+        UInt16 last = 0;
+        UInt32 lastOdo = 0;
+        Boolean done;
+        if (DbGet(dbServiceTypes, t, s->raw, sizeof s->raw, &len) != errNone || ServiceTypeUnpack(s->raw, len, &gXType) != 0) continue;
+        if (gXType.vehicle != gXVeh.id) continue;
+        if (s->count < svtMaxPerVehicle) { s->id[s->count] = gXType.id; StrCopy(s->name[s->count], gXType.name); s->count++; }
+        if (gXType.archived) continue;
+        RecExtGet(recKindServiceType, s->raw, len, recExtTypeNote, s->note, sizeof s->note);
+        if (!SlRoom(s, 14)) break;
+        PdfText(&gPw, pdfFontRegular, 10, kPdfLeft, (Int16)(s->y - 10), gXType.name);
+        b[0] = 0;
+        if (gXType.intervalDist) SlDist(b, gXType.intervalDist);
+        if (gXType.intervalMonths) { if (b[0]) StrCat(b, " or "); StrIToA(b + StrLen(b), gXType.intervalMonths); StrCat(b, " months"); }
+        if (!b[0]) StrCopy(b, "no interval");
+        PdfText(&gPw, pdfFontRegular, 10, 220, (Int16)(s->y - 10), b);
+        done = SlLast(s, gXVeh.id, gXType.id, &last, &lastOdo);
+        if (done) { SlDate(b, last); StrCat(b, ", "); SlDist(n, lastOdo); StrCat(b, n); }
+        else StrCopy(b, "not yet");
+        PdfText(&gPw, pdfFontRegular, 10, 360, (Int16)(s->y - 10), b);
+        b[0] = 0;
+        if (done && gXType.intervalMonths) SlDate(b, DateAddMonths(last, gXType.intervalMonths));
+        if (done && gXType.intervalDist) { if (b[0]) StrCat(b, " or "); SlDist(n, lastOdo + gXType.intervalDist); StrCat(b, n); }
+        if (b[0]) PdfText(&gPw, pdfFontRegular, 10, 520, (Int16)(s->y - 10), b);
+        s->y -= 14;
+        if (s->note[0]) SlWrap(s, pdfFontRegular, 9, kPdfLeft + 14, s->note, 150);
+    }
+    if (s->count == 0 && SlRoom(s, 14)) { PdfText(&gPw, pdfFontRegular, 10, kPdfLeft, (Int16)(s->y - 10), "No services set up for this vehicle."); s->y -= 14; }
+    s->table = 0;
+    s->y -= 10;
+
+    /* Every visit, oldest first, its note under it. */
+    if (SlRoom(s, 40)) {
+        PdfText(&gPw, pdfFontBold, 13, kPdfLeft, (Int16)(s->y - 13), "Visits");
+        s->y -= 20;
+        s->table = 2;
+        SlHeads(s);
+    }
+    for (i = 0; i < nv && !s->full; i++) {
+        if (DbGet(dbServiceVisits, i, s->vraw, sizeof s->vraw, &len) != errNone || ServiceVisitUnpack(s->vraw, len, &gXVisit) != 0) continue;
+        if (gXVisit.vehicle != gXVeh.id) continue;
+        if (!SlRoom(s, 14)) break;
+        visits++;
+        cents += CalcHomeCents(gXVisit.cost, gXVisit.fxRate ? gXVisit.fxRate : fxOne);
+        SlDate(b, gXVisit.date);
+        PdfText(&gPw, pdfFontRegular, 10, kPdfLeft, (Int16)(s->y - 10), b);
+        SlDist(b, gXVisit.odometer);
+        PdfText(&gPw, pdfFontRegular, 10, 110, (Int16)(s->y - 10), b);
+        b[0] = 0;
+        for (k = 0; k < s->count; k++) {
+            if (!(gXVisit.services & (1UL << s->id[k]))) continue;
+            if (StrLen(b) + StrLen(s->name[k]) + 2 >= 44) { StrCat(b, "..."); break; }
+            if (b[0]) StrCat(b, ", ");
+            StrCat(b, s->name[k]);
+        }
+        if ((gXVisit.services & svlOtherBit) && gXVisit.other[0] && StrLen(b) + StrLen(gXVisit.other) + 2 < 44) { if (b[0]) StrCat(b, ", "); StrCat(b, gXVisit.other); }
+        PdfText(&gPw, pdfFontRegular, 10, 200, (Int16)(s->y - 10), b);
+        PdfText(&gPw, pdfFontRegular, 10, 420, (Int16)(s->y - 10), gXVisit.detail);
+        PdfText(&gPw, pdfFontRegular, 10, 570, (Int16)(s->y - 10), gXVisit.shop);
+        if (gXVisit.cost) {
+            TextFixed(b, (Int32)gXVisit.cost, 2, gPoint, gThousands); StrCat(b, " "); StrCat(b, CurrencyCode(gXVisit.currency));
+            PdfText(&gPw, pdfFontRegular, 10, 680, (Int16)(s->y - 10), b);
+        }
+        s->y -= 14;
+        if (gXVisit.notes[0]) SlWrap(s, pdfFontRegular, 9, kPdfLeft + 14, gXVisit.notes, 150);
+    }
+    s->table = 0;
+    if (!s->full && SlRoom(s, 24)) {
+        s->y -= 6;
+        PdfLineWidth(&gPw, 5);
+        PdfLine(&gPw, kPdfLeft, s->y, kSlRight, s->y);
+        if (visits) {
+            StrIToA(b, visits); StrCat(b, visits == 1 ? " visit, " : " visits, ");
+            TextFixed(b + StrLen(b), (Int32)cents, 2, gPoint, gThousands); StrCat(b, " "); StrCat(b, CurrencyCode(gPrefs.homeCurrency)); StrCat(b, " in all");
+        } else StrCopy(b, "No visits logged yet.");
+        PdfText(&gPw, pdfFontBold, 10, kPdfLeft, (Int16)(s->y - 14), b);
+        s->y -= 18;
+    }
+}
+
+/* vehicle 255 = every vehicle, each from a new page. */
+void ExportServicePdfTo(OutStream *out, UInt8 vehicle)
+{
+    SvcLog *s = MemPtrNew(sizeof(SvcLog));
+    UInt16 n = DbCount(dbVehicles), i;
+    if (!s) { out->err = -1; return; }
+    MemSet(s, sizeof(SvcLog), 0);
+    PdfBegin(&gPw, out);
+    for (i = 0; i < n; i++) {
+        if (DbGetVehicle(i, &gXVeh) != errNone) continue;
+        if (vehicle != 255 ? gXVeh.id != vehicle : gXVeh.archived) continue;
+        SlVehicle(s, i);
+    }
+    if (!s->open && gPw.nPages == 0) {
+        StrCopy(s->title, "Service log");
+        SlPage(s);
+        PdfText(&gPw, pdfFontRegular, 12, kPdfLeft, (Int16)(s->y - 12), "No vehicle to show.");
+    }
+    if (s->open) PdfPageEnd(&gPw);
+    PdfEnd(&gPw);
+    MemPtrFree(s);
+}
+
+/* ---- files ---- */
+
 static Int32 FileWrite(OutStream *s, const void *buf, UInt32 len)
 {
     return fwrite(buf, 1, len, (FILE *)s->ctx) == len ? 0 : -1;
@@ -567,12 +832,12 @@ void ExportName(char *buf, const char *ext, UInt16 today)
 
 Int32 ExportFile(const char *dir, UInt8 fmt, UInt8 vehicle, UInt16 year, UInt8 pgm, UInt16 today, char *nameOut, UInt32 *bytes)
 {
-    static const char *const ext[3] = { ".csv", ".xlsx", ".pdf" };
+    static const char *const ext[4] = { ".csv", ".xlsx", ".pdf", "-service.pdf" };
     char path[300];
     OutStream out;
     FILE *f;
     int closed;
-    if (fmt > 2) fmt = 0;
+    if (fmt > exportServicePdf) fmt = 0;
     ExportName(nameOut, ext[fmt], today);
     if (!DirMake(dir)) return exportErrFolder;
     PathJoin(path, dir, nameOut);
@@ -583,7 +848,8 @@ Int32 ExportFile(const char *dir, UInt8 fmt, UInt8 vehicle, UInt16 year, UInt8 p
     out.seek = FileSeek;
     out.ctx = f;
     gExportPgm = pgm;
-    ExportToStream(&out, fmt, vehicle, year);
+    if (fmt == exportServicePdf) ExportServicePdfTo(&out, vehicle);
+    else ExportToStream(&out, fmt, vehicle, year);
     gExportPgm = 255;
     closed = fclose(f) == 0;
     *bytes = FileSize(path);

@@ -205,6 +205,20 @@ Int32 DbReplace(UInt8 which, UInt16 index, const UInt8 *packed, UInt32 len)
     return e;
 }
 
+/* Like DbGet, but a longer record comes back cut to the buffer (enough to
+ * unpack a vehicle or service type, whose extension text follows the trailer). */
+Int32 DbGetPart(UInt8 which, UInt16 index, UInt8 *buf, UInt32 bufLen, UInt32 *lenOut)
+{
+    const PdbRecord *r;
+    UInt32 n;
+    if (!gOpen || which >= dbAll || index >= gDb[which].count) return dbErrRange;
+    r = &gDb[which].recs[index];
+    n = r->len < bufLen ? r->len : bufLen;
+    memcpy(buf, r->data, n);
+    if (lenOut) *lenOut = n;
+    return dbOk;
+}
+
 Int32 DbGet(UInt8 which, UInt16 index, UInt8 *buf, UInt32 bufLen, UInt32 *lenOut)
 {
     const PdbRecord *r;

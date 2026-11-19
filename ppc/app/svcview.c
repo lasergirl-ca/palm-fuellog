@@ -20,6 +20,13 @@ static int GetType(UInt16 i, ServiceTypeRecord *t)
     return DbGet(dbServiceTypes, i, gPacked, sizeof gPacked, &len) == dbOk && ServiceTypeUnpack(gPacked, len, t) == 0;
 }
 
+static int TypeHasNote(UInt16 i)
+{
+    UInt8 raw[svtMaxSize];
+    UInt32 len;
+    return DbGet(dbServiceTypes, i, raw, sizeof raw, &len) == dbOk && RecExtHas(recKindServiceType, raw, len, recExtTypeNote);
+}
+
 static int GetVisit(UInt16 i, ServiceVisitRecord *v)
 {
     UInt32 len;
@@ -239,6 +246,7 @@ UInt8 SvcViewList(UInt8 vehicle, UInt16 today, const FuelPrefs *p, char point, c
         DueFor(&gT, odoNow, pace, today, &d);
         memset(&r, 0, sizeof r);
         r.dbIndex = i;
+        r.note = (UInt8)TypeHasNote(i);
         r.hasVisit = (UInt8)SvcViewLastVisit(vehicle, gT.id, &date, &odo);
         Cp(r.left, gT.name, sizeof r.left);
         if (d.status == svcStatusOK || d.status == svcStatusSoon || d.status == svcStatusOverdue) r.badge = (UInt8)(1 + d.status);
@@ -294,6 +302,7 @@ UInt8 SvcViewHistory(UInt8 vehicle, UInt16 typeIndex, UInt16 today, const FuelPr
         if (perType && !(gScanV.services & (1UL << gT.id))) continue;
         memset(&r, 0, sizeof r);
         r.dbIndex = i;
+        r.note = gScanV.notes[0] != 0;
         SvcViewDueDate(r.left, gScanV.date, today);
         DistText(r.mid, gScanV.odometer, p, point, thousands);
         if (gScanV.cost) TextFixed(r.right, (Int32)gScanV.cost, 2, point, thousands);
@@ -361,7 +370,10 @@ int SvtEditBegin(SvtEdit *e, UInt16 index, UInt8 vehicle, const FuelPrefs *p, ch
     memset(f, 0, sizeof *f);
     e->index = svtEditNew;
     if (index != svtEditNew && GetType(index, &e->t)) {
+        UInt32 len;
         e->index = index;
+        if (DbGet(dbServiceTypes, index, gPacked, sizeof gPacked, &len) == dbOk)
+            RecExtGet(recKindServiceType, gPacked, len, recExtTypeNote, f->note, sizeof f->note);
     } else {
         e->t.vehicle = vehicle;
         e->t.id = SvcViewNextTypeId(vehicle);
@@ -448,6 +460,7 @@ Int32 SvtEditSave(SvtEdit *e, const SvtForm *f, const FuelPrefs *p, char point, 
     t.alarm = f->alarm ? 1 : 0;
     Cp(t.defaultDetail, f->detail, svtDetailLen);
     n = ServiceTypePack(&t, gPacked);
+    n = RecExtSet(recKindServiceType, gPacked, n, recExtTypeNote, f->note);
     if (e->index == svtEditNew) {
         err = DbAppend(dbServiceTypes, gPacked, n);
         if (err == dbOk) e->index = (UInt16)(DbCount(dbServiceTypes) - 1);
@@ -468,7 +481,13 @@ Int32 SvtEditArchive(SvtEdit *e)
         return err;
     }
     t.archived = t.archived ? 0 : 1;
-    err = DbReplace(dbServiceTypes, e->index, gPacked, ServiceTypePack(&t, gPacked));
+    {
+        /* the note stays: copied from the record as stored */
+        UInt8 old[svtMaxSize];
+        UInt32 len, n = ServiceTypePack(&t, gPacked);
+        if (DbGet(dbServiceTypes, e->index, old, sizeof old, &len) == dbOk) n = RecExtCopy(recKindServiceType, old, len, gPacked, n);
+        err = DbReplace(dbServiceTypes, e->index, gPacked, n);
+    }
     if (err == dbOk) e->t = t;
     return err;
 }

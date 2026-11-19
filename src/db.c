@@ -188,6 +188,37 @@ Err DbReplace(UInt8 which, UInt16 index, const UInt8 *packed, UInt32 len)
     return err;
 }
 
+/* Like DbGet, but a record longer than the buffer comes back cut to it: enough
+ * to unpack a vehicle or service type, whose extension text follows the trailer. */
+Err DbGetPart(UInt8 which, UInt16 index, UInt8 *buf, UInt32 bufLen, UInt32 *lenOut)
+{
+    DmOpenRef db = gRef[which];
+    MemHandle h;
+    UInt32 len;
+    if (!db) return dmErrNoOpenDatabase;
+    h = DmQueryRecord(db, index);
+    if (!h) return dmErrIndexOutOfRange;
+    len = MemHandleSize(h);
+    if (len > bufLen) len = bufLen;
+    MemMove(buf, MemHandleLock(h), len);
+    MemHandleUnlock(h);
+    if (lenOut) *lenOut = len;
+    return errNone;
+}
+
+/* Whether a vehicle or service type has extension string `ext`, read in place. */
+Boolean DbExtHas(UInt8 which, UInt16 index, UInt8 ext)
+{
+    MemHandle h;
+    Boolean has;
+    if (!gRef[which]) return false;
+    h = DmQueryRecord(gRef[which], index);
+    if (!h) return false;
+    has = RecExtHas(which, MemHandleLock(h), MemHandleSize(h), ext) != 0;
+    MemHandleUnlock(h);
+    return has;
+}
+
 Err DbGet(UInt8 which, UInt16 index, UInt8 *buf, UInt32 bufLen, UInt32 *lenOut)
 {
     DmOpenRef db = gRef[which];
@@ -315,7 +346,7 @@ Err DbGetVehicle(UInt16 index, VehicleRecord *r)
 {
     UInt8 buf[vehRecordSize + recTrailerSize];
     UInt32 len;
-    Err err = DbGet(dbVehicles, index, buf, sizeof buf, &len);
+    Err err = DbGetPart(dbVehicles, index, buf, sizeof buf, &len);
     if (err) return err;
     return VehicleUnpack(buf, len, r) == 0 ? errNone : dbErrCorrupt;
 }

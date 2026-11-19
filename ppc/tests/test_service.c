@@ -123,7 +123,14 @@ int main(int argc, char **argv)
     checkStr("  pace line", lines[1], "At 45 km/day that is about Nov 9");
     checkStr("  warning", lines[2], "Warning starts at 84,052 km");
     strcpy(tf.dist, "10,000"); tf.warnDist[0] = 0;
+    strcpy(tf.note, "0W-20, 4.2 L, filter PF63");
     check("save every 10,000 km", SvtEditSave(&te, &tf, &p, '.', ','), seSaved);
+    SvtEditBegin(&te, 0, 1, &p, '.', &tf);
+    checkStr("  its note back", tf.note, "0W-20, 4.2 L, filter PF63");
+    {
+        SvcRow rows[8]; char hd[64], ft[64];
+        check("  the list marks it", SvcViewList(1, today, &p, '.', ',', rows, 8, hd, ft) > 0 && rows[0].note, 1);
+    }
     {
         UInt8 pk[dbMaxRecord]; UInt32 len;
         DbGet(dbServiceTypes, 0, pk, sizeof pk, &len);

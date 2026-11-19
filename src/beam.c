@@ -324,7 +324,7 @@ static void ApplyRecord(UInt8 db, const UInt8 *packed, UInt32 len, Boolean merge
             if (!id) return;
             gVehMap[gBVeh.id & 15] = id; gBVeh.id = id;
         }
-        n = VehiclePack(&gBVeh, out);
+        n = RecExtCopy(recKindVehicle, packed, len, out, VehiclePack(&gBVeh, out));
         if (DbAdd(dbVehicles, out, n, NULL) == errNone) (*added)++;
         break;
     case dbProgrammes:
@@ -351,7 +351,7 @@ static void ApplyRecord(UInt8 db, const UInt8 *packed, UInt32 len, Boolean merge
             if (id == 31) return;
             gTypeMap[v][old & 31] = id; gBType.id = id;
         }
-        n = ServiceTypePack(&gBType, out);
+        n = RecExtCopy(recKindServiceType, packed, len, out, ServiceTypePack(&gBType, out));
         if (DbAdd(dbServiceTypes, out, n, NULL) == errNone) (*added)++;
         break;
     case dbServiceVisits:

@@ -47,6 +47,7 @@ void   DbPath(const char *dir, UInt8 which, char *path);
 Int32 DbAdd(UInt8 which, const UInt8 *packed, UInt32 len, UInt16 *indexOut);
 Int32 DbReplace(UInt8 which, UInt16 index, const UInt8 *packed, UInt32 len);
 Int32 DbGet(UInt8 which, UInt16 index, UInt8 *buf, UInt32 bufLen, UInt32 *lenOut);
+Int32 DbGetPart(UInt8 which, UInt16 index, UInt8 *buf, UInt32 bufLen, UInt32 *lenOut);
 Int32 DbRemove(UInt8 which, UInt16 index);
 Int32 DbAppend(UInt8 which, const UInt8 *packed, UInt32 len);
 void  DbSort(UInt8 which);

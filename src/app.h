@@ -47,7 +47,8 @@ Int16   AppRowKey(const EventType *event, Int16 *sel, UInt16 *first, UInt16 coun
 void    AppRowHighlight(const RectangleType *r);   /* fill r in the selection colours; text drawn next lands on it */
 void    AppRowPlain(void);                         /* back to the form colours */
 /* The modal lined note over the current form; edits notes (fillMaxNotes bytes) in place. */
-void   AppNoteDialog(char *notes);   /* the window height after AppFitForm: lay rows out to this, not the display */
+void   AppNoteDialog(char *notes);
+void   AppNoteMark(Coord y);      /* the has-a-note mark in the left margin of a list row at y */
 extern UInt16 gDisplayChanges;          /* winDisplayChangedEvents seen, for the About diagnostics */
 
 /* Form scrolling. Palm forms do not scroll, so the content objects move

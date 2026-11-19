@@ -115,6 +115,17 @@ The compiler is CeGCC's `arm-mingw32ce` (GCC 9.3.0) in a Docker volume; see `dev
    write this side back beside it. Beaming to or from a Palm is not here: Windows Mobile's
    infrared speaks IrOBEX and the Palm's Exchange Manager beam is untested against it.
 
+14. **Notes, plate and VIN.** A vehicle has Plate, VIN and Note rows; a service type has a
+   Note row (fills and visits had theirs already). Any fill, vehicle, service type or visit
+   with a note is marked by a short bar at the left edge of its row in the fill list,
+   Vehicles, Service and History. The Palm keeps the same fields, and they travel in
+   backups and sync files both ways.
+15. **Service log PDF.** Service or History, Menu, Service log PDF writes the vehicle's whole
+   service record as `FuelLog-YYYYMMDD-service.pdf` in Export (on the card when there is
+   one): plate, VIN, odometer and note; each service type with its interval, when it was
+   last done and when it is next due, and its note; then every visit with what was done,
+   the shop, the cost and its note; and the total. The Palm writes the same file.
+
 Two places where this form deliberately differs from the Palm's, both found while porting:
 the previous odometer shown for an edited fill is that vehicle's fill before it (the Palm
 takes the record before it, whichever vehicle that is), and emptying a quantity field to
@@ -171,6 +182,19 @@ tools/mkicon.py      the icon from rsc/icons/icon44x44x8.bmp (standard-library P
 | P6b | CSV, XLSX and XLS import | Built; device check pending |
 | P7 | Sync with a Palm or another Pocket PC through a `.fuel` file on a card; beaming if IrOBEX allows | Sync files built, device check pending; beaming not attempted |
 | P8 | VGA and landscape pass, an icon, a CAB installer | Icon, rotation and landscape columns built, device check pending; no CAB (below) |
+| P9 | Plate, VIN and notes on vehicles and service types; note marks on the lists; the service log PDF | Built; device check pending |
+
+## What to check on the devices (P9)
+
+1. Menu, Vehicles, a vehicle: Plate, VIN and Note rows. Fill them, Save, open it again:
+   they are back. The vehicle's row in Vehicles has a short bar at its left edge.
+2. Service, a service type (or History, Menu, Intervals): a Note row; with a note its row in
+   Service is marked. A visit with a note is marked in History, a fill with one in the list.
+3. Service, Menu, Service log PDF: the file is in Export on the card (or
+   `\My Documents\FuelLog\Export`); open it on a PC. Every visit, the notes under them,
+   and the plate and VIN at the top.
+4. Sync to a file, take it on the Palm (rc12 build): the vehicle's plate, VIN and note and
+   the service type's note are there. The same the other way.
 
 ## What to check on the devices (P8)
 

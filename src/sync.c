@@ -160,7 +160,7 @@ static void ApplyVehicle(Ctx *c, const UInt8 *rec, UInt16 len)
         c->vehMap[inId & 15] = c->veh2.id;
         if (SyncNewer(e->mod, v->modified)) {
             v->id = c->veh2.id;
-            n = VehiclePack(v, c->buf);
+            n = RecExtCopy(recKindVehicle, rec, len, c->buf, VehiclePack(v, c->buf));
             if (DbReplace(dbVehicles, e->index, c->buf, n) == errNone) { e->mod = v->modified; e->uid = v->uid; c->st.updated++; }
         } else AdoptUid(c, dbVehicles, e, v->uid);
         return;
@@ -169,7 +169,7 @@ static void ApplyVehicle(Ctx *c, const UInt8 *rec, UInt16 len)
     v->id = (inId == 0 || inId > vehMaxVehicles || VehUsed(c, inId)) ? VehNextId() : inId;
     if (!v->id) return;
     c->vehMap[inId & 15] = v->id;
-    n = VehiclePack(v, c->buf);
+    n = RecExtCopy(recKindVehicle, rec, len, c->buf, VehiclePack(v, c->buf));
     if (DbAdd(dbVehicles, c->buf, n, NULL) == errNone) c->st.added++;
 }
 
@@ -234,7 +234,7 @@ static void ApplyType(Ctx *c, const UInt8 *rec, UInt16 len)
         c->typeMap[v][inId & 31] = c->svt2.id;
         if (SyncNewer(e->mod, t->modified)) {
             t->id = c->svt2.id; t->vehicle = c->svt2.vehicle;
-            n = ServiceTypePack(t, c->buf);
+            n = RecExtCopy(recKindServiceType, rec, len, c->buf, ServiceTypePack(t, c->buf));
             if (DbReplace(dbServiceTypes, e->index, c->buf, n) == errNone) { e->mod = t->modified; e->uid = t->uid; c->st.updated++; }
         } else AdoptUid(c, dbServiceTypes, e, t->uid);
         return;
@@ -243,7 +243,7 @@ static void ApplyType(Ctx *c, const UInt8 *rec, UInt16 len)
     if (inId >= 31 || (used & (1UL << inId))) { for (inId = 0; inId < 31 && (used & (1UL << inId)); inId++) ; if (inId == 31) return; }
     c->typeMap[v][t->id & 31] = inId;
     t->id = inId;
-    n = ServiceTypePack(t, c->buf);
+    n = RecExtCopy(recKindServiceType, rec, len, c->buf, ServiceTypePack(t, c->buf));
     if (DbAdd(dbServiceTypes, c->buf, n, NULL) == errNone) { c->st.added++; c->typeUsed[v] |= 1UL << inId; }
 }
 

@@ -291,7 +291,11 @@
 #define ServiceScrollBar     2606
 #define StatsScrollBar       2506
 #define VehScrollBar         1823
+#define VehNoteButton        1824
+#define VehPlateField        1825
+#define VehVinField          1826
 #define SvtScrollBar         2716
+#define SvtNoteButton        2717
 #define PrefsScrollBar       1621
 
 #define ServiceHistoryButton 2607
@@ -300,6 +304,7 @@
 #define HistDoneButton       2901
 #define HistIntervalsButton  2902
 #define HistScrollBar        2903
+#define HistPdfButton        2904
 #define DeleteVisitAlert     1517
 
 #define ServiceAlarmAlert    1518

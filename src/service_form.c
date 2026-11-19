@@ -9,6 +9,8 @@
 #include "vehicles.h"
 #include "resources.h"
 #include "device.h"
+#include "card.h"
+#include "export.h"
 
 static ServiceTypeRecord gSvt, gScanSvt;
 static ServiceVisitRecord gSvl, gScanSvl;      /* 400 bytes each: static, off the stack */
@@ -20,6 +22,7 @@ static UInt16 gEditSvlIndex = dmMaxRecordIndex;   /* visit being edited, or new 
 static UInt16 gHistType = dmMaxRecordIndex;        /* service type the History shows; all visits when dmMaxRecordIndex */
 static UInt16 gSvlReturn = ServiceForm;            /* where Log Service goes back to */
 static UInt8 gSvcVehicle;                      /* the vehicle the service screens work on */
+static char *gSvtNote;                         /* the type's note while its form is open (heap) */
 static char gSVNames[vehMaxVehicles + 1][vehNameLen];
 static char *gSVPtrs[vehMaxVehicles + 1];
 static UInt8 gSVIds[vehMaxVehicles + 1];
@@ -48,6 +51,8 @@ static void BuildServicePopup(FormType *form) SVC_SEC;
 static void Summary(FormType *form) SVC_SEC;
 static void LoadSvt(FormType *form) SVC_SEC;
 static Boolean SaveSvt(FormType *form) SVC_SEC;
+static UInt32 PackSvt(void) SVC_SEC;
+static void SvtNoteLabel(FormType *form) SVC_SEC;
 static void PlaceSvl(FormType *form) SVC_SEC;
 static void NextLine(FormType *form) SVC_SEC;
 static void LoadSvl(FormType *form) SVC_SEC;
@@ -362,6 +367,7 @@ static void DrawService(void)
         Boolean hi = (Int16)row == gSvcSel;
         if (SvtGetAt(gSvcRows[row], &gSvt) != errNone) continue;
         if (hi) { RectangleType sr; sr.topLeft.x = 0; sr.topLeft.y = y; sr.extent.x = 160; sr.extent.y = kSvcRowH; AppRowHighlight(&sr); }
+        if (DbExtHas(dbServiceTypes, gSvcRows[row], recExtTypeNote)) AppNoteMark(y);
         DueFor(&gSvt, gSvcOdoNow, gSvcPace, &d);
         FntSetFont(boldFont);
         WinDrawChars(gSvt.name, StrLen(gSvt.name), 4, y);
@@ -533,15 +539,42 @@ static void Summary(FormType *form)
     AppSetLabel(form, SvtSummary3, b);
 }
 
+static void SvtNoteLabel(FormType *form)
+{
+    CtlSetLabel(FrmGetObjectPtr(form, FrmGetObjectIndex(form, SvtNoteButton)), gSvtNote && gSvtNote[0] ? "Note*" : "Note");
+}
+
+/* gSvt and its note, packed into gSvcPacked; returns the length. */
+static UInt32 PackSvt(void)
+{
+    UInt32 n;
+    if (!gSvtNote && gEditSvtIndex != dmMaxRecordIndex) {
+        /* no heap for the note: keep the stored one */
+        UInt8 old[svtMaxSize];
+        UInt32 len;
+        n = ServiceTypePack(&gSvt, gSvcPacked);
+        if (DbGet(dbServiceTypes, gEditSvtIndex, old, sizeof old, &len) == errNone) n = RecExtCopy(recKindServiceType, old, len, gSvcPacked, n);
+        return n;
+    }
+    n = ServiceTypePack(&gSvt, gSvcPacked);
+    return gSvtNote ? RecExtSet(recKindServiceType, gSvcPacked, n, recExtTypeNote, gSvtNote) : n;
+}
+
 static void LoadSvt(FormType *form)
 {
     char b[20];
     Boolean isNew = gEditSvtIndex == dmMaxRecordIndex;
+    UInt32 len;
+    if (!gSvtNote) gSvtNote = MemPtrNew(fillMaxNotes);
+    if (gSvtNote) gSvtNote[0] = 0;
     if (isNew || SvtGetAt(gEditSvtIndex, &gSvt) != errNone) {
         gEditSvtIndex = dmMaxRecordIndex; isNew = true;
         MemSet(&gSvt, sizeof gSvt, 0);
         gSvt.vehicle = gSvcVehicle; gSvt.id = NextTypeId(gSvcVehicle); gSvt.warnDays = 14;
-    }
+    } else if (gSvtNote && DbGet(dbServiceTypes, gEditSvtIndex, gSvcPacked, sizeof gSvcPacked, &len) == errNone)
+        RecExtGet(recKindServiceType, gSvcPacked, len, recExtTypeNote, gSvtNote, fillMaxNotes);
+    if (!gSvtNote) FrmHideObject(form, FrmGetObjectIndex(form, SvtNoteButton));
+    SvtNoteLabel(form);
     FrmSetTitle(form, isNew ? "New Service" : "Service Type");
     AppSetFieldText(form, SvtNameField, gSvt.name);
     if (gSvt.intervalDist) { DistText(b, gSvt.intervalDist, 0); AppSetFieldText(form, SvtDistField, b); } else AppSetFieldText(form, SvtDistField, "");
@@ -585,8 +618,8 @@ static Boolean SaveSvt(FormType *form)
     gSvt.warnDays = (UInt16)(r == 1 ? v : 14);
     gSvt.alarm = (UInt8)CtlGetValue(FrmGetObjectPtr(form, FrmGetObjectIndex(form, SvtAlarmCheckbox)));
     StrNCopy(gSvt.defaultDetail, AppGetFieldText(form, SvtDetailField), svtDetailLen - 1); gSvt.defaultDetail[svtDetailLen - 1] = 0;
-    if (gEditSvtIndex == dmMaxRecordIndex) err = DbAdd(dbServiceTypes, gSvcPacked, ServiceTypePack(&gSvt, gSvcPacked), NULL);
-    else err = DbReplace(dbServiceTypes, gEditSvtIndex, gSvcPacked, ServiceTypePack(&gSvt, gSvcPacked));
+    if (gEditSvtIndex == dmMaxRecordIndex) err = DbAdd(dbServiceTypes, gSvcPacked, PackSvt(), NULL);
+    else err = DbReplace(dbServiceTypes, gEditSvtIndex, gSvcPacked, PackSvt());
     if (err) { FrmAlert(SaveFailedAlert); return false; }
     SvcScheduleAlarm();
     return true;
@@ -595,28 +628,34 @@ static Boolean SaveSvt(FormType *form)
 Boolean EditServiceFormHandleEvent(EventType *event)
 {
     FormType *form = FrmGetActiveForm();
-    static UInt16 bottom[] = { SvtDoneButton, SvtCancelButton, SvtArchiveButton };
-    static UInt16 pinned[] = { SvtDoneButton, SvtCancelButton, SvtArchiveButton, SvtScrollBar };
+    static UInt16 bottom[] = { SvtDoneButton, SvtCancelButton, SvtNoteButton, SvtArchiveButton };
+    static UInt16 pinned[] = { SvtDoneButton, SvtCancelButton, SvtNoteButton, SvtArchiveButton, SvtScrollBar };
     switch (event->eType) {
     case frmOpenEvent:
         AppScrollReset();
-        AppFitForm(form, bottom, 3);
+        AppFitForm(form, bottom, 4);
         LoadSvt(form);
-        AppScrollBarUpdate(form, SvtScrollBar, pinned, 4);
+        AppScrollBarUpdate(form, SvtScrollBar, pinned, 5);
         FrmDrawForm(form);
         return true;
     case frmUpdateEvent: FrmDrawForm(form); return true;
-    case fldEnterEvent: AppScrollToField(form, event->data.fldEnter.fieldID, pinned, 4); AppScrollBarUpdate(form, SvtScrollBar, pinned, 4); break;
+    case frmCloseEvent:
+        if (gSvtNote) { MemPtrFree(gSvtNote); gSvtNote = NULL; }
+        break;
+    case fldEnterEvent: AppScrollToField(form, event->data.fldEnter.fieldID, pinned, 5); AppScrollBarUpdate(form, SvtScrollBar, pinned, 5); break;
     case keyDownEvent: case sclRepeatEvent: case sclExitEvent:
-        if (AppScrollEvent(form, event, pinned, 4, SvtScrollBar)) return true;
+        if (AppScrollEvent(form, event, pinned, 5, SvtScrollBar)) return true;
         break;
     case winDisplayChangedEvent:
-        if (gScrollYPublic()) AppScrollBy(form, gScrollYPublic(), pinned, 4);
-        AppFitForm(form, bottom, 3); AppScrollBarUpdate(form, SvtScrollBar, pinned, 4); WinEraseWindow(); FrmDrawForm(form); return true;
+        if (gScrollYPublic()) AppScrollBy(form, gScrollYPublic(), pinned, 5);
+        AppFitForm(form, bottom, 4); AppScrollBarUpdate(form, SvtScrollBar, pinned, 5); WinEraseWindow(); FrmDrawForm(form); return true;
     case ctlSelectEvent:
         switch (event->data.ctlSelect.controlID) {
         case SvtDoneButton: if (SaveSvt(form)) FrmGotoForm(ServiceForm); return true;
         case SvtCancelButton: FrmGotoForm(ServiceForm); return true;
+        case SvtNoteButton:
+            if (gSvtNote) { AppNoteDialog(gSvtNote); SvtNoteLabel(form); }
+            return true;
         case SvtArchiveButton:
             if (gEditSvtIndex == dmMaxRecordIndex) return true;
             if (gSvt.archived) gSvt.archived = 0;
@@ -627,7 +666,7 @@ Boolean EditServiceFormHandleEvent(EventType *event)
                 FrmGotoForm(ServiceForm);
                 return true;
             }
-            if (DbReplace(dbServiceTypes, gEditSvtIndex, gSvcPacked, ServiceTypePack(&gSvt, gSvcPacked))) FrmAlert(SaveFailedAlert);
+            if (DbReplace(dbServiceTypes, gEditSvtIndex, gSvcPacked, PackSvt())) FrmAlert(SaveFailedAlert);
             FrmGotoForm(ServiceForm);
             return true;
         default: break;
@@ -977,6 +1016,7 @@ static void DrawHistory(void)
         Boolean hi = (Int16)row == gHistSel;
         if (SvlGetAt(gHistIdx[row], &gScanSvl) != errNone) continue;
         if (hi) { RectangleType sr; sr.topLeft.x = 0; sr.topLeft.y = y; sr.extent.x = 160; sr.extent.y = kHistRowH; AppRowHighlight(&sr); }
+        if (gScanSvl.notes[0]) AppNoteMark(y);
         FntSetFont(stdFont);
         DueDateText(b, gScanSvl.date);
         WinDrawChars(b, StrLen(b), 4, y);
@@ -1014,9 +1054,9 @@ static void DrawHistory(void)
 
 static void LayoutHistory(FormType *form)
 {
-    static UInt16 bottom[] = { HistDoneButton, HistIntervalsButton };
+    static UInt16 bottom[] = { HistDoneButton, HistIntervalsButton, HistPdfButton };
     Coord w, h;
-    AppFitForm(form, bottom, 2);
+    AppFitForm(form, bottom, 3);
     WinGetDisplayExtent(&w, &h); h = AppFormHeight(form);
     gHistArea.topLeft.x = 0; gHistArea.topLeft.y = kHistTop; gHistArea.extent.x = w;
     gHistArea.extent.y = (Coord)(((h - 17 - kHistTop) / kHistRowH) * kHistRowH);
@@ -1069,6 +1109,18 @@ Boolean HistoryFormHandleEvent(EventType *event)
         switch (event->data.ctlSelect.controlID) {
         case HistDoneButton: FrmGotoForm(ServiceForm); return true;
         case HistIntervalsButton: gEditSvtIndex = gHistType; FrmGotoForm(EditServiceForm); return true;
+        case HistPdfButton: {
+            /* the vehicle's whole service log, every type, to Export on the card */
+            UInt16 vol;
+            char name[40], kb[12];
+            UInt32 bytes = 0;
+            Err err;
+            if (CardFind(&vol) != errNone) { FrmAlert(NoCardAlert); return true; }
+            err = ExportServicePdf(vol, gSvcVehicle, name, &bytes);
+            if (err) { StrIToA(kb, err); FrmCustomAlert(ExportFailedAlert, name, kb, ""); }
+            else { StrIToA(kb, (bytes + 512) / 1024); FrmCustomAlert(ExportDoneAlert, name, kb, ""); }
+            return true;
+        }
         default: break;
         }
         break;

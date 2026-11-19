@@ -41,11 +41,11 @@
 enum { IDC_VEHICLE = 100, IDC_LIST, IDC_AVG, IDC_MONTH, IDC_EMPTY, IDC_VEHLIST, IDC_VEHARCH, IDC_PGMLIST, IDC_BANNER, IDC_SETLIST, IDC_FILELIST, IDC_KBCOMBO };
 enum { IDM_ABOUT = 200, IDM_PALM, IDM_EXIT, IDM_NEW, IDM_SAVE, IDM_CANCEL, IDM_DELETE, IDM_DONE, IDM_VEHICLES, IDM_PREFS,
        IDM_PROGRAMMES, IDM_OK, IDM_ARCHIVE, IDM_STATS, IDM_REPORTS, IDM_GRAPHS, IDM_SERVICE, IDM_HISTORY,
-       IDM_INTERVALS, IDM_LOG, IDM_NEWSVC, IDM_EXPORT, IDM_DOEXPORT, IDM_BACKUP, IDM_RESTORE, IDM_IMPORT, IDM_DOIMPORT, IDM_SYNC };
+       IDM_INTERVALS, IDM_LOG, IDM_NEWSVC, IDM_EXPORT, IDM_DOEXPORT, IDM_BACKUP, IDM_RESTORE, IDM_IMPORT, IDM_DOIMPORT, IDM_SYNC, IDM_SVCPDF };
 /* The Export page. */
 enum { IDX_FORMAT = 800, IDX_VEH, IDX_YEAR, IDX_PGM, IDX_DEST, IDX_WHERE, IDX_LAST, IDX_AUTO, IDX_KEEP };
 /* The Service Type and Log Service sheets. */
-enum { IDY_NAME = 700, IDY_DIST, IDY_MONTHS, IDY_WARNDIST, IDY_WARNDAYS, IDY_ALARM, IDY_DETAIL, IDY_SUM1, IDY_SUM2, IDY_SUM3 };
+enum { IDY_NAME = 700, IDY_DIST, IDY_MONTHS, IDY_WARNDIST, IDY_WARNDAYS, IDY_ALARM, IDY_DETAIL, IDY_SUM1, IDY_SUM2, IDY_SUM3, IDY_NOTE };
 #define IDS_CHK(i) (742 + (i))
 enum { IDS_DATE = 740, IDS_ODO, IDS_OTHERON = 754, IDS_OTHER, IDS_COST, IDS_CUR, IDS_PAY, IDS_SHOP, IDS_DETAIL, IDS_NOTE, IDS_NEXT };
 /* The Reports and Graphs pages' pickers. */
@@ -57,7 +57,8 @@ enum { IDF_LVEH = 300, IDF_VEH, IDF_DATE, IDF_TIME, IDF_LODO, IDF_ODO, IDF_ODOHI
        IDF_LPAY, IDF_CASH, IDF_CARD, IDF_LPTS, IDF_PTS, IDF_LNOTE, IDF_NOTE };
 /* The rows of the two sheets (label ids are these plus 1000). */
 enum { IDP_DIST = 400, IDP_VOL, IDP_ECO, IDP_PRICE, IDP_FORMAT, IDP_HOME, IDP_NEW };
-enum { IDV_NAME = 420, IDV_POWER, IDV_UNIT, IDV_START, IDV_TANK, IDV_HOME, IDV_GRADE, IDV_CUR, IDV_TRIP, IDV_ARCH, IDV_STATUS };
+enum { IDV_NAME = 420, IDV_POWER, IDV_UNIT, IDV_START, IDV_TANK, IDV_HOME, IDV_GRADE, IDV_CUR, IDV_TRIP, IDV_ARCH, IDV_STATUS,
+       IDV_PLATE, IDV_VIN, IDV_NOTE };
 enum { IDE_NAME = 440, IDE_CUR, IDE_MONEY, IDE_EARN, IDE_BASIS, IDE_PREM, IDE_PAY, IDE_AUTO, IDE_REDEEM, IDE_BLOCK,
        IDE_VALUE, IDE_VOLUNIT, IDE_MAXVOL, IDE_CAP, IDE_EXPIRY, IDE_MONTHS, IDE_OPEN, IDE_ALIAS, IDE_STATUS };
 /* The Points page: four ids per row (programme, earned, redeemed, hint), then Add and the total. */
@@ -1138,6 +1139,9 @@ static const SheetRow kVehRows[] = {
     { IDV_GRADE, rowCombo, L"Fuel:", L"Regular\0Mid\0Premium\0Diesel\0", 0 },
     { IDV_CUR, rowCombo, L"Currency:", L"Use Prefs\0USD\0CAD\0EUR\0AUD\0NZD\0GBP\0", 0 },
     { IDV_TRIP, rowCombo, L"Trip meter:", L"Reset each fill\0Never reset\0Not used\0", 0 },
+    { IDV_PLATE, rowEdit, L"Plate:", NULL, vehPlateLen - 1 },
+    { IDV_VIN, rowEdit, L"VIN:", NULL, vehVinLen - 1 },
+    { IDV_NOTE, rowEdit, L"Note:", NULL, fillMaxNotes - 1 },
     { IDV_ARCH, rowCheck, L"Archived (left out of the pickers)", NULL, 0 },
     { IDV_STATUS, rowText, L"", NULL, 0 },
 };
@@ -1208,6 +1212,9 @@ static void VehOpen(UInt16 index)
     SheetSetSel(s, IDV_GRADE, f.grade);
     SheetSetSel(s, IDV_CUR, f.currency);
     SheetSetSel(s, IDV_TRIP, f.tripMode);
+    SheetSetText(s, IDV_PLATE, f.plate);
+    SheetSetText(s, IDV_VIN, f.vin);
+    SheetSetText(s, IDV_NOTE, f.note);
     SendMessageW(SC(s, IDV_ARCH), BM_SETCHECK, f.archived, 0);
     VehEditStatus(&gVehEdit, status);
     SheetSetText(s, IDV_STATUS, status);
@@ -1232,6 +1239,9 @@ static void VehSave(void)
     f.currency = (UInt8)SheetGetSel(s, IDV_CUR, 0);
     f.tripMode = (UInt8)SheetGetSel(s, IDV_TRIP, 0);
     f.archived = (UInt8)(SendMessageW(SC(s, IDV_ARCH), BM_GETCHECK, 0, 0) == 1);
+    SheetGetText(s, IDV_PLATE, f.plate, vehPlateLen);
+    SheetGetText(s, IDV_VIN, f.vin, vehVinLen);
+    SheetGetText(s, IDV_NOTE, f.note, fillMaxNotes);
     r = VehEditSave(&gVehEdit, &f, gPoint, gThousands, &gPrefs);
     if (r == veNeedName) {
         MessageBoxW(gWin, L"Give the vehicle a name so it can be picked from the list.", L"Name the vehicle", MB_OK | MB_ICONEXCLAMATION);
@@ -2099,6 +2109,14 @@ static void PaintBadge(HDC dc, UInt8 status, int cx, int cy)
     }
 }
 
+/* The has-a-note mark: a short bar in the left margin of a row whose top is y, as on the Palm. */
+static void NoteMark(HDC dc, int y)
+{
+    RECT r;
+    r.left = 0; r.right = S(2) > 1 ? S(2) : 2; r.top = y + S(3); r.bottom = y + S(12);
+    FillRect(dc, &r, (HBRUSH)GetStockObject(BLACK_BRUSH));
+}
+
 static void RowsPaint(HDC dc, int W, int H)
 {
     RECT all;
@@ -2120,6 +2138,7 @@ static void RowsPaint(HDC dc, int W, int H)
         int midRight = r->badge ? edge - S(14) : W * 60 / 100;
         int leftRight = (r->badge || !r->mid[0]) ? W * 58 / 100 : W * 40 / 100;
         if (y + S(kSvcRowH) < 0 || y > H) continue;
+        if (r->note) NoteMark(dc, y);
         SelectObject(dc, gFontBold ? gFontBold : normal);
         DrawCell(dc, r->left, S(4), leftRight, l1, S(14), DT_LEFT);
         SelectObject(dc, normal);
@@ -2238,6 +2257,7 @@ static const SheetRow kSvtRows[] = {
     { IDY_WARNDAYS, rowEdit, L"Or days:", NULL, 5 },
     { IDY_ALARM, rowCheck, L"Alarm when due", NULL, 0 },
     { IDY_DETAIL, rowEdit, L"Detail:", NULL, svtDetailLen - 1 },
+    { IDY_NOTE, rowEdit, L"Note:", NULL, fillMaxNotes - 1 },
     { IDY_SUM1, rowText, L"", NULL, 0 },
     { IDY_SUM2, rowText, L"", NULL, 0 },
     { IDY_SUM3, rowText, L"", NULL, 0 },
@@ -2264,6 +2284,7 @@ static void SvtOpen(UInt16 index, int back)
     SheetSetText(s, IDY_WARNDAYS, f.warnDays);
     SheetSetCheck(s, IDY_ALARM, f.alarm);
     SheetSetText(s, IDY_DETAIL, f.detail);
+    SheetSetText(s, IDY_NOTE, f.note);
     SvtEditSummary(&gSvtEdit, Today(), &gPrefs, gPoint, gThousands, lines);
     SheetSetText(s, IDY_SUM1, lines[0]);
     SheetSetText(s, IDY_SUM2, lines[1]);
@@ -2286,6 +2307,7 @@ static void SvtSave(void)
     SheetGetText(s, IDY_WARNDAYS, f.warnDays, sizeof f.warnDays);
     f.alarm = (UInt8)SheetGetCheck(s, IDY_ALARM);
     SheetGetText(s, IDY_DETAIL, f.detail, svtDetailLen);
+    SheetGetText(s, IDY_NOTE, f.note, fillMaxNotes);
     r = SvtEditSave(&gSvtEdit, &f, &gPrefs, gPoint, gThousands);
     if (r == seNeedName) MessageBoxW(gWin, L"Give the service a name, such as Oil and filter.", L"Name the service", MB_OK | MB_ICONEXCLAMATION);
     else if (r == seBadNumber) MessageBoxW(gWin, L"A number could not be read. Fix the field with the stray character and choose Save again.", L"Check the numbers", MB_OK | MB_ICONEXCLAMATION);
@@ -2623,6 +2645,26 @@ static void ExportRun(void)
     else if (r == exportErrFolder) wsprintfW(msg, L"The folder %s could not be made or written. Is the card in and unlocked?", wd);
     else wsprintfW(msg, L"%s was not written in full. Free some storage and try again.", wn);
     MessageBoxW(gWin, msg, L"Export", MB_OK | (r == exportOk ? MB_ICONINFORMATION : MB_ICONEXCLAMATION));
+}
+
+/* The vehicle's service log as a PDF, in Export on the card when there is one, as the Palm writes it. */
+static void ServicePdf(void)
+{
+    char dir[300], name[40];
+    WCHAR msg[400], wn[40], wd[300];
+    UInt32 bytes = 0;
+    Int32 r;
+    HCURSOR old = SetCursor(LoadCursor(NULL, IDC_WAIT));
+    DestFolder(gCardCount ? 1 : 0, "Export", dir);
+    ExportSetup(&gPrefs, gPoint, gThousands, Time24());
+    r = ExportFile(dir, exportServicePdf, gSvcVehicle, 0, 255, Today(), name, &bytes);
+    SetCursor(old);
+    ToWide(name, wn, 40);
+    ToWide(dir, wd, 300);
+    if (r == exportOk) wsprintfW(msg, L"Saved %s (%u bytes) in %s.", wn, (unsigned)bytes, wd);
+    else if (r == exportErrFolder) wsprintfW(msg, L"The folder %s could not be made or written. Is the card in and unlocked?", wd);
+    else wsprintfW(msg, L"%s was not written in full. Free some storage and try again.", wn);
+    MessageBoxW(gWin, msg, L"Service log", MB_OK | (r == exportOk ? MB_ICONINFORMATION : MB_ICONEXCLAMATION));
 }
 
 /* A backup set of the log as it stands. On closing, the weekly one goes to the card when there is one. */
@@ -3074,6 +3116,7 @@ static void SetMenuBar(int page)
     case pageService:
         AppendMenuW(menu, MF_STRING, IDM_NEWSVC, L"New service");
         AppendMenuW(menu, MF_STRING, IDM_HISTORY, L"History");
+        AppendMenuW(menu, MF_STRING, IDM_SVCPDF, L"Service log PDF");
         AppendMenuW(menu, MF_SEPARATOR, 0, NULL);
         AppendMenuW(menu, MF_STRING, IDM_DONE, L"Done");
         AppendMenuW(bar, MF_STRING, IDM_LOG, L"Log");
@@ -3082,6 +3125,7 @@ static void SetMenuBar(int page)
     case pageHistory:
         if (gHistType != 0xFFFF) AppendMenuW(menu, MF_STRING, IDM_INTERVALS, L"Intervals");
         AppendMenuW(menu, MF_STRING, IDM_LOG, L"Log visit");
+        AppendMenuW(menu, MF_STRING, IDM_SVCPDF, L"Service log PDF");
         AppendMenuW(bar, MF_STRING, IDM_DONE, L"Done");
         AppendMenuW(bar, MF_POPUP, (UINT_PTR)menu, L"Menu");
         break;
@@ -3441,6 +3485,7 @@ static LRESULT CALLBACK Proc(HWND h, UINT m, WPARAM w, LPARAM l)
         case IDM_NEWSVC: if (gPage == pageService) SvtOpen(svtEditNew, pageService); return 0;
         case IDM_HISTORY: if (gPage == pageService) { gHistType = 0xFFFF; PostMessageW(h, WM_SHOWPAGE, pageHistory, 0); } return 0;
         case IDM_INTERVALS: if (gPage == pageHistory && gHistType != 0xFFFF) SvtOpen(gHistType, pageHistory); return 0;
+        case IDM_SVCPDF: if (gPage == pageService || gPage == pageHistory) ServicePdf(); return 0;
         case IDM_LOG: if (gPage == pageService || gPage == pageHistory) VisitOpen(svtEditNew, gPage); return 0;
         case IDM_ARCHIVE:
             if (gPage == pageProgramme) PgmArchive();
@@ -3489,6 +3534,25 @@ static LRESULT CALLBACK Proc(HWND h, UINT m, WPARAM w, LPARAM l)
         break;
     case WM_NOTIFY: {
         NMHDR *n = (NMHDR *)l;
+        if ((n->idFrom == IDC_LIST || n->idFrom == IDC_VEHLIST) && n->code == (UINT)NM_CUSTOMDRAW) {
+            /* the note mark over the row once the list has drawn it */
+            NMLVCUSTOMDRAW *cd = (NMLVCUSTOMDRAW *)l;
+            int row = (int)cd->nmcd.dwItemSpec, has = 0;
+            if (cd->nmcd.dwDrawStage == CDDS_PREPAINT) return CDRF_NOTIFYITEMDRAW;
+            if (cd->nmcd.dwDrawStage == CDDS_ITEMPREPAINT) return CDRF_NOTIFYPOSTPAINT;
+            if (cd->nmcd.dwDrawStage != CDDS_ITEMPOSTPAINT) return CDRF_DODEFAULT;
+            if (n->idFrom == IDC_LIST) has = row >= 0 && row < (int)gRowCount && FillViewHasNote(gRows[row]);
+            else has = row >= 0 && row < (int)gVehCount && VehHasNote(gVehIdx[row]);
+            if (has) {
+                RECT r;
+                r.left = LVIR_BOUNDS;
+                if (SendMessageW(n->hwndFrom, LVM_GETITEMRECT, (WPARAM)row, (LPARAM)&r)) {
+                    r.right = r.left + (S(2) > 1 ? S(2) : 2); r.top += S(2); r.bottom -= S(2);
+                    FillRect(cd->nmcd.hdc, &r, (HBRUSH)GetStockObject(BLACK_BRUSH));
+                }
+            }
+            return CDRF_DODEFAULT;
+        }
         if ((n->idFrom == IDR_FROM || n->idFrom == IDR_TO) && n->code == (UINT)DTN_DATETIMECHANGE) {
             if (gPage == pageReports) RangePicked((int)n->idFrom);
             return 0;

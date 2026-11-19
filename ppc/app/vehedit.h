@@ -18,6 +18,9 @@ typedef struct {
     char homeRate[veText];      /* cents per kWh */
     UInt8 powertrain, odoUnit, grade, tripMode, archived;
     UInt8 currency;             /* 0 = use Prefs, else cur* + 1 */
+    char plate[vehPlateLen];    /* kept after the record's trailer (records.h, extension text) */
+    char vin[vehVinLen];
+    char note[fillMaxNotes];
 } VehEditForm;
 
 typedef struct {
@@ -35,6 +38,8 @@ UInt16 VehListCollect(int showArchived, UInt16 *index, UInt16 max);
  * the fill count and the last odometer in the Prefs unit. Each at least 40 bytes. */
 int VehListRow(UInt16 dbIndex, const FuelPrefs *p, char point, char thousands, char *name, char *kind, char *fills, char *odo);
 
+/* 1 when the vehicle at dbIndex has a note: its row is marked. */
+int VehHasNote(UInt16 dbIndex);
 /* Start on the vehicle at index, or a new one. Returns 0 when a new one cannot be made (sixteen already). */
 int VehEditBegin(VehEdit *e, UInt16 index, char point, VehEditForm *f);
 const char *VehEditTankLabel(UInt8 powertrain);     /* "Tank (L):" or "Battery kWh:" */

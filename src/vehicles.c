@@ -10,6 +10,7 @@
 UInt16 gEditVehicleIndex = dmMaxRecordIndex;
 static VehicleRecord gVeh;          /* the one being edited */
 static VehicleRecord gScanVeh;
+static char *gVehNote;              /* the note while Edit Vehicle is open (heap: the globals are full) */
 static FillRecord gScanFillV;
 static Boolean gShowArchived;
 static RectangleType gVehRows;
@@ -109,6 +110,7 @@ static Int16 GetPopup(FormType *form, UInt16 listId) FORMS_SEC;
 static void ShowElectricFields(FormType *form, UInt8 powertrain) FORMS_SEC;
 static void LoadVehicle(FormType *form) FORMS_SEC;
 static Boolean SaveVehicle(FormType *form) FORMS_SEC;
+static void NoteLabel(FormType *form) FORMS_SEC;
 
 static UInt16 VisibleAt(UInt16 row, UInt16 *dbIndex)
 {
@@ -155,6 +157,7 @@ static void DrawVehicles(void)
         Boolean hi = (Int16)row == gVehSel;
         if (hi) { RectangleType sr; sr.topLeft.x = 0; sr.topLeft.y = y; sr.extent.x = 160; sr.extent.y = kVehRowH; AppRowHighlight(&sr); }
         DbGetVehicle(idx, &gScanVeh);
+        if (DbExtHas(dbVehicles, idx, recExtVehNote)) AppNoteMark(y);
         FntSetFont(gScanVeh.archived ? stdFont : boldFont);
         WinDrawChars(gScanVeh.name, StrLen(gScanVeh.name), 4, y);
         FntSetFont(stdFont);
@@ -284,10 +287,17 @@ static void ShowElectricFields(FormType *form, UInt8 powertrain)
     }
 }
 
+static void NoteLabel(FormType *form)
+{
+    CtlSetLabel(FrmGetObjectPtr(form, FrmGetObjectIndex(form, VehNoteButton)), gVehNote && gVehNote[0] ? "Note*" : "Note");
+}
+
 static void LoadVehicle(FormType *form)
 {
     char b[24];
     UInt16 fills;
+    UInt8 raw[vehMaxSize];
+    UInt32 len = 0;
     if (gEditVehicleIndex == dmMaxRecordIndex || DbGetVehicle(gEditVehicleIndex, &gVeh) != errNone) {
         gEditVehicleIndex = dmMaxRecordIndex;
         MemSet(&gVeh, sizeof gVeh, 0);
@@ -296,6 +306,15 @@ static void LoadVehicle(FormType *form)
         gVeh.tripMode = vehTripReset;
         gVeh.tankSize = 60000;
     }
+    if (gEditVehicleIndex == dmMaxRecordIndex || DbGet(dbVehicles, gEditVehicleIndex, raw, sizeof raw, &len) != errNone) len = 0;
+    RecExtGet(recKindVehicle, raw, len, recExtPlate, b, vehPlateLen);
+    AppSetFieldText(form, VehPlateField, b);
+    RecExtGet(recKindVehicle, raw, len, recExtVin, b, vehVinLen);
+    AppSetFieldText(form, VehVinField, b);
+    if (!gVehNote) gVehNote = MemPtrNew(fillMaxNotes);
+    if (gVehNote) RecExtGet(recKindVehicle, raw, len, recExtVehNote, gVehNote, fillMaxNotes);
+    else FrmHideObject(form, FrmGetObjectIndex(form, VehNoteButton));
+    NoteLabel(form);
     FrmSetTitle(form, gEditVehicleIndex == dmMaxRecordIndex ? "New Vehicle" : "Edit Vehicle");
     AppSetFieldText(form, VehNameField, gVeh.name);
     SetPopup(form, VehPowerTrigger, VehPowerList, gVeh.powertrain < 4 ? gVeh.powertrain : 0);
@@ -335,7 +354,7 @@ static Boolean SaveVehicle(FormType *form)
     UInt32 v;
     Int32 r;
     const char *name = AppGetFieldText(form, VehNameField);
-    UInt8 buf[vehRecordSize + recTrailerSize];
+    UInt8 buf[vehMaxSize];
     UInt32 n;
     Int16 sel;
     Err err;
@@ -365,6 +384,15 @@ static Boolean SaveVehicle(FormType *form)
     gVeh.tripMode = (UInt8)GetPopup(form, VehTripList);
     gVeh.archived = (UInt8)CtlGetValue(FrmGetObjectPtr(form, FrmGetObjectIndex(form, VehArchivedCheckbox)));
     n = VehiclePack(&gVeh, buf);
+    if (!gVehNote && gEditVehicleIndex != dmMaxRecordIndex) {
+        /* no room for the note on the heap: keep the stored one */
+        UInt8 old[vehMaxSize];
+        UInt32 len;
+        if (DbGet(dbVehicles, gEditVehicleIndex, old, sizeof old, &len) == errNone) n = RecExtCopy(recKindVehicle, old, len, buf, n);
+    }
+    n = RecExtSet(recKindVehicle, buf, n, recExtPlate, AppGetFieldText(form, VehPlateField));
+    n = RecExtSet(recKindVehicle, buf, n, recExtVin, AppGetFieldText(form, VehVinField));
+    if (gVehNote) n = RecExtSet(recKindVehicle, buf, n, recExtVehNote, gVehNote);
     if (gEditVehicleIndex == dmMaxRecordIndex) err = DbAdd(dbVehicles, buf, n, NULL);
     else err = DbReplace(dbVehicles, gEditVehicleIndex, buf, n);
     if (err) { FrmAlert(SaveFailedAlert); return false; }
@@ -386,6 +414,9 @@ Boolean EditVehicleFormHandleEvent(EventType *event)
         FrmDrawForm(form);
         return true;
     case frmUpdateEvent: FrmDrawForm(form); return true;
+    case frmCloseEvent:
+        if (gVehNote) { MemPtrFree(gVehNote); gVehNote = NULL; }
+        break;
     case fldEnterEvent: AppScrollToField(form, event->data.fldEnter.fieldID, pinned, 5); AppScrollBarUpdate(form, VehScrollBar, pinned, 5); break;
     case keyDownEvent: case sclRepeatEvent: case sclExitEvent:
         if (AppScrollEvent(form, event, pinned, 5, VehScrollBar)) return true;
@@ -402,6 +433,9 @@ Boolean EditVehicleFormHandleEvent(EventType *event)
         switch (event->data.ctlSelect.controlID) {
         case VehDoneButton: if (SaveVehicle(form)) FrmGotoForm(VehiclesForm); return true;
         case VehCancelButton: FrmGotoForm(VehiclesForm); return true;
+        case VehNoteButton:
+            if (gVehNote) { AppNoteDialog(gVehNote); NoteLabel(form); }
+            return true;
         case VehDeleteButton:
             if (gEditVehicleIndex != dmMaxRecordIndex && VehFillCount(gVeh.id) == 0 && FrmAlert(DeleteVehicleAlert) == 0) {
                 DbDelete(dbVehicles, gEditVehicleIndex);
